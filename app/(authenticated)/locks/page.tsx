@@ -145,7 +145,10 @@ export default function WeekLocksPage() {
     }
 
     setWeekLocks(
-      (data ?? []) as WeekLock[]
+      (data ?? []).map((lock) => ({
+        ...lock,
+        user: lock.user[0] ?? null,
+      }))
     )
   }
 
