@@ -1,7 +1,8 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   ClipboardPenLine,
@@ -96,6 +97,7 @@ const adminItems = [
 
 export function AppSidebar() {
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
   const { state } = useSidebar()
 
@@ -135,30 +137,15 @@ export function AppSidebar() {
         .eq('id', user.id)
         .single()
 
-      console.log(
-        'Sidebar profile:',
-        profile
-      )
-
-      console.log(
-        'Sidebar profile error:',
-        error
-      )
+      console.log('Sidebar profile:', profile)
+      console.log('Sidebar profile error:', error)
 
       if (profile?.full_name) {
-        setFullName(
-          profile.full_name
-        )
-      } else if (
-        user.user_metadata?.full_name
-      ) {
-        setFullName(
-          user.user_metadata.full_name
-        )
+        setFullName(profile.full_name)
+      } else if (user.user_metadata?.full_name) {
+        setFullName(user.user_metadata.full_name)
       } else if (user.email) {
-        setFullName(
-          user.email.split('@')[0]
-        )
+        setFullName(user.email.split('@')[0])
       }
 
       if (profile?.role) {
@@ -168,27 +155,18 @@ export function AppSidebar() {
 
     loadUser()
 
-    const savedTheme =
-      localStorage.getItem('theme')
+    const savedTheme = localStorage.getItem('theme')
 
     if (savedTheme === 'dark') {
-      document.documentElement.classList.add(
-        'dark'
-      )
-
+      document.documentElement.classList.add('dark')
       setDarkMode(true)
     } else {
-      document.documentElement.classList.remove(
-        'dark'
-      )
-
+      document.documentElement.classList.remove('dark')
       setDarkMode(false)
     }
   }, [])
 
-  function getInitials(
-    name: string
-  ) {
+  function getInitials(name: string) {
     const parts = name
       .trim()
       .split(/\s+/)
@@ -199,9 +177,7 @@ export function AppSidebar() {
     }
 
     if (parts.length === 1) {
-      return parts[0]
-        .substring(0, 2)
-        .toUpperCase()
+      return parts[0].substring(0, 2).toUpperCase()
     }
 
     return (
@@ -211,38 +187,23 @@ export function AppSidebar() {
   }
 
   function toggleDarkMode() {
-    const nextDarkMode =
-      !darkMode
+    const nextDarkMode = !darkMode
 
     setDarkMode(nextDarkMode)
 
     if (nextDarkMode) {
-      document.documentElement.classList.add(
-        'dark'
-      )
-
-      localStorage.setItem(
-        'theme',
-        'dark'
-      )
+      document.documentElement.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
     } else {
-      document.documentElement.classList.remove(
-        'dark'
-      )
-
-      localStorage.setItem(
-        'theme',
-        'light'
-      )
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
     }
   }
 
   function openChangePassword() {
     setProfileOpen(false)
-
     setNewPassword('')
     setConfirmPassword('')
-
     setChangePasswordOpen(true)
   }
 
@@ -252,85 +213,62 @@ export function AppSidebar() {
     }
 
     setChangePasswordOpen(false)
-
     setNewPassword('')
     setConfirmPassword('')
   }
 
   async function handleChangePassword() {
     if (!newPassword) {
-      alert(
-        'Please enter your new password.'
-      )
-
+      alert('Please enter your new password.')
       return
     }
 
     if (newPassword.length < 6) {
-      alert(
-        'Password must be at least 6 characters.'
-      )
-
+      alert('Password must be at least 6 characters.')
       return
     }
 
-    if (
-      newPassword !==
-      confirmPassword
-    ) {
-      alert(
-        'Passwords do not match.'
-      )
-
+    if (newPassword !== confirmPassword) {
+      alert('Passwords do not match.')
       return
     }
 
     setChangingPassword(true)
 
-    const {
-      error,
-    } = await supabase.auth.updateUser({
+    const { error } = await supabase.auth.updateUser({
       password: newPassword,
     })
 
     if (error) {
-      console.error(
-        'Change Password Error:',
-        error
-      )
-
+      console.error('Change Password Error:', error)
       alert(error.message)
-
       setChangingPassword(false)
-
       return
     }
 
-    alert(
-      'Your password has been changed successfully.'
-    )
+    alert('Your password has been changed successfully.')
 
     setChangingPassword(false)
-
     setChangePasswordOpen(false)
-
     setNewPassword('')
     setConfirmPassword('')
   }
 
   async function handleLogout() {
     await supabase.auth.signOut()
-
     router.push('/login')
     router.refresh()
   }
 
   const canAccessMasterData =
-    role === 'Region Manager' ||
-    role === 'Admin'
+    role === 'Region Manager' || role === 'Admin'
 
-  const canAccessAdministration =
-    role === 'Admin'
+  const canAccessAdministration = role === 'Admin'
+
+  // Determine whether a menu item matches the current route.
+  function isCurrentPage(url: string) {
+    return pathname === url || pathname.startsWith(`${url}/`)
+  }
 
   return (
     <>
@@ -340,9 +278,6 @@ export function AppSidebar() {
           {/* Application Header */}
 
           <div className="flex items-center px-2 py-4 group-data-[collapsible=icon]:justify-center">
-
-            {/* System Title */}
-
             <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <p className="truncate text-base font-semibold tracking-tight">
                 Feed Sales
@@ -353,8 +288,6 @@ export function AppSidebar() {
               </p>
             </div>
 
-            {/* Collapse / Expand Button */}
-
             <SidebarTrigger
               className="size-8 shrink-0 group-data-[collapsible=icon]:mx-auto"
               title={
@@ -363,7 +296,6 @@ export function AppSidebar() {
                   : 'Collapse sidebar'
               }
             />
-
           </div>
 
           {/* Main Navigation */}
@@ -375,33 +307,18 @@ export function AppSidebar() {
 
             <SidebarGroupContent>
               <SidebarMenu>
-
-                {menuItems.map(
-                  (item) => (
-                    <SidebarMenuItem
-                      key={
-                        item.title
-                      }
+                {menuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      isActive={isCurrentPage(item.url)}
+                      onClick={() => router.push(item.url)}
+                      tooltip={item.title}
                     >
-                      <SidebarMenuButton
-                        onClick={() => {
-                          router.push(
-                            item.url
-                          )
-                        }}
-                        tooltip={
-                          item.title
-                        }
-                      >
-                        <item.icon />
-                        <span>
-                          {item.title}
-                        </span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                )}
-
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -416,35 +333,18 @@ export function AppSidebar() {
 
               <SidebarGroupContent>
                 <SidebarMenu>
-
-                  {masterDataItems.map(
-                    (item) => (
-                      <SidebarMenuItem
-                        key={
-                          item.title
-                        }
+                  {masterDataItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        isActive={isCurrentPage(item.url)}
+                        onClick={() => router.push(item.url)}
+                        tooltip={item.title}
                       >
-                        <SidebarMenuButton
-                          onClick={() => {
-                            router.push(
-                              item.url
-                            )
-                          }}
-                          tooltip={
-                            item.title
-                          }
-                        >
-                          <item.icon />
-                          <span>
-                            {
-                              item.title
-                            }
-                          </span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    )
-                  )}
-
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -460,35 +360,18 @@ export function AppSidebar() {
 
               <SidebarGroupContent>
                 <SidebarMenu>
-
-                  {adminItems.map(
-                    (item) => (
-                      <SidebarMenuItem
-                        key={
-                          item.title
-                        }
+                  {adminItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        isActive={isCurrentPage(item.url)}
+                        onClick={() => router.push(item.url)}
+                        tooltip={item.title}
                       >
-                        <SidebarMenuButton
-                          onClick={() => {
-                            router.push(
-                              item.url
-                            )
-                          }}
-                          tooltip={
-                            item.title
-                          }
-                        >
-                          <item.icon />
-                          <span>
-                            {
-                              item.title
-                            }
-                          </span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    )
-                  )}
-
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -500,30 +383,18 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-
                   <div className="relative">
 
                     {/* Profile Button */}
 
                     <button
                       type="button"
-                      onClick={() =>
-                        setProfileOpen(
-                          !profileOpen
-                        )
-                      }
+                      onClick={() => setProfileOpen(!profileOpen)}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center"
                     >
-
-                      {/* Avatar */}
-
                       <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                        {getInitials(
-                          fullName
-                        )}
+                        {getInitials(fullName)}
                       </div>
-
-                      {/* User Information */}
 
                       <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                         <p className="truncate text-sm font-medium">
@@ -534,7 +405,6 @@ export function AppSidebar() {
                           {email}
                         </p>
                       </div>
-
                     </button>
 
                     {/* Profile Menu */}
@@ -544,7 +414,6 @@ export function AppSidebar() {
                         className="
                           absolute bottom-full left-0 z-50 mb-2 w-full min-w-[220px]
                           rounded-lg border bg-popover p-1 text-popover-foreground shadow-md
-
                           group-data-[collapsible=icon]:fixed
                           group-data-[collapsible=icon]:bottom-14
                           group-data-[collapsible=icon]:left-2
@@ -553,9 +422,6 @@ export function AppSidebar() {
                           group-data-[collapsible=icon]:mb-0
                         "
                       >
-
-                        {/* Profile Information */}
-
                         <div className="px-3 py-2">
                           <p className="truncate text-sm font-medium">
                             {fullName}
@@ -576,25 +442,18 @@ export function AppSidebar() {
 
                         <button
                           type="button"
-                          onClick={
-                            openChangePassword
-                          }
+                          onClick={openChangePassword}
                           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
                         >
                           <KeyRound className="size-4" />
-
-                          <span>
-                            Change Password
-                          </span>
+                          <span>Change Password</span>
                         </button>
 
                         {/* Dark Mode */}
 
                         <button
                           type="button"
-                          onClick={
-                            toggleDarkMode
-                          }
+                          onClick={toggleDarkMode}
                           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
                         >
                           {darkMode ? (
@@ -604,9 +463,7 @@ export function AppSidebar() {
                           )}
 
                           <span>
-                            {darkMode
-                              ? 'Light Mode'
-                              : 'Dark Mode'}
+                            {darkMode ? 'Light Mode' : 'Dark Mode'}
                           </span>
                         </button>
 
@@ -614,23 +471,15 @@ export function AppSidebar() {
 
                         <button
                           type="button"
-                          onClick={
-                            handleLogout
-                          }
+                          onClick={handleLogout}
                           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
                         >
                           <LogOut className="size-4" />
-
-                          <span>
-                            Logout
-                          </span>
+                          <span>Logout</span>
                         </button>
-
                       </div>
                     )}
-
                   </div>
-
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -643,13 +492,11 @@ export function AppSidebar() {
 
       {changePasswordOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-
           <div className="w-full max-w-md rounded-xl border bg-background shadow-xl">
 
             {/* Dialog Header */}
 
             <div className="flex items-center justify-between border-b px-6 py-4">
-
               <div>
                 <h2 className="text-lg font-semibold">
                   Change Password
@@ -662,17 +509,12 @@ export function AppSidebar() {
 
               <button
                 type="button"
-                onClick={
-                  closeChangePassword
-                }
-                disabled={
-                  changingPassword
-                }
+                onClick={closeChangePassword}
+                disabled={changingPassword}
                 className="rounded-md p-2 hover:bg-muted disabled:opacity-50"
               >
                 <X className="size-4" />
               </button>
-
             </div>
 
             {/* Dialog Body */}
@@ -682,7 +524,6 @@ export function AppSidebar() {
               {/* New Password */}
 
               <div className="space-y-2">
-
                 <label
                   htmlFor="newPassword"
                   className="text-sm font-medium"
@@ -693,31 +534,21 @@ export function AppSidebar() {
                 <input
                   id="newPassword"
                   type="password"
-                  value={
-                    newPassword
-                  }
-                  onChange={(e) =>
-                    setNewPassword(
-                      e.target.value
-                    )
-                  }
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Enter new password"
-                  disabled={
-                    changingPassword
-                  }
+                  disabled={changingPassword}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 />
 
                 <p className="text-xs text-muted-foreground">
                   Password must be at least 6 characters.
                 </p>
-
               </div>
 
               {/* Confirm Password */}
 
               <div className="space-y-2">
-
                 <label
                   htmlFor="confirmPassword"
                   className="text-sm font-medium"
@@ -728,37 +559,22 @@ export function AppSidebar() {
                 <input
                   id="confirmPassword"
                   type="password"
-                  value={
-                    confirmPassword
-                  }
-                  onChange={(e) =>
-                    setConfirmPassword(
-                      e.target.value
-                    )
-                  }
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm new password"
-                  disabled={
-                    changingPassword
-                  }
+                  disabled={changingPassword}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 />
-
               </div>
-
             </div>
 
             {/* Dialog Actions */}
 
             <div className="flex justify-end gap-2 border-t px-6 py-4">
-
               <button
                 type="button"
-                onClick={
-                  closeChangePassword
-                }
-                disabled={
-                  changingPassword
-                }
+                onClick={closeChangePassword}
+                disabled={changingPassword}
                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
               >
                 Cancel
@@ -766,23 +582,14 @@ export function AppSidebar() {
 
               <button
                 type="button"
-                onClick={
-                  handleChangePassword
-                }
-                disabled={
-                  changingPassword
-                }
+                onClick={handleChangePassword}
+                disabled={changingPassword}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                {changingPassword
-                  ? 'Changing...'
-                  : 'Change Password'}
+                {changingPassword ? 'Changing...' : 'Change Password'}
               </button>
-
             </div>
-
           </div>
-
         </div>
       )}
     </>

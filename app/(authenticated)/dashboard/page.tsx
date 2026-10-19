@@ -1,13 +1,15 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode, ElementType } from "react";
 import {
   Activity,
+  ArrowRight,
   BarChart3,
   CalendarDays,
   CheckCircle2,
   ClipboardList,
+  Clock,
   DollarSign,
   Package,
   RefreshCw,
@@ -16,6 +18,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/client";
 
 type Tab = "Overview" | "Regions" | "Product" | "Team";
@@ -228,6 +231,7 @@ function getComparison(
 
     currentRows = rows.filter((row) => {
       const period = getPeriodKey(row.year, row.week);
+
       return (
         period.calendarYear === currentPeriod.calendarYear &&
         period.month === currentPeriod.month
@@ -236,6 +240,7 @@ function getComparison(
 
     previousRows = rows.filter((row) => {
       const period = getPeriodKey(row.year, row.week);
+
       return (
         period.calendarYear === previousMonthDate.getUTCFullYear() &&
         period.month === previousMonthDate.getUTCMonth()
@@ -252,6 +257,7 @@ function getComparison(
 
     currentRows = rows.filter((row) => {
       const period = getPeriodKey(row.year, row.week);
+
       return (
         period.calendarYear === currentPeriod.calendarYear &&
         period.quarter === currentPeriod.quarter
@@ -260,26 +266,26 @@ function getComparison(
 
     previousRows = rows.filter((row) => {
       const period = getPeriodKey(row.year, row.week);
+
       return (
         period.calendarYear === previousQuarterDate.getUTCFullYear() &&
-        period.quarter === Math.floor(previousQuarterDate.getUTCMonth() / 3)
+        period.quarter ===
+          Math.floor(previousQuarterDate.getUTCMonth() / 3)
       );
     });
   } else {
     const previousYear = currentPeriod.calendarYear - 1;
 
-    currentRows = rows.filter((row) => {
-      return (
+    currentRows = rows.filter(
+      (row) =>
         getPeriodKey(row.year, row.week).calendarYear ===
         currentPeriod.calendarYear
-      );
-    });
+    );
 
-    previousRows = rows.filter((row) => {
-      return (
+    previousRows = rows.filter(
+      (row) =>
         getPeriodKey(row.year, row.week).calendarYear === previousYear
-      );
-    });
+    );
   }
 
   const currentActual = sum(
@@ -323,11 +329,169 @@ function getStatusColor(status: string) {
   return "bg-amber-50 text-amber-700 ring-amber-200";
 }
 
+/**
+ * Returns true for forecasts awaiting approval.
+ * Handles status values such as "Pending", "Pending Approval",
+ * and "Submitted".
+ */
+function isPendingApprovalStatus(status: string) {
+  const value = String(status ?? "").trim().toLowerCase();
+
+  return value.includes("pending") || value.includes("submitted");
+}
+
+/**
+ * Shared dark-mode styling for the dashboard.
+ * It responds to the .dark class toggled by the sidebar.
+ */
+function DashboardThemeStyles() {
+  return (
+    <style jsx global>{`
+      .dark .dashboard-theme {
+        background-color: #0b1120 !important;
+        color: #e2e8f0;
+        color-scheme: dark;
+      }
+
+      .dark .dashboard-theme .bg-white {
+        background-color: #111c2f !important;
+      }
+
+      .dark .dashboard-theme .bg-slate-50,
+      .dark .dashboard-theme .bg-slate-50\\/70 {
+        background-color: #0b1120 !important;
+      }
+
+      .dark .dashboard-theme .bg-slate-100 {
+        background-color: #1e293b !important;
+      }
+
+      .dark .dashboard-theme .bg-slate-200 {
+        background-color: #334155 !important;
+      }
+
+      .dark .dashboard-theme .border-slate-200,
+      .dark .dashboard-theme .border-slate-100,
+      .dark .dashboard-theme .divide-slate-100 > :not(:first-child) {
+        border-color: #334155 !important;
+      }
+
+      .dark .dashboard-theme .text-slate-900,
+      .dark .dashboard-theme .text-slate-800 {
+        color: #f1f5f9 !important;
+      }
+
+      .dark .dashboard-theme .text-slate-700,
+      .dark .dashboard-theme .text-slate-600 {
+        color: #cbd5e1 !important;
+      }
+
+      .dark .dashboard-theme .text-slate-500 {
+        color: #94a3b8 !important;
+      }
+
+      .dark .dashboard-theme .hover\\:bg-slate-50:hover {
+        background-color: #1e293b !important;
+      }
+
+      .dark .dashboard-theme .hover\\:bg-slate-100:hover {
+        background-color: #273449 !important;
+      }
+
+      .dark .dashboard-theme select,
+      .dark .dashboard-theme input {
+        background-color: #111c2f;
+        color: #e2e8f0;
+        border-color: #475569;
+      }
+
+      .dark .dashboard-theme select option {
+        background-color: #111c2f;
+        color: #e2e8f0;
+      }
+
+      .dark .dashboard-theme .bg-blue-50 {
+        background-color: #172554 !important;
+      }
+
+      .dark .dashboard-theme .text-blue-700 {
+        color: #93c5fd !important;
+      }
+
+      .dark .dashboard-theme .ring-blue-200 {
+        --tw-ring-color: #1e40af !important;
+      }
+
+      .dark .dashboard-theme .bg-emerald-50 {
+        background-color: #052e2b !important;
+      }
+
+      .dark .dashboard-theme .text-emerald-700 {
+        color: #6ee7b7 !important;
+      }
+
+      .dark .dashboard-theme .bg-amber-50 {
+        background-color: #422006 !important;
+      }
+
+      .dark .dashboard-theme .text-amber-700 {
+        color: #fcd34d !important;
+      }
+
+      .dark .dashboard-theme .border-amber-200 {
+        border-color: #92400e !important;
+      }
+
+      .dark .dashboard-theme .bg-red-50 {
+        background-color: #450a0a !important;
+      }
+
+      .dark .dashboard-theme .text-red-800,
+      .dark .dashboard-theme .text-red-700 {
+        color: #fca5a5 !important;
+      }
+
+      .dark .dashboard-theme .border-red-200 {
+        border-color: #7f1d1d !important;
+      }
+
+      .dark .dashboard-theme .bg-violet-50 {
+        background-color: #2e1065 !important;
+      }
+
+      .dark .dashboard-theme .text-violet-700 {
+        color: #c4b5fd !important;
+      }
+
+      .dark .dashboard-theme table thead tr,
+      .dark .dashboard-theme table tbody tr {
+        border-color: #334155 !important;
+      }
+
+      .dark .dashboard-theme table tbody tr:hover {
+        background-color: #1e293b !important;
+      }
+
+      .dark .dashboard-theme svg line[stroke="#e2e8f0"] {
+        stroke: #334155 !important;
+      }
+
+      .dark .dashboard-theme svg text[fill="#64748b"] {
+        fill: #94a3b8 !important;
+      }
+
+      .dark .dashboard-theme .animate-pulse {
+        background-color: #1e293b !important;
+      }
+    `}</style>
+  );
+}
+
 function Card({
   children,
   className = "",
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
@@ -346,7 +510,7 @@ function SectionTitle({
 }: {
   title: string;
   subtitle?: string;
-  icon?: React.ElementType;
+  icon?: ElementType;
 }) {
   return (
     <div className="mb-5 flex items-start gap-3">
@@ -377,9 +541,9 @@ function MetricCard({
   title: string;
   value: string;
   description?: string;
-  icon: React.ElementType;
+  icon: ElementType;
   accent?: "slate" | "blue" | "green" | "amber" | "violet";
-  footer?: React.ReactNode;
+  footer?: ReactNode;
 }) {
   const accentStyles = {
     slate: "bg-slate-100 text-slate-700",
@@ -394,9 +558,11 @@ function MetricCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-500">{title}</p>
+
           <p className="mt-3 break-words text-2xl font-bold tracking-tight text-slate-900">
             {value}
           </p>
+
           {description && (
             <p className="mt-2 text-xs leading-5 text-slate-500">
               {description}
@@ -409,7 +575,11 @@ function MetricCard({
         </div>
       </div>
 
-      {footer && <div className="mt-4 border-t border-slate-100 pt-3">{footer}</div>}
+      {footer && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          {footer}
+        </div>
+      )}
     </Card>
   );
 }
@@ -452,6 +622,7 @@ function HorizontalBarChart({
               <span className="truncate font-medium text-slate-700">
                 {String(item[labelKey])}
               </span>
+
               <span className="shrink-0 font-semibold text-slate-900">
                 {valueFormatter(value)}
               </span>
@@ -499,6 +670,7 @@ function DualBarChart({
           <span className="h-2.5 w-2.5 rounded-sm bg-blue-600" />
           Forecast
         </div>
+
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
           Actual
@@ -517,6 +689,7 @@ function DualBarChart({
                 <span className="w-16 shrink-0 text-xs text-slate-500">
                   Forecast
                 </span>
+
                 <div className="h-3 flex-1 rounded-full bg-slate-100">
                   <div
                     className="h-3 rounded-full bg-blue-600"
@@ -525,6 +698,7 @@ function DualBarChart({
                     }}
                   />
                 </div>
+
                 <span className="w-24 shrink-0 text-right text-xs font-medium text-slate-700">
                   {formatCurrency(item.forecast)}
                 </span>
@@ -534,6 +708,7 @@ function DualBarChart({
                 <span className="w-16 shrink-0 text-xs text-slate-500">
                   Actual
                 </span>
+
                 <div className="h-3 flex-1 rounded-full bg-slate-100">
                   <div
                     className="h-3 rounded-full bg-emerald-500"
@@ -542,6 +717,7 @@ function DualBarChart({
                     }}
                   />
                 </div>
+
                 <span className="w-24 shrink-0 text-right text-xs font-medium text-slate-700">
                   {formatCurrency(item.actual)}
                 </span>
@@ -570,10 +746,7 @@ function LineChart({
 
   const maxValue = Math.max(
     1,
-    ...data.flatMap((item) => [
-      item.forecast,
-      item.actual ?? 0,
-    ])
+    ...data.flatMap((item) => [item.forecast, item.actual ?? 0])
   );
 
   const x = (index: number) =>
@@ -610,6 +783,7 @@ function LineChart({
           <span className="h-0.5 w-5 bg-blue-600" />
           Forecast
         </div>
+
         <div className="flex items-center gap-2">
           <span className="h-0.5 w-5 bg-emerald-500" />
           Actual
@@ -637,6 +811,7 @@ function LineChart({
                   stroke="#e2e8f0"
                   strokeDasharray="4 4"
                 />
+
                 <text
                   x={left - 8}
                   y={tickY + 4}
@@ -712,7 +887,7 @@ function PerformanceTable({
   rows,
 }: {
   headers: string[];
-  rows: (string | number | React.ReactNode)[][];
+  rows: (string | number | ReactNode)[][];
 }) {
   return (
     <div className="overflow-x-auto">
@@ -758,10 +933,17 @@ function PerformanceTable({
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [comparison, setComparison] = useState<Comparison>("MoM");
 
+  // Approved forecasts are used for dashboard calculations.
   const [forecasts, setForecasts] = useState<Forecast[]>([]);
+
+  // Pending/submitted forecasts are displayed separately.
+  const [pendingForecasts, setPendingForecasts] = useState<Forecast[]>([]);
+
   const [regions, setRegions] = useState<Region[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -845,7 +1027,8 @@ export default function DashboardPage() {
         const userData = (usersResult.data ?? []) as UserProfile[];
         const lockData = (locksResult.data ?? []) as WeekLock[];
 
-        const role = String(profile.role ?? "").toLowerCase();
+        // Preserve the existing role-based forecast visibility.
+        const role = String(profile.role ?? "").trim().toLowerCase();
 
         if (role === "user") {
           forecastData = forecastData.filter(
@@ -863,10 +1046,22 @@ export default function DashboardPage() {
           }
         }
 
+        // Capture pending forecasts before filtering the approved records.
+        const pendingForecastData = forecastData.filter((row) =>
+          isPendingApprovalStatus(row.status)
+        );
+
+        // Dashboard analytics include approved forecasts only.
+        const approvedForecastData = forecastData.filter(
+          (row) =>
+            String(row.status ?? "").trim().toLowerCase() === "approved"
+        );
+
         if (cancelled) return;
 
         setCurrentUser(profile);
-        setForecasts(forecastData);
+        setForecasts(approvedForecastData);
+        setPendingForecasts(pendingForecastData);
         setRegions(regionData);
         setProducts(productData);
         setCategories(categoryData);
@@ -919,6 +1114,7 @@ export default function DashboardPage() {
     );
   }, [users]);
 
+  // All dashboard calculations below use approved forecasts only.
   const currentYearRows = useMemo(
     () => forecasts.filter((row) => row.year === currentYear),
     [forecasts, currentYear]
@@ -944,10 +1140,7 @@ export default function DashboardPage() {
     currentYearRows.map((row) => Number(row.budget ?? 0))
   );
 
-  const totalEntries = currentYearRows.filter((row) => {
-    const status = String(row.status ?? "").toLowerCase();
-    return status !== "draft" && !status.includes("reject");
-  }).length;
+  const totalEntries = currentYearRows.length;
 
   const accuracy = accuracyForRows(currentYearRows);
   const forecastError = getForecastError(totalForecast, totalActual);
@@ -976,6 +1169,7 @@ export default function DashboardPage() {
 
     currentYearRows.forEach((row) => {
       const key = `${row.year}-W${row.week}`;
+
       const existing = rowsByWeek.get(key) ?? {
         year: row.year,
         week: row.week,
@@ -986,7 +1180,8 @@ export default function DashboardPage() {
       existing.forecast += Number(row.forecast ?? 0);
 
       if (row.actual !== null && row.actual !== undefined) {
-        existing.actual = Number(existing.actual ?? 0) + Number(row.actual);
+        existing.actual =
+          Number(existing.actual ?? 0) + Number(row.actual);
       }
 
       rowsByWeek.set(key, existing);
@@ -1089,15 +1284,23 @@ export default function DashboardPage() {
       .sort((a, b) => b.actual - a.actual);
   }, [currentYearRows, userMap]);
 
+  // All approved activity records, newest first.
   const recentActivity = useMemo(() => {
-    return [...forecasts]
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() -
-          new Date(a.created_at).getTime()
-      )
-      .slice(0, 8);
+    return [...forecasts].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() -
+        new Date(a.created_at).getTime()
+    );
   }, [forecasts]);
+
+  // All pending/submitted records, newest first.
+  const pendingActivity = useMemo(() => {
+    return [...pendingForecasts].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() -
+        new Date(a.created_at).getTime()
+    );
+  }, [pendingForecasts]);
 
   const currentWeekForecast = sum(
     thisWeekRows.map((row) => Number(row.forecast ?? 0))
@@ -1121,8 +1324,11 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-4 md:p-8">
+      <main className="dashboard-theme min-h-screen space-y-6 bg-slate-50/70 p-4 text-slate-900 transition-colors duration-200 md:p-8">
+        <DashboardThemeStyles />
+
         <div className="h-8 w-56 animate-pulse rounded-lg bg-slate-200" />
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
@@ -1131,31 +1337,40 @@ export default function DashboardPage() {
             />
           ))}
         </div>
+
         <div className="h-72 animate-pulse rounded-2xl bg-slate-100" />
-      </div>
+      </main>
     );
   }
 
   if (error) {
     return (
-      <div className="m-4 rounded-2xl border border-red-200 bg-red-50 p-6 md:m-8">
-        <h2 className="font-semibold text-red-800">
-          Unable to load dashboard
-        </h2>
-        <p className="mt-2 text-sm text-red-700">{error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
-        >
-          <RefreshCw size={15} />
-          Retry
-        </button>
-      </div>
+      <main className="dashboard-theme min-h-screen bg-slate-50/70 p-4 text-slate-900 md:p-8">
+        <DashboardThemeStyles />
+
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+          <h2 className="font-semibold text-red-800">
+            Unable to load dashboard
+          </h2>
+
+          <p className="mt-2 text-sm text-red-700">{error}</p>
+
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
+          >
+            <RefreshCw size={15} />
+            Retry
+          </button>
+        </div>
+      </main>
     );
   }
 
   return (
-    <main className="min-h-screen space-y-6 bg-slate-50/70 p-4 md:p-8">
+    <main className="dashboard-theme min-h-screen space-y-6 bg-slate-50/70 p-4 text-slate-900 transition-colors duration-200 md:p-8">
+      <DashboardThemeStyles />
+
       {/* Page heading */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
@@ -1171,16 +1386,14 @@ export default function DashboardPage() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Monitor forecast performance, actual sales, budget achievement,
-            and team results.
+            Monitor approved forecast performance, actual sales, budget
+            achievement, and team results.
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 sm:self-auto">
           <Users size={16} />
-          <span className="capitalize">
-            {currentUser?.role ?? "User"}
-          </span>
+          <span className="capitalize">{currentUser?.role ?? "User"}</span>
         </div>
       </div>
 
@@ -1189,12 +1402,12 @@ export default function DashboardPage() {
         <MetricCard
           title="Total Forecast"
           value={formatCurrency(totalForecast)}
-          description={`${formatNumber(totalEntries)} submitted entries · ${currentYear}`}
+          description={`${formatNumber(totalEntries)} approved entries · ${currentYear}`}
           icon={ClipboardList}
           accent="blue"
           footer={
             <div className="flex justify-between gap-3 text-xs text-slate-500">
-              <span>Sales forecast</span>
+              <span>Approved forecasts</span>
               <span>{currentYear}</span>
             </div>
           }
@@ -1203,7 +1416,7 @@ export default function DashboardPage() {
         <MetricCard
           title="Actual Sales"
           value={formatCurrency(totalActual)}
-          description={`Year-to-date actual sales · ${currentYear}`}
+          description={`Year-to-date actual sales from approved forecasts · ${currentYear}`}
           icon={DollarSign}
           accent="green"
           footer={
@@ -1237,6 +1450,7 @@ export default function DashboardPage() {
                   ) : (
                     <TrendingDown size={14} />
                   ))}
+
                 {formatPercent(comparisonData.change)}
               </span>
             </div>
@@ -1246,12 +1460,13 @@ export default function DashboardPage() {
         <MetricCard
           title="Forecast Accuracy"
           value={formatPercent(accuracy)}
-          description="Based on actual sales entered"
+          description="Based on actual sales for approved forecasts"
           icon={Target}
           accent="violet"
           footer={
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="text-slate-500">Performance status</span>
+
               <span
                 className={`rounded-full px-2.5 py-1 font-medium ${
                   accuracy === null
@@ -1278,12 +1493,13 @@ export default function DashboardPage() {
         <MetricCard
           title="Sales Achievement"
           value={formatPercent(salesAchievement)}
-          description="Actual sales compared with total forecast"
+          description="Actual sales compared with approved forecasts"
           icon={Activity}
           accent="amber"
           footer={
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="text-slate-500">Forecast bias</span>
+
               <span
                 className={`font-semibold ${
                   biasPercentage === null
@@ -1307,21 +1523,21 @@ export default function DashboardPage() {
       </div>
 
       {/* Tabs */}
-<div className="grid grid-cols-4 gap-1 rounded-xl border border-slate-200 bg-white p-1.5">
-  {tabs.map((tab) => (
-    <button
-      key={tab}
-      onClick={() => setActiveTab(tab)}
-      className={`w-full rounded-lg px-2 py-2.5 text-center text-sm font-medium transition ${
-        activeTab === tab
-          ? "bg-slate-900 text-white shadow-sm"
-          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-      }`}
-    >
-      {tab}
-    </button>
-  ))}
-</div>
+      <div className="grid grid-cols-4 gap-1 rounded-xl border border-slate-200 bg-white p-1.5">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`w-full rounded-lg px-2 py-2.5 text-center text-sm font-medium transition ${
+              activeTab === tab
+                ? "bg-slate-900 text-white shadow-sm dark:bg-blue-600 dark:text-white"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
       {/* Overview */}
       {activeTab === "Overview" && (
@@ -1330,7 +1546,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Budget Achievement"
               value={formatPercent(budgetAchievement)}
-              description="Actual sales against assigned budget"
+              description="Actual sales against budget from approved forecasts"
               icon={Target}
               accent="green"
               footer={
@@ -1341,6 +1557,7 @@ export default function DashboardPage() {
                       {formatCurrency(totalActual)}
                     </span>
                   </div>
+
                   <div className="flex justify-between gap-2">
                     <span className="text-slate-500">Budget</span>
                     <span className="font-medium text-slate-800">
@@ -1369,7 +1586,11 @@ export default function DashboardPage() {
                   ? "Actual sales exceeded the forecast"
                   : "Forecast matched actual sales"
               }
-              icon={forecastError !== null && forecastError < 0 ? TrendingDown : TrendingUp}
+              icon={
+                forecastError !== null && forecastError < 0
+                  ? TrendingDown
+                  : TrendingUp
+              }
               accent={
                 forecastError === null
                   ? "slate"
@@ -1390,7 +1611,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Active Products"
               value={formatNumber(activeProductCount)}
-              description="Active products with forecast entries this year"
+              description="Active products with approved forecast entries this year"
               icon={Package}
               accent="violet"
             />
@@ -1398,7 +1619,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Actual Sales Entries"
               value={formatNumber(actualRows(currentYearRows).length)}
-              description="Entries with actual sales recorded this year"
+              description="Approved forecast entries with actual sales recorded this year"
               icon={CheckCircle2}
               accent="blue"
             />
@@ -1408,9 +1629,10 @@ export default function DashboardPage() {
             <Card className="xl:col-span-2">
               <SectionTitle
                 title="Weekly Forecast vs Actual"
-                subtitle={`Last ${weeklyData.length} weeks with entries in ${currentYear}`}
+                subtitle={`Last ${weeklyData.length} weeks with approved entries in ${currentYear}`}
                 icon={TrendingUp}
               />
+
               <LineChart data={weeklyData} />
             </Card>
 
@@ -1424,7 +1646,7 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 {[
                   {
-                    label: "Forecast",
+                    label: "Approved Forecast",
                     amount: currentWeekForecast,
                     color: "text-blue-700",
                   },
@@ -1446,6 +1668,7 @@ export default function DashboardPage() {
                     <span className="text-sm text-slate-500">
                       {item.label}
                     </span>
+
                     <span className={`text-sm font-semibold ${item.color}`}>
                       {formatCurrency(item.amount)}
                     </span>
@@ -1486,6 +1709,7 @@ export default function DashboardPage() {
 
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="text-slate-500">Week status</span>
+
                   <span
                     className={`rounded-full px-2.5 py-1 font-medium ${
                       currentWeekLock
@@ -1512,7 +1736,7 @@ export default function DashboardPage() {
           <Card>
             <SectionTitle
               title="Region Performance"
-              subtitle="Actual sales by geographic region for the current year"
+              subtitle="Actual sales by geographic region for the current year, using approved forecasts"
               icon={BarChart3}
             />
 
@@ -1526,42 +1750,113 @@ export default function DashboardPage() {
             />
           </Card>
 
+          {/* Recent Approved Forecast Activity */}
           <Card>
             <SectionTitle
-              title="Recent Forecast Activity"
-              subtitle="Latest forecast entries available to your account"
+              title="Recent Approved Forecast Activity"
+              subtitle={`Latest approved forecast entries available to your account (${recentActivity.length} total)`}
               icon={ClipboardList}
             />
 
-            <PerformanceTable
-              headers={[
-                "Week",
-                "Region",
-                "Product",
-                "Category",
-                "Forecast",
-                "Actual",
-                "Status",
-              ]}
-              rows={recentActivity.map((row) => [
-                `W${row.week}, ${row.year}`,
-                regionMap.get(row.region_id) ?? "Unknown",
-                productMap.get(row.product_id) ?? "Unknown",
-                categoryMap.get(row.category_id) ?? "Unknown",
-                formatCurrency(Number(row.forecast ?? 0)),
-                row.actual === null
-                  ? "—"
-                  : formatCurrency(Number(row.actual)),
-                <span
-                  key={row.id}
-                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusColor(
-                    row.status
-                  )}`}
-                >
-                  {row.status || "Unknown"}
-                </span>,
-              ])}
-            />
+            <div className="max-h-[360px] overflow-y-auto overscroll-contain rounded-xl border border-slate-100">
+              <PerformanceTable
+                headers={[
+                  "Week",
+                  "Region",
+                  "Product",
+                  "Category",
+                  "Forecast",
+                  "Actual",
+                  "Status",
+                ]}
+                rows={recentActivity.map((row) => [
+                  `W${row.week}, ${row.year}`,
+                  regionMap.get(row.region_id) ?? "Unknown",
+                  productMap.get(row.product_id) ?? "Unknown",
+                  categoryMap.get(row.category_id) ?? "Unknown",
+                  formatCurrency(Number(row.forecast ?? 0)),
+                  row.actual === null
+                    ? "—"
+                    : formatCurrency(Number(row.actual)),
+                  <span
+                    key={row.id}
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusColor(
+                      row.status
+                    )}`}
+                  >
+                    {row.status || "Unknown"}
+                  </span>,
+                ])}
+              />
+            </div>
+          </Card>
+
+          {/* Forecasts Pending Approval */}
+          <Card className="border-amber-200 bg-white">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-amber-50 p-3 text-amber-700">
+                  <Clock size={22} />
+                </div>
+
+                <div>
+                  <h2 className="font-semibold text-slate-900">
+                    Forecasts Pending Approval
+                  </h2>
+
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    {pendingActivity.length > 0
+                      ? `${formatNumber(
+                          pendingActivity.length
+                        )} forecast${
+                          pendingActivity.length === 1 ? "" : "s"
+                        } awaiting approval. Review the records below or open the Approvals page.`
+                      : "There are no forecasts currently awaiting approval."}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => router.push("/approvals")}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                Go to Approvals
+                <ArrowRight size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 max-h-[360px] overflow-y-auto overscroll-contain rounded-xl border border-slate-100">
+              <PerformanceTable
+                headers={[
+                  "Week",
+                  "Region",
+                  "Product",
+                  "Category",
+                  "Forecast",
+                  "Actual",
+                  "Status",
+                ]}
+                rows={pendingActivity.map((row) => [
+                  `W${row.week}, ${row.year}`,
+                  regionMap.get(row.region_id) ?? "Unknown",
+                  productMap.get(row.product_id) ?? "Unknown",
+                  categoryMap.get(row.category_id) ?? "Unknown",
+                  formatCurrency(Number(row.forecast ?? 0)),
+                  row.actual === null
+                    ? "—"
+                    : formatCurrency(Number(row.actual)),
+                  <span
+                    key={row.id}
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusColor(
+                      row.status
+                    )}`}
+                  >
+                    {row.status || "Unknown"}
+                  </span>,
+                ])}
+              />
+            </div>
           </Card>
         </div>
       )}
@@ -1572,7 +1867,9 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <MetricCard
               title="Regions with Sales"
-              value={formatNumber(regionPerformance.filter((item) => item.actual > 0).length)}
+              value={formatNumber(
+                regionPerformance.filter((item) => item.actual > 0).length
+              )}
               description="Regions with actual sales recorded"
               icon={Activity}
               accent="blue"
@@ -1581,7 +1878,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Regional Actual Sales"
               value={formatCurrency(totalActual)}
-              description="Combined actual sales for the year"
+              description="Combined actual sales from approved forecasts for the year"
               icon={DollarSign}
               accent="green"
             />
@@ -1589,7 +1886,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Overall Forecast Accuracy"
               value={formatPercent(accuracy)}
-              description="Weighted accuracy across visible records"
+              description="Weighted accuracy across approved records visible to your account"
               icon={Target}
               accent="violet"
             />
@@ -1598,7 +1895,7 @@ export default function DashboardPage() {
           <Card>
             <SectionTitle
               title="Region Summary Performance"
-              subtitle="Geographic breakdown of forecast, actual sales, achievement, and accuracy"
+              subtitle="Geographic breakdown of approved forecasts, actual sales, achievement, and accuracy"
               icon={BarChart3}
             />
 
@@ -1665,7 +1962,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Products with Forecasts"
               value={formatNumber(productPerformance.length)}
-              description="Products represented in current-year records"
+              description="Products represented in approved current-year records"
               icon={Package}
               accent="blue"
             />
@@ -1673,7 +1970,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Product Actual Sales"
               value={formatCurrency(totalActual)}
-              description="Total actual sales across visible products"
+              description="Actual sales across visible approved product forecasts"
               icon={DollarSign}
               accent="green"
             />
@@ -1681,7 +1978,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Product Forecast Accuracy"
               value={formatPercent(accuracy)}
-              description="Accuracy across visible product records"
+              description="Accuracy across visible approved product forecasts"
               icon={Target}
               accent="violet"
             />
@@ -1690,7 +1987,7 @@ export default function DashboardPage() {
           <Card>
             <SectionTitle
               title="Product Performance: Forecast vs Actual"
-              subtitle="Side-by-side comparison of forecast and actual sales by product"
+              subtitle="Side-by-side comparison of approved forecasts and actual sales by product"
               icon={BarChart3}
             />
 
@@ -1741,7 +2038,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Team Members with Entries"
               value={formatNumber(teamPerformance.length)}
-              description="Users with visible forecast records"
+              description="Users with visible approved forecast records"
               icon={Users}
               accent="blue"
             />
@@ -1749,7 +2046,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Team Actual Sales"
               value={formatCurrency(totalActual)}
-              description="Combined actual sales for visible team records"
+              description="Combined actual sales from visible approved forecasts"
               icon={DollarSign}
               accent="green"
             />
@@ -1757,7 +2054,7 @@ export default function DashboardPage() {
             <MetricCard
               title="Team Forecast Accuracy"
               value={formatPercent(accuracy)}
-              description="Accuracy across visible team records"
+              description="Accuracy across visible approved team forecasts"
               icon={Target}
               accent="violet"
             />
@@ -1832,7 +2129,8 @@ export default function DashboardPage() {
       <footer className="flex flex-col justify-between gap-2 border-t border-slate-200 pt-4 text-xs text-slate-500 sm:flex-row">
         <span>Feed Sales Forecast · Dashboard</span>
         <span>
-          Metrics are based on records visible to your account.
+          Metrics are based on approved forecast records visible to your
+          account.
         </span>
       </footer>
     </main>
