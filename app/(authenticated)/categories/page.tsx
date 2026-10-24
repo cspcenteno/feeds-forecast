@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 import {
   Table,
@@ -21,6 +22,7 @@ type Category = {
 }
 
 export default function CategoriesPage() {
+  const authorization = useAuthorization()
   const [categories, setCategories] = useState<Category[]>([])
 
   const [code, setCode] = useState('')
@@ -50,6 +52,7 @@ export default function CategoriesPage() {
   }
 
   async function saveCategory() {
+    if (!authorization.can('Categories', editingId === null ? 'add' : 'edit')) return
     setError(null)
 
     if (!code.trim() || !name.trim()) {
@@ -127,6 +130,7 @@ export default function CategoriesPage() {
   }
 
   async function deleteCategory(id: number) {
+    if (!authorization.can('Categories', 'delete')) return
     const confirmed = window.confirm(
       'Are you sure you want to delete this category?'
     )
@@ -271,7 +275,7 @@ export default function CategoriesPage() {
           <button
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveCategory}
-            disabled={loading}
+            disabled={loading || !authorization.can('Categories', editingId === null ? 'add' : 'edit')}
           >
             {loading
               ? 'Saving...'
@@ -375,6 +379,7 @@ export default function CategoriesPage() {
                           onClick={() =>
                             deleteCategory(category.id)
                           }
+                          disabled={!authorization.can('Categories', 'delete')}
                         >
                           Delete
                         </button>

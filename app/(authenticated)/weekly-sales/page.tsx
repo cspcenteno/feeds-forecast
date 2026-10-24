@@ -28,6 +28,7 @@ type SalesForecast = {
   year: number
   week: number
   region_id: number | null
+  subregion_id: number | null
   category_id: number | null
   product_id: number | null
   forecast: number
@@ -106,7 +107,7 @@ export default function WeeklySalesPage() {
       error: profileError,
     } = await supabase
       .from('users')
-      .select('is_active')
+      .select('is_active, role, region_id, subregion_id')
       .eq('id', user.id)
       .single()
 
@@ -134,6 +135,7 @@ export default function WeeklySalesPage() {
         year,
         week,
         region_id,
+        subregion_id,
         category_id,
         product_id,
         forecast,
@@ -147,6 +149,13 @@ export default function WeeklySalesPage() {
       .order('year', { ascending: false })
       .order('week', { ascending: false })
       .order('id', { ascending: false })
+
+    if (profile.role === 'Manager' || profile.role === 'User') {
+      const subregionId = profile.subregion_id == null ? null : Number(profile.subregion_id)
+      const regionId = profile.region_id == null ? null : Number(profile.region_id)
+      if (subregionId !== null) salesQuery.eq('subregion_id', subregionId)
+      else if (regionId !== null) salesQuery.eq('region_id', regionId)
+    }
 
     // -----------------------------------------
     // LOAD ALL REGIONS

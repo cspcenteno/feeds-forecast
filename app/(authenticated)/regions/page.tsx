@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 import {
   Table,
@@ -20,6 +21,7 @@ type Region = {
 }
 
 export default function RegionsPage() {
+  const authorization = useAuthorization()
   const [regions, setRegions] = useState<Region[]>([])
 
   const [name, setName] = useState('')
@@ -48,6 +50,7 @@ export default function RegionsPage() {
   }
 
   async function saveRegion() {
+    if (!authorization.can('Regions', editingId === null ? 'add' : 'edit')) return
     setError(null)
 
     if (!name.trim()) {
@@ -122,6 +125,7 @@ export default function RegionsPage() {
   }
 
   async function deleteRegion(id: number) {
+    if (!authorization.can('Regions', 'delete')) return
     const confirmed = window.confirm(
       'Are you sure you want to delete this region?'
     )
@@ -247,7 +251,7 @@ export default function RegionsPage() {
           <button
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveRegion}
-            disabled={loading}
+            disabled={loading || !authorization.can('Regions', editingId === null ? 'add' : 'edit')}
           >
             {loading
               ? 'Saving...'
@@ -343,6 +347,7 @@ export default function RegionsPage() {
                           onClick={() =>
                             deleteRegion(region.id)
                           }
+                          disabled={!authorization.can('Regions', 'delete')}
                         >
                           Delete
                         </button>

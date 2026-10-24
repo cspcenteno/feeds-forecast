@@ -9,12 +9,14 @@ import {
   X,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
+import { useAuthorization } from '@/lib/authorization'
 
 type Region = {
   id: number
   name: string
   code: string | null
 }
+type Subregion = { id: number; name: string; region_id: number }
 
 type Category = {
   id: number
@@ -35,6 +37,7 @@ type Budget = {
   month: number | null
   week: number | null
   region_id: number | null
+  subregion_id: number | null
   category_id: number | null
   product_id: number | null
   forecast: number
@@ -45,6 +48,7 @@ type Budget = {
 type UserProfile = {
   role: string
   region_id: number | null
+  subregion_id: number | null
   is_active: boolean
 }
 
@@ -65,6 +69,7 @@ const months = [
 
 export default function BudgetPage() {
   const supabase = createClient()
+  const authorization = useAuthorization()
 
   // =========================================================
   // DATA
@@ -72,6 +77,7 @@ export default function BudgetPage() {
 
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [regions, setRegions] = useState<Region[]>([])
+  const [subregions, setSubregions] = useState<Subregion[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
 
@@ -95,6 +101,7 @@ export default function BudgetPage() {
   const [week, setWeek] = useState("")
 
   const [regionId, setRegionId] = useState("")
+  const [subregionId, setSubregionId] = useState("")
 
   const [categoryId, setCategoryId] = useState("")
 
@@ -167,7 +174,7 @@ export default function BudgetPage() {
     } = await supabase
       .from("users")
       .select(
-        "role, region_id, is_active"
+        "role, region_id, subregion_id, is_active"
       )
       .eq("id", user.id)
       .single()
@@ -199,7 +206,7 @@ export default function BudgetPage() {
 
     if (
       profile.role ===
-      "Region Manager"
+      "Manager"
     ) {
       if (profile.region_id) {
         setRegionId(
@@ -223,7 +230,8 @@ export default function BudgetPage() {
     await Promise.all([
       loadBudgets(
         profile.role,
-        profile.region_id
+        profile.region_id,
+        profile.subregion_id
       ),
       loadRegions(
         profile.role,
@@ -231,9 +239,16 @@ export default function BudgetPage() {
       ),
       loadCategories(),
       loadProducts(),
+      loadSubregions(),
     ])
 
     setLoading(false)
+  }
+
+  async function loadSubregions() {
+    const { data, error } = await supabase.from('subregions').select('id,name,region_id').eq('is_active', true).order('name')
+    if (error) { setMessage(error.message); return }
+    setSubregions((data ?? []) as Subregion[])
   }
 
   // =========================================================
@@ -242,7 +257,8 @@ export default function BudgetPage() {
 
   async function loadBudgets(
     role?: string,
-    assignedRegionId?: number | null
+    assignedRegionId?: number | null,
+    assignedSubregionId?: number | null
   ) {
     let query = supabase
       .from("budgets")
@@ -253,6 +269,7 @@ export default function BudgetPage() {
         month,
         week,
         region_id,
+        subregion_id,
         category_id,
         product_id,
         forecast,
@@ -275,16 +292,15 @@ export default function BudgetPage() {
         ascending: false,
       })
 
-    // Region Manager sees only assigned region.
+    // Manager sees only assigned region.
     if (
-      role === "Region Manager" &&
+      role === "Manager" &&
       assignedRegionId !== null &&
       assignedRegionId !== undefined
     ) {
-      query = query.eq(
-        "region_id",
-        assignedRegionId
-      )
+      query = assignedSubregionId != null
+        ? query.eq("subregion_id", assignedSubregionId)
+        : query.eq("region_id", assignedRegionId)
     }
 
     const {
@@ -334,9 +350,9 @@ export default function BudgetPage() {
       )
       .order("name")
 
-    // Region Manager only sees assigned region.
+    // Manager only sees assigned region.
     if (
-      role === "Region Manager" &&
+      role === "Manager" &&
       assignedRegionId !== null &&
       assignedRegionId !== undefined
     ) {
@@ -472,7 +488,7 @@ export default function BudgetPage() {
 
     if (
       userProfile?.role ===
-      "Region Manager"
+      "Manager"
     ) {
       setRegionId(
         userProfile.region_id?.toString() ||
@@ -541,10 +557,10 @@ export default function BudgetPage() {
     )
 
     // Admin can edit the selected region.
-    // Region Manager always uses assigned region.
+    // Manager always uses assigned region.
     if (
       userProfile?.role ===
-      "Region Manager"
+      "Manager"
     ) {
       setRegionId(
         userProfile.region_id?.toString() ||
@@ -772,6 +788,7 @@ export default function BudgetPage() {
   // =========================================================
 
   async function handleSave() {
+    if (!authorization.can('Budget', editingId === null ? 'add' : 'edit')) return
     setMessage("")
 
     // =======================================================
@@ -797,8 +814,8 @@ export default function BudgetPage() {
     // =======================================================
 
     if (
-      userProfile.role !== "Admin" &&
-      userProfile.role !== "Region Manager"
+      userProfile.role !== "Admin" && userProfile.role !== "Superuser" &&
+      userProfile.role !== "Manager"
     ) {
       setMessage(
         "You do not have permission to manage budgets."
@@ -824,7 +841,7 @@ export default function BudgetPage() {
     let saveRegionId: number | null = null
 
     if (
-      userProfile.role === "Admin"
+      userProfile.role === "Admin" || userProfile.role === "Superuser"
     ) {
       if (!regionId) {
         setMessage(
@@ -836,7 +853,7 @@ export default function BudgetPage() {
       saveRegionId =
         Number(regionId)
     } else {
-      // Region Manager ALWAYS uses
+      // Manager ALWAYS uses
       // their assigned region.
       if (
         userProfile.region_id === null
@@ -906,6 +923,9 @@ export default function BudgetPage() {
 
       region_id:
         saveRegionId,
+      subregion_id: userProfile?.role === 'Admin' || userProfile?.role === 'Superuser'
+        ? (subregionId ? Number(subregionId) : null)
+        : userProfile?.subregion_id ?? null,
 
       category_id:
         Number(categoryId),
@@ -1057,7 +1077,8 @@ export default function BudgetPage() {
 
     await loadBudgets(
       userProfile.role,
-      userProfile.region_id
+      userProfile.region_id,
+      userProfile.subregion_id
     )
 
     setSaving(false)
@@ -1070,6 +1091,7 @@ export default function BudgetPage() {
   async function handleDelete(
     id: number
   ) {
+    if (!authorization.can('Budget', 'delete')) return
     const confirmed =
       window.confirm(
         "Are you sure you want to delete this budget?"
@@ -1126,7 +1148,8 @@ export default function BudgetPage() {
 
     await loadBudgets(
       userProfile?.role,
-      userProfile?.region_id
+      userProfile?.region_id,
+      userProfile?.subregion_id
     )
   }
 
@@ -1331,7 +1354,7 @@ export default function BudgetPage() {
 
     if (
       userProfile?.role ===
-      "Region Manager"
+      "Manager"
     ) {
       setFilterRegion(
         userProfile.region_id?.toString() ||
@@ -1529,16 +1552,13 @@ export default function BudgetPage() {
               Region
             </label>
 
-            {userProfile?.role ===
-            "Admin" ? (
+            {userProfile?.role === "Admin" || userProfile?.role === "Superuser" ? (
               <select
                 value={
                   regionId
                 }
                 onChange={(e) =>
-                  setRegionId(
-                    e.target.value
-                  )
+                  (setRegionId(e.target.value), setSubregionId(''))
                 }
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
               >
@@ -1581,6 +1601,19 @@ export default function BudgetPage() {
               />
             )}
 
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Subregion</label>
+            <select
+              value={userProfile?.role === 'Admin' || userProfile?.role === 'Superuser' ? subregionId : userProfile?.subregion_id ?? ''}
+              onChange={(e) => setSubregionId(e.target.value)}
+              disabled={userProfile?.role !== 'Admin' && userProfile?.role !== 'Superuser'}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:bg-muted"
+            >
+              <option value="">Region wide</option>
+              {subregions.filter((item) => item.region_id === Number(regionId)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
           </div>
 
           {/* ================================================= */}
@@ -1790,7 +1823,7 @@ export default function BudgetPage() {
                 handleSave
               }
               disabled={
-                saving
+                saving || !authorization.can('Budget', editingId === null ? 'add' : 'edit')
               }
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -1949,7 +1982,8 @@ export default function BudgetPage() {
 
               await loadBudgets(
                 userProfile?.role,
-                userProfile?.region_id
+                userProfile?.region_id,
+                userProfile?.subregion_id
               )
 
               setLoading(false)
@@ -2153,8 +2187,7 @@ export default function BudgetPage() {
               Region
             </label>
 
-            {userProfile?.role ===
-            "Admin" ? (
+            {userProfile?.role === "Admin" || userProfile?.role === "Superuser" ? (
               <select
                 value={
                   filterRegion
@@ -2441,6 +2474,7 @@ export default function BudgetPage() {
                               )
                             }
                             title="Edit"
+                            disabled={!authorization.can('Budget', 'edit')}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
                           >
                             <Pencil className="h-4 w-4" />
@@ -2454,6 +2488,7 @@ export default function BudgetPage() {
                               )
                             }
                             title="Delete"
+                            disabled={!authorization.can('Budget', 'delete')}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
                           >
                             <Trash2 className="h-4 w-4" />

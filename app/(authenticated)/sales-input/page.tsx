@@ -8,12 +8,14 @@ import {
   Pencil,
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 type Region = {
   id: number
   name: string
   code: string | null
 }
+type Subregion = { id: number; name: string; region_id: number }
 
 type Category = {
   id: number
@@ -35,6 +37,7 @@ type BudgetRecord = {
   month: number | null
   week: number | null
   region_id: number | null
+  subregion_id: number | null
   category_id: number | null
   product_id: number | null
   forecast: number
@@ -47,6 +50,7 @@ type SalesForecast = {
   year: number
   week: number
   region_id: number | null
+  subregion_id: number | null
   category_id: number | null
   product_id: number | null
   forecast: number
@@ -72,13 +76,16 @@ type UserAccess = {
   role: string
   isAdmin: boolean
   assignedRegionId: number | null
+  assignedSubregionId: number | null
 }
 
 export default function SalesInputPage() {
   const supabase = createClient()
+  const authorization = useAuthorization()
   const currentYear = new Date().getFullYear()
 
   const [regions, setRegions] = useState<Region[]>([])
+  const [subregions, setSubregions] = useState<Subregion[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [budgets, setBudgets] = useState<BudgetRecord[]>([])
@@ -87,6 +94,7 @@ export default function SalesInputPage() {
   const [userId, setUserId] = useState('')
   const [userFullName, setUserFullName] = useState('')
   const [assignedRegionId, setAssignedRegionId] = useState<number | null>(null)
+  const [assignedSubregionId, setAssignedSubregionId] = useState<number | null>(null)
   const [assignedRegionName, setAssignedRegionName] = useState('')
   const [role, setRole] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
@@ -95,6 +103,7 @@ export default function SalesInputPage() {
   const [week, setWeek] = useState(1)
   const [selectedWeek, setSelectedWeek] = useState('')
   const [selectedRegionId, setSelectedRegionId] = useState('')
+  const [selectedSubregionId, setSelectedSubregionId] = useState('')
 
   const [rows, setRows] = useState<SalesRow[]>([
     {
@@ -276,7 +285,7 @@ export default function SalesInputPage() {
     } = await supabase
       .from('users')
       .select(
-        'full_name, role, is_active, region_id'
+        'full_name, role, is_active, region_id, subregion_id'
       )
       .eq('id', user.id)
       .single()
@@ -298,6 +307,7 @@ export default function SalesInputPage() {
       profile.region_id
         ? Number(profile.region_id)
         : null
+    const profileAssignedSubregionId = profile.subregion_id == null ? null : Number(profile.subregion_id)
 
     const fullName =
       profile.full_name ||
@@ -306,6 +316,8 @@ export default function SalesInputPage() {
       'User'
 
     setRole(profileRole)
+    setAssignedSubregionId(profileAssignedSubregionId)
+    setSelectedSubregionId(profileAssignedSubregionId == null ? '' : String(profileAssignedSubregionId))
     setUserFullName(fullName)
 
     if (profileRole === 'Admin') {
@@ -319,11 +331,12 @@ export default function SalesInputPage() {
         role: profileRole,
         isAdmin: true,
         assignedRegionId: null,
+        assignedSubregionId: null,
       }
     }
 
     if (
-      profileRole === 'Region Manager' ||
+      profileRole === 'Manager' ||
       profileRole === 'User'
     ) {
       setIsAdmin(false)
@@ -337,6 +350,7 @@ export default function SalesInputPage() {
           ? String(profileAssignedRegionId)
           : ''
       )
+      setSelectedSubregionId(profileAssignedSubregionId == null ? '' : String(profileAssignedSubregionId))
 
       return {
         userId: user.id,
@@ -344,6 +358,7 @@ export default function SalesInputPage() {
         isAdmin: false,
         assignedRegionId:
           profileAssignedRegionId,
+        assignedSubregionId: profileAssignedSubregionId,
       }
     }
 
@@ -365,6 +380,7 @@ export default function SalesInputPage() {
       isAdmin: false,
       assignedRegionId:
         profileAssignedRegionId,
+      assignedSubregionId: profileAssignedSubregionId,
     }
   }
 
@@ -401,6 +417,10 @@ export default function SalesInputPage() {
     setRegions(
       loadedRegions ?? []
     )
+    const { data: loadedSubregions, error: subregionsError } = await supabase
+      .from('subregions').select('id, name, region_id').eq('is_active', true).order('name')
+    if (subregionsError) { setError(subregionsError.message); return }
+    setSubregions((loadedSubregions ?? []) as Subregion[])
 
     if (
       profileAssignedRegionId !== null
@@ -468,6 +488,7 @@ export default function SalesInputPage() {
         month,
         week,
         region_id,
+        subregion_id,
         category_id,
         product_id,
         forecast,
@@ -487,7 +508,7 @@ export default function SalesInputPage() {
   }
 
   const availableRegions = useMemo(() => {
-    if (role === 'Admin') {
+    if (role === 'Admin' || role === 'Superuser') {
       return regions
     }
 
@@ -514,6 +535,7 @@ export default function SalesInputPage() {
           year,
           week,
           region_id,
+          subregion_id,
           category_id,
           product_id,
           forecast,
@@ -535,8 +557,10 @@ export default function SalesInputPage() {
 
     if (access.isAdmin) {
       // Admin can see all forecasts.
+    } else if (access.role === 'Superuser') {
+      // Superusers have global read access.
     } else if (
-      access.role === 'Region Manager'
+      access.role === 'Manager'
     ) {
       if (
         access.assignedRegionId === null
@@ -548,11 +572,9 @@ export default function SalesInputPage() {
         return
       }
 
-      forecastsQuery =
-        forecastsQuery.eq(
-          'region_id',
-          access.assignedRegionId
-        )
+      forecastsQuery = access.assignedSubregionId !== null
+        ? forecastsQuery.eq('subregion_id', access.assignedSubregionId)
+        : forecastsQuery.eq('region_id', access.assignedRegionId)
     } else {
       forecastsQuery =
         forecastsQuery.eq(
@@ -779,14 +801,19 @@ export default function SalesInputPage() {
         week
       )
 
-    const matchingBudgets =
-      budgets.filter(
+    const targetSubregionId = selectedSubregionId
+      ? Number(selectedSubregionId)
+      : assignedSubregionId
+    const scopedBudgets = budgets.filter(
         (item) =>
           item.year === year &&
           item.region_id === region &&
           item.category_id === category &&
           item.product_id === product
       )
+    const matchingBudgets = targetSubregionId === null
+      ? scopedBudgets.filter((item) => item.subregion_id === null)
+      : scopedBudgets.filter((item) => item.subregion_id === targetSubregionId)
 
     const weeklyBudget =
       matchingBudgets.find(
@@ -885,6 +912,7 @@ export default function SalesInputPage() {
   }
 
   function addRow() {
+    if (!authorization.can('Sales Input', 'add')) return
     setRows([
       ...rows,
       {
@@ -1138,6 +1166,8 @@ export default function SalesInputPage() {
   async function handleSave(
     submitAfterSave = false
   ) {
+    if ((rows.some((row) => row.id === null) && !authorization.can('Sales Input', 'add')) ||
+        (rows.some((row) => row.id !== null) && !authorization.can('Sales Input', 'edit'))) return
     setError('')
     setMessage('')
 
@@ -1177,9 +1207,12 @@ export default function SalesInputPage() {
     setLoading(true)
 
     const regionId =
-      role === 'Admin'
+      role === 'Admin' || role === 'Superuser'
         ? Number(selectedRegionId)
         : assignedRegionId
+    const subregionId = role === 'Admin' || role === 'Superuser'
+      ? (selectedSubregionId ? Number(selectedSubregionId) : null)
+      : assignedSubregionId
 
     if (!regionId) {
       setLoading(false)
@@ -1211,6 +1244,7 @@ export default function SalesInputPage() {
 
           region_id:
             regionId,
+          subregion_id: subregionId,
 
           category_id:
             Number(row.category_id),
@@ -1335,6 +1369,7 @@ export default function SalesInputPage() {
       role,
       isAdmin,
       assignedRegionId,
+      assignedSubregionId,
     }
 
     await loadForecasts(
@@ -1345,6 +1380,7 @@ export default function SalesInputPage() {
   async function handleEdit(
     item: SalesForecast
   ) {
+    if (!authorization.can('Sales Input', 'edit')) return
     if (
       item.status === 'Approved'
     ) {
@@ -1356,7 +1392,7 @@ export default function SalesInputPage() {
     }
 
     if (
-      role === 'Region Manager' &&
+      role === 'Manager' &&
       item.region_id !==
         assignedRegionId
     ) {
@@ -1452,6 +1488,7 @@ export default function SalesInputPage() {
   async function handleSubmit(
     id: number
   ) {
+    if (!authorization.can('Sales Input', 'edit')) return
     setError('')
     setMessage('')
 
@@ -1470,7 +1507,7 @@ export default function SalesInputPage() {
     }
 
     if (
-      role === 'Region Manager' &&
+      role === 'Manager' &&
       item.region_id !==
         assignedRegionId
     ) {
@@ -1555,6 +1592,7 @@ export default function SalesInputPage() {
       role,
       isAdmin,
       assignedRegionId,
+      assignedSubregionId,
     }
 
     await loadForecasts(
@@ -1565,6 +1603,7 @@ export default function SalesInputPage() {
   async function handleDelete(
     id: number
   ) {
+    if (!authorization.can('Sales Input', 'delete')) return
     setError('')
     setMessage('')
 
@@ -1587,7 +1626,7 @@ export default function SalesInputPage() {
     }
 
     if (
-      role === 'Region Manager' &&
+      role === 'Manager' &&
       item.region_id !==
         assignedRegionId
     ) {
@@ -1666,6 +1705,7 @@ export default function SalesInputPage() {
       role,
       isAdmin,
       assignedRegionId,
+      assignedSubregionId,
     }
 
     await loadForecasts(
@@ -1686,7 +1726,8 @@ export default function SalesInputPage() {
   const isFormDisabled =
     isLocked ||
     checkingWeekLock ||
-    loading
+    loading ||
+    (!authorization.can('Sales Input', 'add') && !authorization.can('Sales Input', 'edit'))
 
   function formatNumber(
     value: number
@@ -1801,13 +1842,11 @@ export default function SalesInputPage() {
                   selectedRegionId
                 }
                 onChange={(e) =>
-                  setSelectedRegionId(
-                    e.target.value
-                  )
+                  (setSelectedRegionId(e.target.value), setSelectedSubregionId(''))
                 }
                 disabled={
                   isFormDisabled ||
-                  role !== 'Admin'
+                  (role !== 'Admin' && role !== 'Superuser')
                 }
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -1835,7 +1874,7 @@ export default function SalesInputPage() {
                 </p>
               )}
 
-              {role === 'Region Manager' && (
+              {role === 'Manager' && (
                 <p className="text-xs text-muted-foreground">
                   Region is based on your assigned region.
                 </p>
@@ -1847,6 +1886,21 @@ export default function SalesInputPage() {
                 </p>
               )}
 
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subregion</label>
+              <select
+                value={selectedSubregionId}
+                onChange={(e) => setSelectedSubregionId(e.target.value)}
+                disabled={isFormDisabled || (role !== 'Admin' && role !== 'Superuser')}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">No subregion</option>
+                {subregions.filter((item) => item.region_id === Number(selectedRegionId)).map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
             </div>
 
           </div>
@@ -2136,7 +2190,7 @@ export default function SalesInputPage() {
                       type="button"
                       onClick={addRow}
                       disabled={
-                        isFormDisabled
+                        isFormDisabled || !authorization.can('Sales Input', 'add')
                       }
                       className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -2197,7 +2251,7 @@ export default function SalesInputPage() {
                 handleSave(false)
               }
               disabled={
-                isFormDisabled
+                isFormDisabled || (!authorization.can('Sales Input', 'add') && !authorization.can('Sales Input', 'edit'))
               }
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -2216,7 +2270,7 @@ export default function SalesInputPage() {
                 handleSave(true)
               }
               disabled={
-                isFormDisabled
+                isFormDisabled || !authorization.can('Sales Input', 'edit')
               }
               className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >

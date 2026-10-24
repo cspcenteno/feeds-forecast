@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 import {
   Table,
@@ -30,6 +31,7 @@ type Subregion = {
 }
 
 export default function SubregionsPage() {
+  const authorization = useAuthorization()
   const [subregions, setSubregions] = useState<Subregion[]>([])
   const [regions, setRegions] = useState<Region[]>([])
 
@@ -80,6 +82,7 @@ export default function SubregionsPage() {
   }
 
   async function saveSubregion() {
+    if (!authorization.can('Subregions', editingId === null ? 'add' : 'edit')) return
     setError(null)
 
     if (!name.trim()) {
@@ -168,6 +171,7 @@ export default function SubregionsPage() {
   }
 
   async function deleteSubregion(id: number) {
+    if (!authorization.can('Subregions', 'delete')) return
     const confirmed = window.confirm(
       'Are you sure you want to delete this subregion?'
     )
@@ -329,7 +333,7 @@ export default function SubregionsPage() {
           <button
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveSubregion}
-            disabled={loading || initialLoading}
+            disabled={loading || initialLoading || !authorization.can('Subregions', editingId === null ? 'add' : 'edit')}
           >
             {loading
               ? 'Saving...'
@@ -431,7 +435,7 @@ export default function SubregionsPage() {
                           <button
                             className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
                             onClick={() => editSubregion(subregion)}
-                            disabled={loading}
+                            disabled={loading || !authorization.can('Subregions', 'edit')}
                           >
                             Edit
                           </button>
@@ -441,7 +445,7 @@ export default function SubregionsPage() {
                             onClick={() =>
                               deleteSubregion(subregion.id)
                             }
-                            disabled={loading}
+                            disabled={loading || !authorization.can('Subregions', 'delete')}
                           >
                             Delete
                           </button>

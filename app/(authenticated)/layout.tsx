@@ -3,6 +3,7 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { usePathname } from "next/navigation"
+import { AuthorizationProvider } from "@/lib/authorization"
 
 export default function AuthenticatedLayout({
   children,
@@ -20,7 +21,9 @@ export default function AuthenticatedLayout({
     "/categories": "Categories",
     "/products": "Products",
     "/regions": "Regions",
+    "/subregions": "Subregions",
     "/week-locks": "Week Locks",
+    "/locks": "Week Locks",
     "/users": "Users",
   }
 
@@ -28,8 +31,8 @@ export default function AuthenticatedLayout({
 
   return (
     <SidebarProvider>
+      <AuthorizationProvider>
       <AppSidebar />
-
       <main className="w-full min-w-0">
         <div className="flex h-14 items-center border-b px-4">
           <h1 className="text-lg font-semibold">
@@ -41,6 +44,7 @@ export default function AuthenticatedLayout({
           {children}
         </div>
       </main>
+      </AuthorizationProvider>
     </SidebarProvider>
   )
 }

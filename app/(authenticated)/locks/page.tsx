@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 import {
   Table,
@@ -32,6 +33,7 @@ type WeekLock = {
 const statuses = ['Open', 'Locked']
 
 export default function WeekLocksPage() {
+  const authorization = useAuthorization()
   const supabase = createClient()
 
   // DATA
@@ -167,6 +169,7 @@ export default function WeekLocksPage() {
 
   // SAVE WEEK LOCK
   async function saveWeekLock() {
+    if (!authorization.can('Week Locks', editingId === null ? 'add' : 'edit')) return
     setError('')
     setMessage('')
 
@@ -318,6 +321,7 @@ export default function WeekLocksPage() {
 
   // DELETE WEEK LOCK
   async function deleteWeekLock(id: number) {
+    if (!authorization.can('Week Locks', 'delete')) return
     const confirmed = window.confirm(
       'Are you sure you want to delete this week lock?'
     )
@@ -452,7 +456,7 @@ export default function WeekLocksPage() {
           <button
             type="button"
             onClick={saveWeekLock}
-            disabled={loading || !selectedWeek}
+            disabled={loading || !selectedWeek || !authorization.can('Week Locks', editingId === null ? 'add' : 'edit')}
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
@@ -567,7 +571,7 @@ export default function WeekLocksPage() {
                         <button
                           type="button"
                           onClick={() => editWeekLock(lock)}
-                          disabled={loading}
+                          disabled={loading || !authorization.can('Week Locks', 'edit')}
                           className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Edit
@@ -576,7 +580,7 @@ export default function WeekLocksPage() {
                         <button
                           type="button"
                           onClick={() => deleteWeekLock(lock.id)}
-                          disabled={loading}
+                          disabled={loading || !authorization.can('Week Locks', 'delete')}
                           className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Delete

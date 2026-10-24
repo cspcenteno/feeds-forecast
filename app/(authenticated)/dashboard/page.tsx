@@ -29,6 +29,7 @@ type Forecast = {
   year: number;
   week: number;
   region_id: string;
+  subregion_id: number | null;
   category_id: string;
   product_id: string;
   forecast: number;
@@ -62,6 +63,7 @@ type UserProfile = {
   id: string;
   role: string;
   region_id: string | null;
+  subregion_id: number | null;
   is_active: boolean;
   full_name?: string | null;
   display_name?: string | null;
@@ -1034,8 +1036,10 @@ export default function DashboardPage() {
           forecastData = forecastData.filter(
             (row) => row.user_id === profile.id
           );
-        } else if (role === "region manager") {
-          if (profile.region_id) {
+        } else if (role === "manager") {
+          if (profile.subregion_id) {
+            forecastData = forecastData.filter((row) => row.subregion_id === profile.subregion_id);
+          } else if (profile.region_id) {
             forecastData = forecastData.filter(
               (row) => row.region_id === profile.region_id
             );

@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState } from 'react'
@@ -22,19 +23,58 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const { data, error: loginError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
 
-    if (error) {
-      setError(error.message)
+      if (loginError) {
+        setError(loginError.message)
+        return
+      }
+
+      if (!data.user) {
+        setError('Unable to verify your account. Please sign in again.')
+        await supabase.auth.signOut()
+        return
+      }
+
+      // Check whether the user must change their temporary password.
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('must_change_password')
+        .eq('id', data.user.id)
+        .single()
+
+      if (profileError || !profile) {
+        console.error('Unable to retrieve user profile:', profileError)
+
+        setError(
+          'Unable to verify your account settings. Please contact your administrator.'
+        )
+
+        await supabase.auth.signOut()
+        return
+      }
+
+      // Require a password change before opening the dashboard.
+      if (profile.must_change_password) {
+        router.replace('/change-password')
+        router.refresh()
+        return
+      }
+
+      // Normal login.
+      router.replace('/dashboard')
+      router.refresh()
+    } catch (err) {
+      console.error('Login error:', err)
+      setError('Something went wrong. Please try again.')
+    } finally {
       setLoading(false)
-      return
     }
-
-    router.push('/dashboard')
-    router.refresh()
   }
 
   return (
@@ -57,10 +97,7 @@ export default function LoginPage() {
 
           {/* Email */}
           <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium"
-            >
+            <label htmlFor="email" className="text-sm font-medium">
               Email
             </label>
 
@@ -70,6 +107,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
+              autoComplete="username"
               required
               className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
             />
@@ -77,10 +115,7 @@ export default function LoginPage() {
 
           {/* Password */}
           <div className="space-y-2">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium"
-            >
+            <label htmlFor="password" className="text-sm font-medium">
               Password
             </label>
 
@@ -91,6 +126,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
+                autoComplete="current-password"
                 required
                 className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm outline-none focus:ring-2 focus:ring-primary"
               />
@@ -98,6 +134,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? (
@@ -111,7 +148,10 @@ export default function LoginPage() {
 
           {/* Error */}
           {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div
+              role="alert"
+              className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+            >
               {error}
             </div>
           )}

@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 type Region = {
   id: number
@@ -33,6 +34,7 @@ type SalesForecast = {
   year: number
   week: number
   region_id: number | null
+  subregion_id: number | null
   category_id: number | null
   product_id: number | null
   forecast: number
@@ -47,6 +49,7 @@ type SalesForecast = {
 
 export default function ApprovalsPage() {
   const supabase = createClient()
+  const authorization = useAuthorization()
 
   // -----------------------------------------
   // DATA
@@ -77,7 +80,6 @@ export default function ApprovalsPage() {
 
   const [userId, setUserId] = useState('')
   const [userRole, setUserRole] = useState('')
-  const [isAdmin, setIsAdmin] = useState(false)
   const [assignedRegionId, setAssignedRegionId] =
     useState<number | null>(null)
 
@@ -163,7 +165,7 @@ export default function ApprovalsPage() {
     } = await supabase
       .from('users')
       .select(
-        'role, is_active, region_id'
+        'role, is_active, region_id, subregion_id'
       )
       .eq('id', user.id)
       .single()
@@ -182,11 +184,11 @@ export default function ApprovalsPage() {
 
     const role = profile.role ?? ''
     const admin = role === 'Admin'
+    const superuser = role === 'Superuser'
     const regionManager =
-      role === 'Region Manager'
+      role === 'Manager'
 
     setUserRole(role)
-    setIsAdmin(admin)
 
     const profileRegionId =
       profile.region_id !== null &&
@@ -207,7 +209,7 @@ export default function ApprovalsPage() {
     //
 
     if (
-      !admin &&
+      !admin && !superuser &&
       !regionManager
     ) {
       setError(
@@ -223,7 +225,7 @@ export default function ApprovalsPage() {
     }
 
     // -----------------------------------------
-    // VALIDATE REGION MANAGER REGION
+    // VALIDATE MANAGER REGION
     // -----------------------------------------
 
     if (
@@ -254,7 +256,7 @@ export default function ApprovalsPage() {
       .eq('is_active', true)
       .order('name')
 
-    // Region Manager can only see
+    // Manager can only see
     // their assigned region.
     if (regionManager) {
       regionsQuery =
@@ -276,6 +278,7 @@ export default function ApprovalsPage() {
         year,
         week,
         region_id,
+        subregion_id,
         category_id,
         product_id,
         forecast,
@@ -299,15 +302,14 @@ export default function ApprovalsPage() {
       })
 
     // -----------------------------------------
-    // REGION MANAGER REGION RESTRICTION
+    // MANAGER REGION RESTRICTION
     // -----------------------------------------
 
     if (regionManager) {
-      salesQuery =
-        salesQuery.eq(
-          'region_id',
-          profileRegionId
-        )
+      const subregionId = profile.subregion_id == null ? null : Number(profile.subregion_id)
+      salesQuery = subregionId !== null
+        ? salesQuery.eq('subregion_id', subregionId)
+        : salesQuery.eq('region_id', profileRegionId)
     }
 
     // -----------------------------------------
@@ -417,7 +419,7 @@ export default function ApprovalsPage() {
     // Admin:
     //     All regions
     //
-    // Region Manager:
+    // Manager:
     //     Assigned region only
     //
 
@@ -688,7 +690,7 @@ export default function ApprovalsPage() {
 
     if (
       userRole ===
-      'Region Manager'
+      'Manager'
     ) {
       setSelectedRegion(
         String(
@@ -769,6 +771,7 @@ export default function ApprovalsPage() {
   // -----------------------------------------
 
   async function handleApproval() {
+    if (!authorization.can('Approvals', 'edit')) return
     if (!selectedItem) {
       return
     }
@@ -950,12 +953,11 @@ export default function ApprovalsPage() {
                 }
                 disabled={
                   userRole ===
-                  'Region Manager'
+                  'Manager'
                 }
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted"
               >
-                {userRole ===
-                'Admin' && (
+                {(userRole === 'Admin' || userRole === 'Superuser') && (
                   <option value="all">
                     All Active Regions
                   </option>
@@ -1066,7 +1068,7 @@ export default function ApprovalsPage() {
 
             <p className="text-sm text-muted-foreground">
               {userRole ===
-              'Region Manager'
+              'Manager'
                 ? 'Review submitted sales forecasts for your assigned region.'
                 : 'Review submitted sales forecasts.'}
             </p>
@@ -1231,8 +1233,7 @@ export default function ApprovalsPage() {
                       {/* Action */}
 
                       <td className="px-6 py-3">
-                        {item.status ===
-                        'Pending' ? (
+                        {item.status === 'Pending' && authorization.can('Approvals', 'edit') ? (
                           <div className="flex items-center justify-start gap-2">
                             <button
                               type="button"

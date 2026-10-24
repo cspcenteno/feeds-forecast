@@ -8,9 +8,17 @@ import {
   Trash2,
   RefreshCw,
   ShieldCheck,
+  Plus,
+  X,
 } from 'lucide-react'
 
 import { createClient } from '@/lib/client'
+import {
+  defaultPermissions as sharedDefaultPermissions,
+  disabledPermissions,
+  modules,
+} from '@/lib/authorization'
+import type { Action, ModuleName } from '@/lib/authorization'
 
 type User = {
   id: string
@@ -37,22 +45,6 @@ type Subregion = {
 
 const roles = ['User', 'Superuser', 'Manager', 'Admin'] as const
 
-const modules = [
-  'Dashboard',
-  'Sales Input',
-  'Weekly Sales',
-  'Approvals',
-  'Budget',
-  'Categories',
-  'Products',
-  'Regions',
-  'Subregions',
-  'Users',
-  'Week Locks',
-] as const
-
-type ModuleName = (typeof modules)[number]
-
 type PermissionField =
   | 'can_view'
   | 'can_add'
@@ -77,30 +69,6 @@ const permissionFields: {
   { field: 'can_delete', label: 'Delete' },
 ]
 
-/**
- * Permissions that must never be enabled.
- *
- * Dashboard: Add, Edit, Delete disabled.
- * Weekly Sales: Add, Edit, Delete disabled.
- * Approvals: Add and Delete disabled.
- */
-const disabledPermissions: Record<
-  ModuleName,
-  PermissionField[]
-> = {
-  Dashboard: ['can_add', 'can_edit', 'can_delete'],
-  'Sales Input': [],
-  'Weekly Sales': ['can_add', 'can_edit', 'can_delete'],
-  Approvals: ['can_add', 'can_delete'],
-  Budget: [],
-  Categories: [],
-  Products: [],
-  Regions: [],
-  Subregions: [],
-  Users: [],
-  'Week Locks': [],
-}
-
 function createDefaultPermissions(): ModulePermission[] {
   return modules.map((module) => ({
     module,
@@ -113,126 +81,44 @@ function createDefaultPermissions(): ModulePermission[] {
 
 function isPermissionDisabled(
   module: ModuleName,
-  field: PermissionField
+  field: PermissionField,
 ) {
-  return disabledPermissions[module].includes(field)
+  return (disabledPermissions[module] ?? []).includes(
+    field.replace('can_', '') as Action,
+  )
 }
 
 function normalizePermission(
-  permission: ModulePermission
+  permission: ModulePermission,
 ): ModulePermission {
   const normalized = { ...permission }
 
-  for (const field of permissionFields) {
-    if (isPermissionDisabled(permission.module, field.field)) {
-      normalized[field.field] = false
+  for (const { field } of permissionFields) {
+    if (isPermissionDisabled(permission.module, field)) {
+      normalized[field] = false
     }
   }
 
   return normalized
 }
 
-/**
- * Creates default permissions for a role.
- * Prohibited permissions are always normalized to false.
- */
 function getDefaultPermissions(role: string): ModulePermission[] {
-  const permissions = createDefaultPermissions()
+  const shared = sharedDefaultPermissions(role)
 
-  function setPermission(
-    module: ModuleName,
-    values: Partial<Omit<ModulePermission, 'module'>>
-  ) {
-    const permission = permissions.find(
-      (item) => item.module === module
-    )
-
-    if (permission) {
-      Object.assign(permission, values)
-    }
-  }
-
-  function setViewOnly(moduleNames: ModuleName[]) {
-    moduleNames.forEach((module) => {
-      setPermission(module, { can_view: true })
-    })
-  }
-
-  switch (role) {
-    case 'User':
-      // Dashboard and Weekly Sales only have View available.
-      setViewOnly(['Dashboard', 'Weekly Sales'])
-
-      setPermission('Sales Input', {
-        can_view: true,
-        can_add: true,
-        can_edit: true,
-      })
-      break
-
-    case 'Superuser':
-      setViewOnly([
-        'Dashboard',
-        'Sales Input',
-        'Weekly Sales',
-        'Approvals',
-        'Categories',
-        'Products',
-        'Regions',
-        'Subregions',
-      ])
-
-      setPermission('Budget', {
-        can_view: true,
-        can_add: true,
-        can_edit: true,
-      })
-
-      setPermission('Week Locks', {
-        can_view: true,
-        can_add: true,
-        can_edit: true,
-      })
-      break
-
-    case 'Manager':
-      setViewOnly([
-        'Dashboard',
-        'Sales Input',
-        'Weekly Sales',
-        'Approvals',
-        'Categories',
-        'Products',
-        'Regions',
-        'Subregions',
-        'Budget',
-        'Week Locks',
-      ])
-
-      setPermission('Approvals', {
-        can_view: true,
-        can_edit: true,
-      })
-      break
-
-    case 'Admin':
-      // Enable every permitted action.
-      // normalizePermission will keep prohibited actions false.
-      permissions.forEach((permission) => {
-        permission.can_view = true
-        permission.can_add = true
-        permission.can_edit = true
-        permission.can_delete = true
-      })
-      break
-  }
-
-  return permissions.map(normalizePermission)
+  return modules.map((module) =>
+    normalizePermission({
+      module,
+      can_view: shared[module].view,
+      can_add: shared[module].add,
+      can_edit: shared[module].edit,
+      can_delete: shared[module].delete,
+    }),
+  )
 }
 
 export default function UsersPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [users, setUsers] = useState<User[]>([])
   const [regions, setRegions] = useState<Region[]>([])
@@ -246,6 +132,7 @@ export default function UsersPage() {
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
+  // Edit User state
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [position, setPosition] = useState('')
@@ -254,11 +141,26 @@ export default function UsersPage() {
   const [subregionId, setSubregionId] = useState<number | null>(null)
   const [isActive, setIsActive] = useState(false)
 
-  const [permissions, setPermissions] = useState<ModulePermission[]>(
-    () => createDefaultPermissions()
+  // Create User state
+  const [showCreateUser, setShowCreateUser] = useState(false)
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [newFullName, setNewFullName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newTemporaryPassword, setNewTemporaryPassword] = useState('')
+  const [newRole, setNewRole] = useState<string>('User')
+  const [newRegionId, setNewRegionId] = useState<number | null>(null)
+  const [newSubregionId, setNewSubregionId] = useState<number | null>(null)
+  const [newPosition, setNewPosition] = useState('')
+
+  // Permissions for new and existing users
+  const [newPermissions, setNewPermissions] = useState<ModulePermission[]>(
+    () => getDefaultPermissions('User'),
   )
 
-  // True if this user already has at least one saved permission row.
+  const [permissions, setPermissions] = useState<ModulePermission[]>(
+    () => createDefaultPermissions(),
+  )
+
   const [hasSavedPermissions, setHasSavedPermissions] = useState(false)
   const [loadingPermissions, setLoadingPermissions] = useState(false)
   const [permissionLoadError, setPermissionLoadError] = useState(false)
@@ -286,11 +188,7 @@ export default function UsersPage() {
       .eq('id', user.id)
       .single()
 
-    if (
-      error ||
-      profile?.role !== 'Admin' ||
-      !profile?.is_active
-    ) {
+    if (error || profile?.role !== 'Admin' || !profile?.is_active) {
       router.push('/dashboard')
       return
     }
@@ -383,7 +281,7 @@ export default function UsersPage() {
 
   async function loadUserPermissions(
     userId: string,
-    selectedRole: string
+    selectedRole: string,
   ) {
     setLoadingPermissions(true)
     setPermissionLoadError(false)
@@ -395,7 +293,8 @@ export default function UsersPage() {
         can_view,
         can_add,
         can_edit,
-        can_delete
+        can_delete,
+        is_default
       `)
       .eq('user_id', userId)
 
@@ -403,26 +302,23 @@ export default function UsersPage() {
       console.error('User Permissions Select Error:', error)
       setPermissionLoadError(true)
       setLoadingPermissions(false)
-
-      alert(
-        `Unable to load user permissions: ${error.message}`
-      )
+      alert(`Unable to load user permissions: ${error.message}`)
       return
     }
 
-    if (!data || data.length === 0) {
-      // No permission records exist for this user.
-      // Generate defaults based on the selected user's role.
+    if (
+      !data ||
+      data.length === 0 ||
+      data.every((item) => item.is_default)
+    ) {
       setHasSavedPermissions(false)
       setPermissions(getDefaultPermissions(selectedRole))
       setLoadingPermissions(false)
       return
     }
 
-    // Existing permission records take precedence over role defaults.
-    // Any modules without rows remain false.
     const savedPermissions = new Map(
-      data.map((item) => [item.module, item])
+      data.map((item) => [item.module, item]),
     )
 
     const mergedPermissions: ModulePermission[] = modules.map(
@@ -436,7 +332,7 @@ export default function UsersPage() {
           can_edit: saved?.can_edit ?? false,
           can_delete: saved?.can_delete ?? false,
         })
-      }
+      },
     )
 
     setHasSavedPermissions(true)
@@ -445,6 +341,7 @@ export default function UsersPage() {
   }
 
   async function selectUser(user: User) {
+    setShowCreateUser(false)
     setSelectedUser(user)
     setFullName(user.full_name ?? '')
     setEmail(user.email)
@@ -460,8 +357,6 @@ export default function UsersPage() {
   function handleRoleChange(newRole: string) {
     setRole(newRole)
 
-    // If this user has no saved permission rows, update the defaults
-    // immediately whenever the selected role changes.
     if (!hasSavedPermissions) {
       setPermissions(getDefaultPermissions(newRole))
     }
@@ -487,10 +382,95 @@ export default function UsersPage() {
     setPermissionLoadError(false)
   }
 
+  function resetCreateUserForm() {
+    setNewFullName('')
+    setNewEmail('')
+    setNewTemporaryPassword('')
+    setNewRole('User')
+    setNewRegionId(null)
+    setNewSubregionId(null)
+    setNewPosition('')
+    setNewPermissions(getDefaultPermissions('User'))
+    setShowCreateUser(false)
+  }
+
+  function openCreateUserForm() {
+    clearSelection()
+    resetCreateUserForm()
+    setNewPermissions(getDefaultPermissions('User'))
+    setShowCreateUser(true)
+  }
+
+  function handleNewRoleChange(newRole: string) {
+    setNewRole(newRole)
+    setNewPermissions(getDefaultPermissions(newRole))
+
+    if (newRole === 'Admin') {
+      setNewRegionId(null)
+      setNewSubregionId(null)
+    }
+  }
+
+  function updateNewPermission(
+    module: ModuleName,
+    field: PermissionField,
+    checked: boolean,
+  ) {
+    if (isPermissionDisabled(module, field)) return
+
+    setNewPermissions((current) =>
+      current.map((permission) =>
+        permission.module === module
+          ? normalizePermission({
+              ...permission,
+              [field]: checked,
+            })
+          : permission,
+      ),
+    )
+  }
+
+  function toggleNewModulePermissions(
+    module: ModuleName,
+    checked: boolean,
+  ) {
+    setNewPermissions((current) =>
+      current.map((permission) => {
+        if (permission.module !== module) return permission
+
+        const updated = { ...permission }
+
+        permissionFields.forEach(({ field }) => {
+          if (!isPermissionDisabled(module, field)) {
+            updated[field] = checked
+          }
+        })
+
+        return normalizePermission(updated)
+      }),
+    )
+  }
+
+  function toggleAllNewPermissions(checked: boolean) {
+    setNewPermissions((current) =>
+      current.map((permission) => {
+        const updated = { ...permission }
+
+        permissionFields.forEach(({ field }) => {
+          if (!isPermissionDisabled(permission.module, field)) {
+            updated[field] = checked
+          }
+        })
+
+        return normalizePermission(updated)
+      }),
+    )
+  }
+
   function updatePermission(
     module: ModuleName,
     field: PermissionField,
-    checked: boolean
+    checked: boolean,
   ) {
     if (isPermissionDisabled(module, field)) return
 
@@ -501,14 +481,14 @@ export default function UsersPage() {
               ...permission,
               [field]: checked,
             })
-          : permission
-      )
+          : permission,
+      ),
     )
   }
 
   function toggleModulePermissions(
     module: ModuleName,
-    checked: boolean
+    checked: boolean,
   ) {
     setPermissions((current) =>
       current.map((permission) => {
@@ -523,7 +503,7 @@ export default function UsersPage() {
         })
 
         return normalizePermission(updated)
-      })
+      }),
     )
   }
 
@@ -539,10 +519,107 @@ export default function UsersPage() {
         })
 
         return normalizePermission(updated)
-      })
+      }),
     )
   }
 
+  async function handleCreateUser() {
+    if (!newFullName.trim()) {
+      alert('Please enter the full name.')
+      return
+    }
+
+    if (!newEmail.trim()) {
+      alert('Please enter the email address.')
+      return
+    }
+
+    if (newTemporaryPassword.length < 8) {
+      alert('The temporary password must be at least 8 characters.')
+      return
+    }
+
+    if (newTemporaryPassword.length > 128) {
+      alert('The temporary password must not exceed 128 characters.')
+      return
+    }
+
+    if (!roles.includes(newRole as (typeof roles)[number])) {
+      alert('Please select a valid role.')
+      return
+    }
+
+    if (newRole !== 'Admin' && newRegionId === null) {
+      alert('Please select a region.')
+      return
+    }
+
+    if (
+      newRole !== 'Admin' &&
+      newSubregionId !== null &&
+      !subregions.some(
+        (subregion) =>
+          subregion.id === newSubregionId &&
+          subregion.region_id === newRegionId,
+      )
+    ) {
+      alert('Please select a subregion belonging to the selected region.')
+      return
+    }
+
+    setCreatingUser(true)
+
+    try {
+      const normalizedNewPermissions = newPermissions.map(
+        normalizePermission,
+      )
+
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName: newFullName.trim(),
+          email: newEmail.trim().toLowerCase(),
+          temporaryPassword: newTemporaryPassword,
+          role: newRole,
+          regionId: newRole === 'Admin' ? null : newRegionId,
+          subregionId: newRole === 'Admin' ? null : newSubregionId,
+          position: newPosition.trim(),
+          permissions: normalizedNewPermissions.map((permission) => ({
+            module: permission.module,
+            can_view: permission.can_view,
+            can_add: permission.can_add,
+            can_edit: permission.can_edit,
+            can_delete: permission.can_delete,
+          })),
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        alert(result.error || 'Unable to create the user.')
+        return
+      }
+
+      await loadUsers()
+      resetCreateUserForm()
+
+      alert(
+        'User created successfully. Share the temporary password securely. The user must change it after signing in.',
+      )
+    } catch (error) {
+      console.error('Create User Error:', error)
+      alert('Unable to connect to the server. Please try again.')
+    } finally {
+      setCreatingUser(false)
+    }
+  }
+
+  
+  // Save both profile details and permissions through the server API.
   async function handleSave() {
     if (!selectedUser) return
 
@@ -551,8 +628,18 @@ export default function UsersPage() {
       return
     }
 
-    if (!role) {
-      alert('Please select a role.')
+    if (fullName.trim().length > 150) {
+      alert('Full name must not exceed 150 characters.')
+      return
+    }
+
+    if (position.trim().length > 150) {
+      alert('Position must not exceed 150 characters.')
+      return
+    }
+
+    if (!roles.includes(role as (typeof roles)[number])) {
+      alert('Please select a valid role.')
       return
     }
 
@@ -567,112 +654,123 @@ export default function UsersPage() {
       !subregions.some(
         (subregion) =>
           subregion.id === subregionId &&
-          subregion.region_id === regionId
+          subregion.region_id === regionId,
       )
     ) {
-      alert(
-        'Please select a subregion belonging to the selected region.'
-      )
+      alert('Please select a subregion belonging to the selected region.')
       return
     }
 
     if (loadingPermissions || permissionLoadError) {
       alert(
-        'Please ensure user permissions have loaded successfully before saving.'
+        'Please ensure user permissions have loaded successfully before saving.',
       )
       return
     }
 
     setSaving(true)
 
-    const assignedRegionId =
-      role === 'Admin' ? null : regionId
+    try {
+      const normalizedPermissions = permissions.map(normalizePermission)
 
-    const assignedSubregionId =
-      role === 'Admin' ? null : subregionId
-
-    const updatedFields = {
-      full_name: fullName.trim(),
-      position: position.trim() || null,
-      role,
-      region_id: assignedRegionId,
-      subregion_id: assignedSubregionId,
-      is_active: isActive,
-    }
-
-    const { error: userError } = await supabase
-      .from('users')
-      .update(updatedFields)
-      .eq('id', selectedUser.id)
-
-    if (userError) {
-      console.error('User Update Error:', userError)
-      alert(`Unable to update user: ${userError.message}`)
-      setSaving(false)
-      return
-    }
-
-    // Normalize again before saving so disabled permissions are false.
-    const normalizedPermissions = permissions.map(
-      normalizePermission
-    )
-
-    const permissionRecords = normalizedPermissions.map(
-      (permission) => ({
-        user_id: selectedUser.id,
-        module: permission.module,
-        can_view: permission.can_view,
-        can_add: permission.can_add,
-        can_edit: permission.can_edit,
-        can_delete: permission.can_delete,
-        updated_at: new Date().toISOString(),
-      })
-    )
-
-    const { error: permissionError } = await supabase
-      .from('user_permissions')
-      .upsert(permissionRecords, {
-        onConflict: 'user_id,module',
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          fullName: fullName.trim(),
+          position: position.trim(),
+          role,
+          regionId: role === 'Admin' ? null : regionId,
+          subregionId: role === 'Admin' ? null : subregionId,
+          isActive,
+          permissions: normalizedPermissions.map((permission) => ({
+            module: permission.module,
+            can_view: permission.can_view,
+            can_add: permission.can_add,
+            can_edit: permission.can_edit,
+            can_delete: permission.can_delete,
+          })),
+        }),
       })
 
-    const updatedUser: User = {
-      ...selectedUser,
-      ...updatedFields,
-    }
+      const result = await response.json()
 
-    setUsers((currentUsers) =>
-      currentUsers
-        .map((user) =>
-          user.id === selectedUser.id ? updatedUser : user
-        )
-        .sort((a, b) =>
-          (a.full_name ?? '').localeCompare(b.full_name ?? '')
-        )
-    )
+      if (!response.ok) {
+        // The profile might have been saved even if the permission save failed.
+        if (result.profileSaved && result.user) {
+          const updatedUser = result.user as User
 
-    setSelectedUser(updatedUser)
-    setRegionId(assignedRegionId)
-    setSubregionId(assignedSubregionId)
-    setPermissions(normalizedPermissions)
-    setSaving(false)
+          setUsers((currentUsers) =>
+            currentUsers
+              .map((user) =>
+                user.id === updatedUser.id ? updatedUser : user,
+              )
+              .sort((a, b) =>
+                (a.full_name ?? '').localeCompare(b.full_name ?? ''),
+              ),
+          )
 
-    if (permissionError) {
-      console.error(
-        'User Permissions Save Error:',
-        permissionError
+          setSelectedUser(updatedUser)
+          setFullName(updatedUser.full_name ?? '')
+          setEmail(updatedUser.email)
+          setPosition(updatedUser.position ?? '')
+          setRole(updatedUser.role)
+          setRegionId(updatedUser.region_id)
+          setSubregionId(updatedUser.subregion_id)
+          setIsActive(updatedUser.is_active)
+        }
+
+        alert(result.error || 'Unable to save changes.')
+        return
+      }
+
+      if (!result.user) {
+        alert('The server did not return the updated user record.')
+        return
+      }
+
+      const updatedUser = result.user as User
+
+      setUsers((currentUsers) =>
+        currentUsers
+          .map((user) =>
+            user.id === updatedUser.id ? updatedUser : user,
+          )
+          .sort((a, b) =>
+            (a.full_name ?? '').localeCompare(b.full_name ?? ''),
+          ),
       )
+
+      setSelectedUser(updatedUser)
+      setFullName(updatedUser.full_name ?? '')
+      setEmail(updatedUser.email)
+      setPosition(updatedUser.position ?? '')
+      setRole(updatedUser.role)
+      setRegionId(updatedUser.region_id)
+      setSubregionId(updatedUser.subregion_id)
+      setIsActive(updatedUser.is_active)
+
+      setPermissions(normalizedPermissions)
+      setHasSavedPermissions(true)
+      setPermissionLoadError(false)
+
+      alert('User details and permissions saved successfully.')
+    } catch (error) {
+      console.error('Save User Error:', error)
 
       alert(
-        `User details were saved, but permissions could not be saved: ${permissionError.message}`
+        error instanceof Error
+          ? `Unable to save changes: ${error.message}`
+          : 'Unable to save changes. Please try again.',
       )
-      return
+    } finally {
+      setSaving(false)
     }
-
-    setHasSavedPermissions(true)
-    setPermissionLoadError(false)
-
-    alert('User details and permissions saved successfully.')
   }
+
 
   async function handleDelete() {
     if (!selectedUser) return
@@ -680,31 +778,33 @@ export default function UsersPage() {
     const confirmed = window.confirm(
       `Are you sure you want to delete ${
         selectedUser.full_name || selectedUser.email
-      }?`
+      }?`,
     )
 
     if (!confirmed) return
 
     setDeleting(true)
 
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', selectedUser.id)
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', selectedUser.id)
 
-    if (error) {
-      console.error('User Delete Error:', error)
-      alert(`Unable to delete user: ${error.message}`)
+      if (error) {
+        console.error('User Delete Error:', error)
+        alert(`Unable to delete user: ${error.message}`)
+        return
+      }
+
+      setUsers((currentUsers) =>
+        currentUsers.filter((user) => user.id !== selectedUser.id),
+      )
+
+      clearSelection()
+    } finally {
       setDeleting(false)
-      return
     }
-
-    setUsers((currentUsers) =>
-      currentUsers.filter((user) => user.id !== selectedUser.id)
-    )
-
-    clearSelection()
-    setDeleting(false)
   }
 
   function getRegionName(id: number | null) {
@@ -716,22 +816,21 @@ export default function UsersPage() {
   function getSubregionName(id: number | null) {
     if (id === null) return '—'
 
-    return (
-      subregions.find((subregion) => subregion.id === id)?.name ??
-      '—'
-    )
+    return subregions.find((subregion) => subregion.id === id)?.name ?? '—'
   }
 
   const availableSubregions = subregions.filter(
-    (subregion) => subregion.region_id === regionId
+    (subregion) => subregion.region_id === regionId,
+  )
+
+  const availableNewSubregions = subregions.filter(
+    (subregion) => subregion.region_id === newRegionId,
   )
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">
-          Loading users...
-        </p>
+        <p className="text-sm text-muted-foreground">Loading users...</p>
       </div>
     )
   }
@@ -741,7 +840,6 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       {/* User Accounts */}
-
       <div className="rounded-xl border bg-background">
         <div className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -751,19 +849,29 @@ export default function UsersPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center justify-center gap-2 self-start rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 sm:self-auto"
-          >
-            <RefreshCw
-              className={`size-4 ${
-                refreshing ? 'animate-spin' : ''
-              }`}
-            />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openCreateUserForm}
+              disabled={creatingUser}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Plus className="size-4" />
+              Add User
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`size-4 ${refreshing ? 'animate-spin' : ''}`}
+              />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -796,14 +904,10 @@ export default function UsersPage() {
                   <tr
                     key={user.id}
                     className={`border-b last:border-0 ${
-                      selectedUser?.id === user.id
-                        ? 'bg-muted/40'
-                        : ''
+                      selectedUser?.id === user.id ? 'bg-muted/40' : ''
                     }`}
                   >
-                    <td className="px-6 py-3">
-                      {user.full_name || '—'}
-                    </td>
+                    <td className="px-6 py-3">{user.full_name || '—'}</td>
                     <td className="px-4 py-3">{user.email}</td>
                     <td className="px-4 py-3">{user.role}</td>
                     <td className="px-4 py-3">
@@ -812,9 +916,7 @@ export default function UsersPage() {
                     <td className="px-4 py-3">
                       {getSubregionName(user.subregion_id)}
                     </td>
-                    <td className="px-4 py-3">
-                      {user.position || '—'}
-                    </td>
+                    <td className="px-4 py-3">{user.position || '—'}</td>
                     <td className="px-4 py-3">
                       {user.is_active ? 'Active' : 'Pending'}
                     </td>
@@ -836,8 +938,367 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Edit User */}
+      {/* Create User */}
+      {showCreateUser && (
+        <div className="rounded-xl border bg-background">
+          <div className="flex items-start justify-between gap-4 border-b px-6 py-4">
+            <div>
+              <h2 className="font-semibold">Create User</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create an account and assign its initial role and permissions.
+              </p>
+            </div>
 
+            <button
+              type="button"
+              onClick={resetCreateUserForm}
+              disabled={creatingUser}
+              aria-label="Close Create User form"
+              className="rounded-md p-1.5 hover:bg-muted disabled:opacity-50"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="grid gap-4 p-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="newFullName" className="text-sm font-medium">
+                Full Name <span className="text-destructive">*</span>
+              </label>
+              <input
+                id="newFullName"
+                type="text"
+                value={newFullName}
+                onChange={(e) => setNewFullName(e.target.value)}
+                maxLength={150}
+                autoComplete="name"
+                required
+                disabled={creatingUser}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                placeholder="Enter full name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="newEmail" className="text-sm font-medium">
+                Email <span className="text-destructive">*</span>
+              </label>
+              <input
+                id="newEmail"
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                maxLength={254}
+                autoComplete="off"
+                required
+                disabled={creatingUser}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                placeholder="user@company.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="newTemporaryPassword"
+                className="text-sm font-medium"
+              >
+                Temporary Password <span className="text-destructive">*</span>
+              </label>
+              <input
+                id="newTemporaryPassword"
+                type="password"
+                value={newTemporaryPassword}
+                onChange={(e) => setNewTemporaryPassword(e.target.value)}
+                minLength={8}
+                maxLength={128}
+                autoComplete="new-password"
+                required
+                disabled={creatingUser}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                placeholder="At least 8 characters"
+              />
+              <p className="text-xs text-muted-foreground">
+                Share the temporary password securely. Do not send it in a
+                public channel.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="newPosition" className="text-sm font-medium">
+                Position
+              </label>
+              <input
+                id="newPosition"
+                type="text"
+                value={newPosition}
+                onChange={(e) => setNewPosition(e.target.value)}
+                maxLength={150}
+                disabled={creatingUser}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                placeholder="Enter position"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="newRole" className="text-sm font-medium">
+                Role <span className="text-destructive">*</span>
+              </label>
+              <select
+                id="newRole"
+                value={newRole}
+                onChange={(e) => handleNewRoleChange(e.target.value)}
+                disabled={creatingUser}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+              >
+                {roles.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Default permissions for this role load automatically. You can
+                customize them below.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="newRegion" className="text-sm font-medium">
+                Region{' '}
+                {newRole !== 'Admin' && (
+                  <span className="text-destructive">*</span>
+                )}
+              </label>
+
+              {newRole === 'Admin' ? (
+                <div className="rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  All Regions
+                </div>
+              ) : (
+                <select
+                  id="newRegion"
+                  value={newRegionId ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setNewRegionId(value ? Number(value) : null)
+                    setNewSubregionId(null)
+                  }}
+                  disabled={creatingUser}
+                  required
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                >
+                  <option value="">Select region</option>
+                  {regions.map((region) => (
+                    <option key={region.id} value={region.id}>
+                      {region.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {newRole !== 'Admin' && (
+              <div className="space-y-2">
+                <label htmlFor="newSubregion" className="text-sm font-medium">
+                  Subregion
+                </label>
+                <select
+                  id="newSubregion"
+                  value={newSubregionId ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setNewSubregionId(value ? Number(value) : null)
+                  }}
+                  disabled={creatingUser || newRegionId === null}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">No subregion selected</option>
+                  {availableNewSubregions.map((subregion) => (
+                    <option key={subregion.id} value={subregion.id}>
+                      {subregion.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Optional. Only subregions belonging to the selected region
+                  are shown.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Create User Permissions */}
+          <div className="space-y-4 border-t p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg border p-2">
+                  <ShieldCheck className="size-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">User Permissions</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Configure module access before creating the account.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => toggleAllNewPermissions(true)}
+                disabled={creatingUser}
+                className="self-start rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 sm:self-auto"
+              >
+                Enable All
+              </button>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Choose the actions this user can perform in each module.
+              Unavailable actions are disabled by your authorization rules.
+            </p>
+
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[650px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="px-4 py-3 text-left font-medium">
+                      Module
+                    </th>
+                    {permissionFields.map(({ field, label }) => (
+                      <th
+                        key={field}
+                        className="px-4 py-3 text-center font-medium"
+                      >
+                        {label}
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-center font-medium">
+                      All
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {newPermissions.map((permission) => {
+                    const availableFields = permissionFields.filter(
+                      ({ field }) =>
+                        !isPermissionDisabled(permission.module, field),
+                    )
+
+                    const allChecked =
+                      availableFields.length > 0 &&
+                      availableFields.every(
+                        ({ field }) => permission[field],
+                      )
+
+                    return (
+                      <tr
+                        key={permission.module}
+                        className="border-b last:border-0"
+                      >
+                        <td className="px-4 py-3 font-medium">
+                          {permission.module}
+                        </td>
+
+                        {permissionFields.map(({ field, label }) => {
+                          const disabled = isPermissionDisabled(
+                            permission.module,
+                            field,
+                          )
+
+                          return (
+                            <td
+                              key={field}
+                              className="px-4 py-3 text-center"
+                            >
+                              <input
+                                type="checkbox"
+                                aria-label={`${label} permission for ${permission.module}`}
+                                checked={permission[field]}
+                                disabled={disabled || creatingUser}
+                                title={
+                                  disabled
+                                    ? `${label} is not available for ${permission.module}`
+                                    : `${label} ${permission.module}`
+                                }
+                                onChange={(e) =>
+                                  updateNewPermission(
+                                    permission.module,
+                                    field,
+                                    e.target.checked,
+                                  )
+                                }
+                                className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
+                              />
+                            </td>
+                          )
+                        })}
+
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`All available permissions for ${permission.module}`}
+                            checked={allChecked}
+                            disabled={
+                              creatingUser || availableFields.length === 0
+                            }
+                            onChange={(e) =>
+                              toggleNewModulePermissions(
+                                permission.module,
+                                e.target.checked,
+                              )
+                            }
+                            className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                {newPermissions.filter((p) => p.can_view).length} of{' '}
+                {modules.length} modules have View enabled.
+              </p>
+              <button
+                type="button"
+                onClick={() => toggleAllNewPermissions(false)}
+                disabled={creatingUser}
+                className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                Clear All Permissions
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={resetCreateUserForm}
+              disabled={creatingUser}
+              className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateUser}
+              disabled={creatingUser}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {creatingUser && (
+                <RefreshCw className="size-4 animate-spin" />
+              )}
+              {creatingUser ? 'Creating User...' : 'Create User'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User */}
       {selectedUser && (
         <div className="space-y-6">
           <div className="rounded-xl border bg-background">
@@ -928,16 +1389,16 @@ export default function UsersPage() {
                     value={regionId ?? ''}
                     onChange={(e) => {
                       const value = e.target.value
-                      const newRegionId = value ? Number(value) : null
+                      const newId = value ? Number(value) : null
 
-                      setRegionId(newRegionId)
+                      setRegionId(newId)
 
                       if (
                         subregionId !== null &&
                         !subregions.some(
                           (subregion) =>
                             subregion.id === subregionId &&
-                            subregion.region_id === newRegionId
+                            subregion.region_id === newId,
                         )
                       ) {
                         setSubregionId(null)
@@ -1004,15 +1465,13 @@ export default function UsersPage() {
             </div>
           </div>
 
-          {/* User Permissions */}
-
+          {/* Edit User Permissions */}
           <div className="rounded-xl border bg-background">
             <div className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
                 <div className="rounded-lg border p-2">
                   <ShieldCheck className="size-5" />
                 </div>
-
                 <div>
                   <h2 className="font-semibold">User Permissions</h2>
                   <p className="text-sm text-muted-foreground">
@@ -1025,11 +1484,7 @@ export default function UsersPage() {
               <button
                 type="button"
                 onClick={() => toggleAllPermissions(true)}
-                disabled={
-                  loadingPermissions ||
-                  permissionLoadError ||
-                  saving
-                }
+                disabled={loadingPermissions || permissionLoadError || saving}
                 className="self-start rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 sm:self-auto"
               >
                 Enable All
@@ -1052,9 +1507,7 @@ export default function UsersPage() {
                   </p>
                   <button
                     type="button"
-                    onClick={() =>
-                      loadUserPermissions(selectedUser.id, role)
-                    }
+                    onClick={() => loadUserPermissions(selectedUser.id, role)}
                     className="mt-3 rounded-md border px-3 py-2 hover:bg-muted"
                   >
                     Retry
@@ -1089,18 +1542,16 @@ export default function UsersPage() {
 
                       <tbody>
                         {permissions.map((permission) => {
-                          const allAllowedFieldsChecked =
-                            permissionFields
-                              .filter(
-                                ({ field }) =>
-                                  !isPermissionDisabled(
-                                    permission.module,
-                                    field
-                                  )
-                              )
-                              .every(
-                                ({ field }) => permission[field]
-                              )
+                          const availableFields = permissionFields.filter(
+                            ({ field }) =>
+                              !isPermissionDisabled(permission.module, field),
+                          )
+
+                          const allChecked =
+                            availableFields.length > 0 &&
+                            availableFields.every(
+                              ({ field }) => permission[field],
+                            )
 
                           return (
                             <tr
@@ -1114,7 +1565,7 @@ export default function UsersPage() {
                               {permissionFields.map(({ field, label }) => {
                                 const disabled = isPermissionDisabled(
                                   permission.module,
-                                  field
+                                  field,
                                 )
 
                                 return (
@@ -1136,7 +1587,7 @@ export default function UsersPage() {
                                         updatePermission(
                                           permission.module,
                                           field,
-                                          e.target.checked
+                                          e.target.checked,
                                         )
                                       }
                                       className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
@@ -1149,15 +1600,16 @@ export default function UsersPage() {
                                 <input
                                   type="checkbox"
                                   aria-label={`All available permissions for ${permission.module}`}
-                                  checked={allAllowedFieldsChecked}
+                                  checked={allChecked}
+                                  disabled={
+                                    saving || availableFields.length === 0
+                                  }
                                   onChange={(e) =>
                                     toggleModulePermissions(
                                       permission.module,
-                                      e.target.checked
+                                      e.target.checked,
                                     )
                                   }
-                                  disabled={saving}
-                                  title={`Toggle all available permissions for ${permission.module}`}
                                   className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                               </td>
@@ -1188,8 +1640,7 @@ export default function UsersPage() {
             </div>
           </div>
 
-          {/* Actions */}
-
+          {/* Edit User Actions */}
           <div className="flex items-center justify-between rounded-xl border bg-background px-6 py-4">
             <button
               type="button"
@@ -1214,11 +1665,7 @@ export default function UsersPage() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={
-                  saving ||
-                  loadingPermissions ||
-                  permissionLoadError
-                }
+                disabled={saving || loadingPermissions || permissionLoadError}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save Changes'}

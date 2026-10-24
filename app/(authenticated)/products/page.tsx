@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 import {
   Table,
@@ -28,6 +29,7 @@ type Product = {
 }
 
 export default function ProductsPage() {
+  const authorization = useAuthorization()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
 
@@ -76,6 +78,7 @@ export default function ProductsPage() {
   }
 
   async function saveProduct() {
+    if (!authorization.can('Products', editingId === null ? 'add' : 'edit')) return
     setError(null)
 
     if (!categoryId || !code.trim() || !name.trim()) {
@@ -158,6 +161,7 @@ export default function ProductsPage() {
   }
 
   async function deleteProduct(id: number) {
+    if (!authorization.can('Products', 'delete')) return
     const confirmed = window.confirm(
       'Are you sure you want to delete this product?'
     )
@@ -334,7 +338,7 @@ export default function ProductsPage() {
           <button
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveProduct}
-            disabled={loading}
+            disabled={loading || !authorization.can('Products', editingId === null ? 'add' : 'edit')}
           >
             {loading
               ? 'Saving...'
@@ -459,6 +463,7 @@ export default function ProductsPage() {
                             onClick={() =>
                               deleteProduct(product.id)
                             }
+                            disabled={!authorization.can('Products', 'delete')}
                           >
                             Delete
                           </button>

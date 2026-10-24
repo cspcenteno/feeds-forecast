@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 
 import { createClient } from '@/lib/client'
+import { useAuthorization } from '@/lib/authorization'
 
 import {
   Sidebar,
@@ -106,6 +107,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const supabase = createClient()
   const { state } = useSidebar()
+  const authorization = useAuthorization()
 
   const [fullName, setFullName] = useState('User')
   const [email, setEmail] = useState('')
@@ -268,12 +270,11 @@ export function AppSidebar() {
     router.refresh()
   }
 
-  const canAccessMasterData =
-    role === 'Superuser' ||
-    role === 'Manager' ||
-    role === 'Admin'
-
-  const canAccessAdministration = role === 'Admin'
+  const visibleMenuItems = menuItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
+  const visibleMasterDataItems = masterDataItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
+  const visibleAdminItems = adminItems.filter((item) => authorization.can(item.title === 'Week Locks' ? 'Week Locks' : 'Users', 'view'))
+  const canAccessMasterData = visibleMasterDataItems.length > 0
+  const canAccessAdministration = visibleAdminItems.length > 0
 
   function isCurrentPage(url: string) {
     return pathname === url || pathname.startsWith(`${url}/`)
@@ -318,7 +319,7 @@ export function AppSidebar() {
 
             <SidebarGroupContent>
               <SidebarMenu>
-                {menuItems.map((item) => (
+                {visibleMenuItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       isActive={isCurrentPage(item.url)}
@@ -343,7 +344,7 @@ export function AppSidebar() {
 
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {masterDataItems.map((item) => (
+                  {visibleMasterDataItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={isCurrentPage(item.url)}
@@ -369,7 +370,7 @@ export function AppSidebar() {
 
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {adminItems.map((item) => (
+                  {visibleAdminItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={isCurrentPage(item.url)}
