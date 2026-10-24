@@ -12,6 +12,7 @@ import {
   Tags,
   Package,
   Map,
+  MapPinned,
   Users,
   Lock,
   LogOut,
@@ -52,9 +53,6 @@ const menuItems = [
     url: '/weekly-sales',
     icon: CalendarDays,
   },
-]
-
-const masterDataItems = [
   {
     title: 'Approvals',
     url: '/approvals',
@@ -65,6 +63,9 @@ const masterDataItems = [
     url: '/budget',
     icon: Wallet,
   },
+]
+
+const masterDataItems = [
   {
     title: 'Categories',
     url: '/categories',
@@ -81,9 +82,9 @@ const masterDataItems = [
     icon: Map,
   },
   {
-    title: 'Week Locks',
-    url: '/locks',
-    icon: Lock,
+    title: 'Subregions',
+    url: '/subregions',
+    icon: MapPinned,
   },
 ]
 
@@ -92,6 +93,11 @@ const adminItems = [
     title: 'Users',
     url: '/users',
     icon: Users,
+  },
+  {
+    title: 'Week Locks',
+    url: '/locks',
+    icon: Lock,
   },
 ]
 
@@ -119,26 +125,28 @@ export function AppSidebar() {
     useState(false)
 
   useEffect(() => {
+    let mounted = true
+
     async function loadUser() {
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
-      if (!user) return
+      if (!user || !mounted) return
 
       setEmail(user.email ?? '')
 
-      const {
-        data: profile,
-        error,
-      } = await supabase
+      const { data: profile, error } = await supabase
         .from('users')
-        .select('full_name, role')
+        .select('full_name, role, is_active')
         .eq('id', user.id)
         .single()
 
-      console.log('Sidebar profile:', profile)
-      console.log('Sidebar profile error:', error)
+      if (!mounted) return
+
+      if (error) {
+        console.error('Sidebar profile error:', error)
+      }
 
       if (profile?.full_name) {
         setFullName(profile.full_name)
@@ -149,7 +157,7 @@ export function AppSidebar() {
       }
 
       if (profile?.role) {
-        setRole(profile.role)
+        setRole(profile.is_active ? profile.role : '')
       }
     }
 
@@ -164,7 +172,11 @@ export function AppSidebar() {
       document.documentElement.classList.remove('dark')
       setDarkMode(false)
     }
-  }, [])
+
+    return () => {
+      mounted = false
+    }
+  }, [supabase])
 
   function getInitials(name: string) {
     const parts = name
@@ -172,9 +184,7 @@ export function AppSidebar() {
       .split(/\s+/)
       .filter(Boolean)
 
-    if (parts.length === 0) {
-      return 'U'
-    }
+    if (parts.length === 0) return 'U'
 
     if (parts.length === 1) {
       return parts[0].substring(0, 2).toUpperCase()
@@ -208,9 +218,7 @@ export function AppSidebar() {
   }
 
   function closeChangePassword() {
-    if (changingPassword) {
-      return
-    }
+    if (changingPassword) return
 
     setChangePasswordOpen(false)
     setNewPassword('')
@@ -261,22 +269,26 @@ export function AppSidebar() {
   }
 
   const canAccessMasterData =
-    role === 'Region Manager' || role === 'Admin'
+    role === 'Superuser' ||
+    role === 'Manager' ||
+    role === 'Admin'
 
   const canAccessAdministration = role === 'Admin'
 
-  // Determine whether a menu item matches the current route.
   function isCurrentPage(url: string) {
     return pathname === url || pathname.startsWith(`${url}/`)
+  }
+
+  function navigateTo(url: string) {
+    setProfileOpen(false)
+    router.push(url)
   }
 
   return (
     <>
       <Sidebar collapsible="icon">
         <SidebarContent>
-
           {/* Application Header */}
-
           <div className="flex items-center px-2 py-4 group-data-[collapsible=icon]:justify-center">
             <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <p className="truncate text-base font-semibold tracking-tight">
@@ -298,8 +310,7 @@ export function AppSidebar() {
             />
           </div>
 
-          {/* Main Navigation */}
-
+          {/* Main Menu */}
           <SidebarGroup>
             <SidebarGroupLabel>
               Main Menu
@@ -311,7 +322,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       isActive={isCurrentPage(item.url)}
-                      onClick={() => router.push(item.url)}
+                      onClick={() => navigateTo(item.url)}
                       tooltip={item.title}
                     >
                       <item.icon />
@@ -324,7 +335,6 @@ export function AppSidebar() {
           </SidebarGroup>
 
           {/* Master Data */}
-
           {canAccessMasterData && (
             <SidebarGroup>
               <SidebarGroupLabel>
@@ -337,7 +347,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={isCurrentPage(item.url)}
-                        onClick={() => router.push(item.url)}
+                        onClick={() => navigateTo(item.url)}
                         tooltip={item.title}
                       >
                         <item.icon />
@@ -351,7 +361,6 @@ export function AppSidebar() {
           )}
 
           {/* Administration */}
-
           {canAccessAdministration && (
             <SidebarGroup>
               <SidebarGroupLabel>
@@ -364,7 +373,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={isCurrentPage(item.url)}
-                        onClick={() => router.push(item.url)}
+                        onClick={() => navigateTo(item.url)}
                         tooltip={item.title}
                       >
                         <item.icon />
@@ -378,15 +387,11 @@ export function AppSidebar() {
           )}
 
           {/* User Profile */}
-
           <SidebarGroup className="mt-auto">
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <div className="relative">
-
-                    {/* Profile Button */}
-
                     <button
                       type="button"
                       onClick={() => setProfileOpen(!profileOpen)}
@@ -408,7 +413,6 @@ export function AppSidebar() {
                     </button>
 
                     {/* Profile Menu */}
-
                     {profileOpen && (
                       <div
                         className="
@@ -432,14 +436,13 @@ export function AppSidebar() {
                           </p>
 
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {role}
+                            {role || 'Inactive account'}
                           </p>
                         </div>
 
                         <div className="my-1 h-px bg-border" />
 
                         {/* Change Password */}
-
                         <button
                           type="button"
                           onClick={openChangePassword}
@@ -449,8 +452,7 @@ export function AppSidebar() {
                           <span>Change Password</span>
                         </button>
 
-                        {/* Dark Mode */}
-
+                        {/* Theme */}
                         <button
                           type="button"
                           onClick={toggleDarkMode}
@@ -468,7 +470,6 @@ export function AppSidebar() {
                         </button>
 
                         {/* Logout */}
-
                         <button
                           type="button"
                           onClick={handleLogout}
@@ -484,18 +485,13 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-
         </SidebarContent>
       </Sidebar>
 
       {/* Change Password Dialog */}
-
       {changePasswordOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border bg-background shadow-xl">
-
-            {/* Dialog Header */}
-
             <div className="flex items-center justify-between border-b px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold">
@@ -511,18 +507,14 @@ export function AppSidebar() {
                 type="button"
                 onClick={closeChangePassword}
                 disabled={changingPassword}
+                aria-label="Close change password dialog"
                 className="rounded-md p-2 hover:bg-muted disabled:opacity-50"
               >
                 <X className="size-4" />
               </button>
             </div>
 
-            {/* Dialog Body */}
-
             <div className="space-y-4 px-6 py-5">
-
-              {/* New Password */}
-
               <div className="space-y-2">
                 <label
                   htmlFor="newPassword"
@@ -546,8 +538,6 @@ export function AppSidebar() {
                 </p>
               </div>
 
-              {/* Confirm Password */}
-
               <div className="space-y-2">
                 <label
                   htmlFor="confirmPassword"
@@ -567,8 +557,6 @@ export function AppSidebar() {
                 />
               </div>
             </div>
-
-            {/* Dialog Actions */}
 
             <div className="flex justify-end gap-2 border-t px-6 py-4">
               <button
