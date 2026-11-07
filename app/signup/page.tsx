@@ -151,7 +151,7 @@ export default function SignupPage() {
             </div>
           )}
 
-          <button
+          <button data-action-tone="primary" data-action-fill=""
             type="submit"
             disabled={loading}
             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"

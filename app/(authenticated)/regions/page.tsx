@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
 
@@ -117,6 +118,7 @@ export default function RegionsPage() {
   }
 
   function editRegion(region: Region) {
+    if (!authorization.can('Regions', 'edit')) return
     setEditingId(region.id)
     setName(region.name)
     setCode(region.code ?? '')
@@ -172,10 +174,15 @@ export default function RegionsPage() {
     getRegions()
   }, [])
 
+  const { sortedRows: sortedRegions, sortHeader } = useTableSort(regions, {
+    code: (row) => row.code,
+    name: (row) => row.name,
+  })
+
   return (
     <main className="space-y-8">
       {/* Form */}
-      <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Regions', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="mb-5">
           <h2 className="font-semibold">
             {editingId !== null
@@ -248,7 +255,7 @@ export default function RegionsPage() {
 
         {/* Buttons */}
         <div className="mt-5 flex gap-2">
-          <button
+          <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveRegion}
             disabled={loading || !authorization.can('Regions', editingId === null ? 'add' : 'edit')}
@@ -261,7 +268,7 @@ export default function RegionsPage() {
           </button>
 
           {editingId !== null && (
-            <button
+            <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
               onClick={clearForm}
               disabled={loading}
@@ -270,14 +277,13 @@ export default function RegionsPage() {
             </button>
           )}
         </div>
-
         {/* Error */}
         {error && (
           <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
-      </section>
+      </section> : null}
 
       {/* Table */}
       <section className="rounded-xl border bg-card shadow-sm">
@@ -292,31 +298,39 @@ export default function RegionsPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <Table>
+          <Table saved>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-6 w-[150px]">
-  Code
-</TableHead>
+                {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableHead className="w-[180px] text-left">Action</TableHead>}
+                <TableHead className="w-[120px]">Status</TableHead>
+                <SortableHeader className="pl-6 w-[150px]" {...sortHeader('code')}>Code</SortableHeader>
 
-                <TableHead>
-                  Region Name
-                </TableHead>
+                <SortableHeader {...sortHeader('name')}>Region Name</SortableHeader>
 
-                <TableHead className="w-[120px]">
-                  Status
-                </TableHead>
-
-                <TableHead className="w-[180px] text-left">
-                  Action
-                </TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
               {regions.length > 0 ? (
-                regions.map((region) => (
+                sortedRegions.map((region) => (
                   <TableRow key={region.id}>
+                    {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableCell>
+                      {authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? <div className="flex justify-start gap-2">
+                        {authorization.can('Regions', 'edit') && <button data-action-tone="caution"
+                          className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+                          onClick={() => editRegion(region)}
+                          disabled={!authorization.can('Regions', 'edit')}
+                        >Edit</button>}
+                        {authorization.can('Regions', 'delete') && <button data-action-tone="danger"
+                          className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                          onClick={() => deleteRegion(region.id)}
+                          disabled={!authorization.can('Regions', 'delete')}
+                        >Delete</button>}
+                      </div> : <span className="text-sm text-muted-foreground">No Action</span>}
+                    </TableCell>}
+                    <TableCell>
+                      {region.is_active ? 'Active' : 'Inactive'}
+                    </TableCell>
                     <TableCell className="pl-6 font-medium">
                       {region.code || '—'}
                     </TableCell>
@@ -325,40 +339,12 @@ export default function RegionsPage() {
                       {region.name}
                     </TableCell>
 
-                    <TableCell>
-                      {region.is_active
-                        ? 'Active'
-                        : 'Inactive'}
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex justify-start gap-2">
-                        <button
-                          className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
-                          onClick={() =>
-                            editRegion(region)
-                          }
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                          onClick={() =>
-                            deleteRegion(region.id)
-                          }
-                          disabled={!authorization.can('Regions', 'delete')}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 4 : 3}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No regions found.

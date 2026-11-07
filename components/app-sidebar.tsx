@@ -9,8 +9,10 @@ import {
   CalendarDays,
   CheckCircle,
   Wallet,
+  ChartColumn,
   Tags,
   Package,
+  ContactRound,
   Map,
   MapPinned,
   Users,
@@ -45,8 +47,8 @@ const menuItems = [
     icon: LayoutDashboard,
   },
   {
-    title: 'Sales Input',
-    url: '/sales-input',
+    title: 'Forecast Input',
+    url: '/forecast-input',
     icon: ClipboardPenLine,
   },
   {
@@ -64,6 +66,11 @@ const menuItems = [
     url: '/budget',
     icon: Wallet,
   },
+  {
+    title: 'Actual',
+    url: '/actual',
+    icon: ChartColumn,
+  },
 ]
 
 const masterDataItems = [
@@ -76,6 +83,11 @@ const masterDataItems = [
     title: 'Products',
     url: '/products',
     icon: Package,
+  },
+  {
+    title: 'Customers',
+    url: '/customers',
+    icon: ContactRound,
   },
   {
     title: 'Regions',
@@ -444,7 +456,7 @@ export function AppSidebar() {
                         <div className="my-1 h-px bg-border" />
 
                         {/* Change Password */}
-                        <button
+                        <button data-action-tone="caution"
                           type="button"
                           onClick={openChangePassword}
                           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
@@ -569,7 +581,7 @@ export function AppSidebar() {
                 Cancel
               </button>
 
-              <button
+              <button data-action-tone="primary" data-action-fill=""
                 type="button"
                 onClick={handleChangePassword}
                 disabled={changingPassword}

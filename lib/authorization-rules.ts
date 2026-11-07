@@ -1,12 +1,14 @@
 
 export const modules = [
   'Dashboard',
-  'Sales Input',
+  'Forecast Input',
   'Weekly Sales',
   'Approvals',
   'Budget',
+  'Actual',
   'Categories',
   'Products',
+  'Customers',
   'Regions',
   'Subregions',
   'Users',
@@ -43,37 +45,29 @@ export function defaultPermissions(role: string): PermissionMap {
 
   if (role === 'User') {
     set('Dashboard', ['view'])
-    set('Sales Input', ['view', 'add', 'edit'])
+    set('Forecast Input', ['view', 'add', 'edit'])
     set('Weekly Sales', ['view'])
   } else if (role === 'Superuser') {
     ;(
       [
         'Dashboard',
-        'Sales Input',
         'Weekly Sales',
-        'Approvals',
-        'Categories',
         'Products',
-        'Regions',
-        'Subregions',
       ] as ModuleName[]
     ).forEach((m) => set(m, ['view']))
 
+    set('Customers', ['view', 'add', 'edit'])
     set('Budget', ['view', 'add', 'edit'])
+    set('Actual', ['view', 'add', 'edit'])
     set('Week Locks', ['view', 'add', 'edit'])
   } else if (role === 'Manager') {
     ;(
       [
         'Dashboard',
-        'Sales Input',
         'Weekly Sales',
         'Approvals',
-        'Categories',
-        'Products',
-        'Regions',
-        'Subregions',
         'Budget',
-        'Week Locks',
+        'Actual',
       ] as ModuleName[]
     ).forEach((m) => set(m, ['view']))
 

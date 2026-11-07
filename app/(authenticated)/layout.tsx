@@ -14,12 +14,14 @@ export default function AuthenticatedLayout({
 
   const pageTitles: Record<string, string> = {
     "/dashboard": "Dashboard",
-    "/sales-input": "Sales Input",
+    "/forecast-input": "Forecast Input",
     "/weekly-sales": "Weekly Sales",
     "/approvals": "Approvals",
     "/budget": "Budget",
+    "/actual": "Actual",
     "/categories": "Categories",
     "/products": "Products",
+    "/customers": "Customers",
     "/regions": "Regions",
     "/subregions": "Subregions",
     "/week-locks": "Week Locks",
@@ -40,7 +42,7 @@ export default function AuthenticatedLayout({
           </h1>
         </div>
 
-        <div className="p-4 md:p-6">
+        <div className="app-tables p-4 md:p-6">
           {children}
         </div>
       </main>

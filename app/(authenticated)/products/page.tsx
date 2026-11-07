@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
 
@@ -15,8 +16,9 @@ import {
 
 type Category = {
   id: number
-  code: string
+  code: string | null
   name: string
+  is_active: boolean
 }
 
 type Product = {
@@ -24,19 +26,36 @@ type Product = {
   category_id: number | null
   code: string
   name: string
-  unit_price: number
+  product_line: string | null
+  species: string | null
+  weight: number
+  created_at: string | null
   is_active: boolean
 }
 
+const sortableColumns = [
+  { key: 'category_id', label: 'Category', className: 'w-[14%]' },
+  { key: 'code', label: 'Product Code', className: 'w-[12%]' },
+  { key: 'name', label: 'Product Name', className: 'w-[18%]' },
+  { key: 'product_line', label: 'Product Line', className: 'w-[12%]' },
+  { key: 'species', label: 'Species', className: 'w-[10%]' },
+  { key: 'created_at', label: 'Date created', className: 'w-[13%]' },
+] as const
+
+type SortKey = (typeof sortableColumns)[number]['key']
+
 export default function ProductsPage() {
   const authorization = useAuthorization()
+  const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
 
   const [categoryId, setCategoryId] = useState('')
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
-  const [unitPrice, setUnitPrice] = useState('')
+  const [productLine, setProductLine] = useState('')
+  const [species, setSpecies] = useState('')
+  const [weight, setWeight] = useState('')
   const [isActive, setIsActive] = useState(true)
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -49,7 +68,7 @@ export default function ProductsPage() {
 
     const { data, error } = await supabase
       .from('products')
-      .select('id, category_id, code, name, unit_price, is_active')
+      .select('id, category_id, code, name, product_line, species, weight, is_active, created_at')
       .order('id')
 
     if (error) {
@@ -65,8 +84,7 @@ export default function ProductsPage() {
 
     const { data, error } = await supabase
       .from('categories')
-      .select('id, code, name')
-      .eq('is_active', true)
+      .select('id, code, name, is_active')
       .order('name')
 
     if (error) {
@@ -86,10 +104,10 @@ export default function ProductsPage() {
       return
     }
 
-    const price = Number(unitPrice)
+    const productWeight = Number(weight)
 
-    if (unitPrice.trim() !== '' && isNaN(price)) {
-      setError('Unit Price must be a valid number.')
+    if (weight.trim() !== '' && isNaN(productWeight)) {
+      setError('Weight must be a valid number.')
       return
     }
 
@@ -101,7 +119,9 @@ export default function ProductsPage() {
       category_id: Number(categoryId),
       code: code.trim(),
       name: name.trim(),
-      unit_price: price || 0,
+      product_line: productLine.trim() || null,
+      species: species.trim() || null,
+      weight: productWeight || 0,
       is_active: isActive,
     }
 
@@ -151,11 +171,14 @@ export default function ProductsPage() {
   }
 
   function editProduct(product: Product) {
+    if (!authorization.can('Products', 'edit')) return
     setEditingId(product.id)
     setCategoryId(product.category_id?.toString() ?? '')
     setCode(product.code)
     setName(product.name)
-    setUnitPrice(product.unit_price?.toString() ?? '')
+    setProductLine(product.product_line ?? '')
+    setSpecies(product.species ?? '')
+    setWeight(product.weight?.toString() ?? '')
     setIsActive(product.is_active)
     setError(null)
   }
@@ -200,7 +223,9 @@ export default function ProductsPage() {
     setCategoryId('')
     setCode('')
     setName('')
-    setUnitPrice('')
+    setProductLine('')
+    setSpecies('')
+    setWeight('')
     setIsActive(true)
     setError(null)
   }
@@ -210,10 +235,34 @@ export default function ProductsPage() {
     getCategories()
   }, [])
 
+  const canShowActions = authorization.can('Products', 'add') ||
+    authorization.can('Products', 'edit') || authorization.can('Products', 'delete')
+  const columnCount = canShowActions ? 9 : 8
+  const categoryLabels = new Map(categories.map((category) => [
+    category.id,
+    category.code ? category.code + ' - ' + category.name : category.name,
+  ]))
+  function categoryLabel(id: Product['category_id']) {
+    return id === null ? 'Uncategorized' : categoryLabels.get(id) ?? 'Category #' + id
+  }
+
+  function sortValue(product: Product, key: SortKey) {
+    if (key === 'category_id') return categoryLabel(product.category_id)
+    if (key === 'created_at') return product.created_at ? new Date(product.created_at).toISOString() : ''
+    return product[key] ?? ''
+  }
+
+  const sortedProducts = sort ? [...products].sort((a, b) => {
+    const first = sortValue(a, sort.key)
+    const second = sortValue(b, sort.key)
+    const comparison = first.localeCompare(second, undefined, { numeric: true, sensitivity: 'base' })
+    return (sort.descending ? -comparison : comparison) || a.id - b.id
+  }) : products
+
   return (
     <main className="space-y-8">
       {/* Form */}
-      <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Products', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="mb-5">
           <h2 className="font-semibold">
             {editingId !== null
@@ -228,7 +277,7 @@ export default function ProductsPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid items-end gap-4 md:grid-cols-4">
           {/* Category */}
           <div className="space-y-2">
             <label
@@ -246,24 +295,24 @@ export default function ProductsPage() {
             >
               <option value="">Select category</option>
 
-              {categories.map((category) => (
+              {categories.filter((category) => category.is_active || (editingId !== null && String(category.id) === categoryId)).map((category) => (
                 <option
                   key={category.id}
                   value={category.id}
                 >
-                  {category.code} - {category.name}
+                  {category.code ? category.code + ' - ' : ''}{category.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Code */}
+          {/* Product Code */}
           <div className="space-y-2">
             <label
               htmlFor="code"
               className="text-sm font-medium"
             >
-              Code
+              Product Code
             </label>
 
             <input
@@ -293,24 +342,34 @@ export default function ProductsPage() {
             />
           </div>
 
-          {/* Unit Price */}
           <div className="space-y-2">
-            <label
-              htmlFor="unitPrice"
-              className="text-sm font-medium"
-            >
-              Unit Price
-            </label>
-
+            <label htmlFor="productLine" className="text-sm font-medium">Product Line</label>
             <input
-              id="unitPrice"
-              type="number"
-              step="0.01"
-              min="0"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="0.00"
-              value={unitPrice}
-              onChange={(e) => setUnitPrice(e.target.value)}
+              id="productLine"
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+              value={productLine}
+              onChange={(e) => setProductLine(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="species" className="text-sm font-medium">Species</label>
+            <input
+              id="species"
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+              value={species}
+              onChange={(e) => setSpecies(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="weight" className="text-sm font-medium">Weight</label>
+            <input
+              id="weight"
+              type="number" step="any" min="0" placeholder="Enter weight"
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
             />
           </div>
 
@@ -335,7 +394,7 @@ export default function ProductsPage() {
 
         {/* Buttons */}
         <div className="mt-5 flex gap-2">
-          <button
+          <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveProduct}
             disabled={loading || !authorization.can('Products', editingId === null ? 'add' : 'edit')}
@@ -348,7 +407,7 @@ export default function ProductsPage() {
           </button>
 
           {editingId !== null && (
-            <button
+            <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
               onClick={clearForm}
               disabled={loading}
@@ -364,7 +423,7 @@ export default function ProductsPage() {
             {error}
           </div>
         )}
-      </section>
+      </section> : null}
 
       {/* Table */}
       <section className="rounded-xl border bg-card shadow-sm">
@@ -379,105 +438,66 @@ export default function ProductsPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <Table>
+          <Table saved className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[180px] pl-6">
-                  Code
-                </TableHead>
-
-                <TableHead className="w-[220px]">
-                  Product Name
-                </TableHead>
-
-                <TableHead className="w-[180px]">
-                  Category
-                </TableHead>
-
-                <TableHead className="w-[150px]">
-                  Unit Price
-                </TableHead>
-
-                <TableHead className="w-[120px]">
-                  Status
-                </TableHead>
-
-                <TableHead className="w-[180px] text-left">
-                  Action
-                </TableHead>
+                {canShowActions && <TableHead className="w-[13%] text-left">Action</TableHead>}
+                <TableHead className="w-[8%]">Status</TableHead>
+                {sortableColumns.map(({ key, label, className }) => {
+                  const active = sort?.key === key
+                  const SortIcon = active ? (sort.descending ? ChevronDown : ChevronUp) : ChevronsUpDown
+                  return (
+                    <TableHead key={key} className={className} aria-sort={active ? (sort.descending ? 'descending' : 'ascending') : undefined}>
+                      <button
+                        type="button"
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-sm focus-visible:outline-2"
+                        onClick={() => setSort((current) => ({ key, descending: current?.key === key && !current.descending }))}
+                      >
+                        {label}
+                        <SortIcon aria-hidden="true" className={active ? 'size-4 shrink-0' : 'size-4 shrink-0 text-muted-foreground'} />
+                      </button>
+                    </TableHead>
+                  )
+                })}
+                <TableHead className="w-[8%]">Weight</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {products.length > 0 ? (
-                products.map((product) => {
-                  const category = categories.find(
-                    (item) => item.id === product.category_id
-                  )
-
-                  return (
-                    <TableRow key={product.id}>
-                      <TableCell className="pl-6 font-medium">
-                        {product.code}
-                      </TableCell>
-
-                      <TableCell>
-                        {product.name}
-                      </TableCell>
-
-                      <TableCell>
-                        {category
-                          ? `${category.code} - ${category.name}`
-                          : '—'}
-                      </TableCell>
-
-                      <TableCell>
-                        {Number(product.unit_price).toLocaleString(
-                          'en-PH',
-                          {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }
-                        )}
-                      </TableCell>
-
-                      <TableCell>
-                        {product.is_active
-                          ? 'Active'
-                          : 'Inactive'}
-                      </TableCell>
-
-                      <TableCell>
-                        <div className="flex justify-start gap-2">
-                          <button
-                            className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
-                            onClick={() =>
-                              editProduct(product)
-                            }
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                            onClick={() =>
-                              deleteProduct(product.id)
-                            }
-                            disabled={!authorization.can('Products', 'delete')}
-                          >
-                            Delete
-                          </button>
+              {sortedProducts.length > 0 ? sortedProducts.map((product) => (
+                <TableRow key={product.id}>
+                  {canShowActions && (
+                    <TableCell>
+                      {authorization.can('Products', 'edit') || authorization.can('Products', 'delete') ? (
+                        <div className="flex flex-wrap justify-start gap-2">
+                          {authorization.can('Products', 'edit') && (
+                            <button data-action-tone="caution"
+                              className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+                              onClick={() => editProduct(product)}
+                            >Edit</button>
+                          )}
+                          {authorization.can('Products', 'delete') && (
+                            <button data-action-tone="danger"
+                              className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                              onClick={() => deleteProduct(product.id)}
+                            >Delete</button>
+                          )}
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              ) : (
+                      ) : <span className="text-sm text-muted-foreground">No Action</span>}
+                    </TableCell>
+                  )}
+                  <TableCell>{product.is_active ? 'Active' : 'Inactive'}</TableCell>
+                  <TableCell>{categoryLabel(product.category_id)}</TableCell>
+                  <TableCell className="font-medium">{product.code}</TableCell>
+                  <TableCell>{product.name}</TableCell>
+                  <TableCell>{product.product_line || '—'}</TableCell>
+                  <TableCell>{product.species || '—'}</TableCell>
+                  <TableCell>{product.created_at ? new Date(product.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</TableCell>
+                  <TableCell>{Number(product.weight).toLocaleString('en-PH')}</TableCell>
+                </TableRow>
+              )) : (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="h-24 text-center text-muted-foreground"
-                  >
+                  <TableCell colSpan={columnCount} className="h-24 text-center text-muted-foreground">
                     No products found.
                   </TableCell>
                 </TableRow>

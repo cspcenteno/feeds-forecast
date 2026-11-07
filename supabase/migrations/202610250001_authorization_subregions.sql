@@ -243,31 +243,31 @@ $$;
 drop policy if exists app_users_base on public.users;
 create policy app_users_base on public.users for all to authenticated using (true) with check (true);
 drop policy if exists app_users_scope on public.users;
-create policy app_users_scope as restrictive on public.users for select to authenticated
+create policy app_users_scope on public.users as restrictive for select to authenticated
   using ((id = auth.uid()) or public.has_module_permission('Users','view') or public.has_module_permission('Dashboard','view'));
 drop policy if exists app_users_insert on public.users;
-create policy app_users_insert as restrictive on public.users for insert to authenticated
+create policy app_users_insert on public.users as restrictive for insert to authenticated
   with check (public.has_module_permission('Users','add') and public.subregion_matches_region(subregion_id,region_id));
 drop policy if exists app_users_update on public.users;
-create policy app_users_update as restrictive on public.users for update to authenticated
+create policy app_users_update on public.users as restrictive for update to authenticated
   using (public.has_module_permission('Users','edit')) with check (public.has_module_permission('Users','edit') and public.subregion_matches_region(subregion_id,region_id));
 drop policy if exists app_users_delete on public.users;
-create policy app_users_delete as restrictive on public.users for delete to authenticated using (public.has_module_permission('Users','delete'));
+create policy app_users_delete on public.users as restrictive for delete to authenticated using (public.has_module_permission('Users','delete'));
 drop policy if exists app_permissions_base on public.user_permissions;
 create policy app_permissions_base on public.user_permissions for all to authenticated using (true) with check (true);
 drop policy if exists app_permissions_self_read on public.user_permissions;
 create policy app_permissions_self_read on public.user_permissions for select to authenticated using (user_id = auth.uid());
 drop policy if exists app_permissions_admin_read on public.user_permissions;
-create policy app_permissions_admin_read as restrictive on public.user_permissions for select to authenticated
+create policy app_permissions_admin_read on public.user_permissions as restrictive for select to authenticated
   using (user_id = auth.uid() or public.has_module_permission('Users','edit'));
 drop policy if exists app_permissions_write on public.user_permissions;
-create policy app_permissions_write as restrictive on public.user_permissions for insert to authenticated
+create policy app_permissions_write on public.user_permissions as restrictive for insert to authenticated
   with check (public.has_module_permission('Users','edit'));
 drop policy if exists app_permissions_update on public.user_permissions;
-create policy app_permissions_update as restrictive on public.user_permissions for update to authenticated
+create policy app_permissions_update on public.user_permissions as restrictive for update to authenticated
   using (public.has_module_permission('Users','edit')) with check (public.has_module_permission('Users','edit'));
 drop policy if exists app_permissions_delete on public.user_permissions;
-create policy app_permissions_delete as restrictive on public.user_permissions for delete to authenticated
+create policy app_permissions_delete on public.user_permissions as restrictive for delete to authenticated
   using (public.has_module_permission('Users','edit'));
 
 -- Forecasts: View is available through any module that reads forecasts; write authority is
@@ -275,30 +275,30 @@ create policy app_permissions_delete as restrictive on public.user_permissions f
 drop policy if exists app_forecasts_base on public.sales_forecasts;
 create policy app_forecasts_base on public.sales_forecasts for all to authenticated using (true) with check (true);
 drop policy if exists app_forecasts_select on public.sales_forecasts;
-create policy app_forecasts_select as restrictive on public.sales_forecasts for select to authenticated
+create policy app_forecasts_select on public.sales_forecasts as restrictive for select to authenticated
   using ((public.has_module_permission('Sales Input','view') or public.has_module_permission('Weekly Sales','view') or public.has_module_permission('Approvals','view') or public.has_module_permission('Dashboard','view')) and public.can_access_data_scope(region_id,subregion_id,user_id));
 drop policy if exists app_forecasts_insert on public.sales_forecasts;
-create policy app_forecasts_insert as restrictive on public.sales_forecasts for insert to authenticated
+create policy app_forecasts_insert on public.sales_forecasts as restrictive for insert to authenticated
   with check (public.has_module_permission('Sales Input','add') and user_id = auth.uid() and public.can_access_data_scope(region_id,subregion_id,user_id) and public.subregion_matches_region(subregion_id,region_id));
 drop policy if exists app_forecasts_update on public.sales_forecasts;
-create policy app_forecasts_update as restrictive on public.sales_forecasts for update to authenticated
+create policy app_forecasts_update on public.sales_forecasts as restrictive for update to authenticated
   using ((public.has_module_permission('Sales Input','edit') or public.has_module_permission('Approvals','edit')) and public.can_access_data_scope(region_id,subregion_id,user_id))
   with check ((public.has_module_permission('Sales Input','edit') or public.has_module_permission('Approvals','edit')) and public.can_access_data_scope(region_id,subregion_id,user_id) and public.subregion_matches_region(subregion_id,region_id));
 drop policy if exists app_forecasts_delete on public.sales_forecasts;
-create policy app_forecasts_delete as restrictive on public.sales_forecasts for delete to authenticated
+create policy app_forecasts_delete on public.sales_forecasts as restrictive for delete to authenticated
   using (public.has_module_permission('Sales Input','delete') and public.can_access_data_scope(region_id,subregion_id,user_id));
 
 -- Budgets
 drop policy if exists app_budgets_base on public.budgets;
 create policy app_budgets_base on public.budgets for all to authenticated using (true) with check (true);
 drop policy if exists app_budgets_select on public.budgets;
-create policy app_budgets_select as restrictive on public.budgets for select to authenticated using (public.has_module_permission('Budget','view') and public.can_access_data_scope(region_id,subregion_id,null));
+create policy app_budgets_select on public.budgets as restrictive for select to authenticated using (public.has_module_permission('Budget','view') and public.can_access_data_scope(region_id,subregion_id,null));
 drop policy if exists app_budgets_insert on public.budgets;
-create policy app_budgets_insert as restrictive on public.budgets for insert to authenticated with check (public.has_module_permission('Budget','add') and public.can_access_data_scope(region_id,subregion_id,null) and public.subregion_matches_region(subregion_id,region_id));
+create policy app_budgets_insert on public.budgets as restrictive for insert to authenticated with check (public.has_module_permission('Budget','add') and public.can_access_data_scope(region_id,subregion_id,null) and public.subregion_matches_region(subregion_id,region_id));
 drop policy if exists app_budgets_update on public.budgets;
-create policy app_budgets_update as restrictive on public.budgets for update to authenticated using (public.has_module_permission('Budget','edit') and public.can_access_data_scope(region_id,subregion_id,null)) with check (public.has_module_permission('Budget','edit') and public.can_access_data_scope(region_id,subregion_id,null) and public.subregion_matches_region(subregion_id,region_id));
+create policy app_budgets_update on public.budgets as restrictive for update to authenticated using (public.has_module_permission('Budget','edit') and public.can_access_data_scope(region_id,subregion_id,null)) with check (public.has_module_permission('Budget','edit') and public.can_access_data_scope(region_id,subregion_id,null) and public.subregion_matches_region(subregion_id,region_id));
 drop policy if exists app_budgets_delete on public.budgets;
-create policy app_budgets_delete as restrictive on public.budgets for delete to authenticated using (public.has_module_permission('Budget','delete') and public.can_access_data_scope(region_id,subregion_id,null));
+create policy app_budgets_delete on public.budgets as restrictive for delete to authenticated using (public.has_module_permission('Budget','delete') and public.can_access_data_scope(region_id,subregion_id,null));
 
 -- Reference tables and week locks
 do $$
@@ -311,23 +311,23 @@ begin
     execute format('create policy app_%I_base on public.%I for all to authenticated using (true) with check (true)', x.tbl, x.tbl);
     execute format('drop policy if exists app_%I_select on public.%I', x.tbl, x.tbl);
     if x.tbl not in ('regions','subregions') then
-      execute format('create policy app_%I_select as restrictive on public.%I for select to authenticated using (public.has_module_permission(%L,''view'') or public.has_module_permission(''Dashboard'',''view''))', x.tbl, x.tbl, x.mod);
+      execute format('create policy app_%I_select on public.%I as restrictive for select to authenticated using (public.has_module_permission(%L,''view'') or public.has_module_permission(''Dashboard'',''view''))', x.tbl, x.tbl, x.mod);
     end if;
     execute format('drop policy if exists app_%I_insert on public.%I', x.tbl, x.tbl);
-    execute format('create policy app_%I_insert as restrictive on public.%I for insert to authenticated with check (public.has_module_permission(%L,''add''))', x.tbl, x.tbl, x.mod);
+    execute format('create policy app_%I_insert on public.%I as restrictive for insert to authenticated with check (public.has_module_permission(%L,''add''))', x.tbl, x.tbl, x.mod);
     execute format('drop policy if exists app_%I_update on public.%I', x.tbl, x.tbl);
-    execute format('create policy app_%I_update as restrictive on public.%I for update to authenticated using (public.has_module_permission(%L,''edit'')) with check (public.has_module_permission(%L,''edit''))', x.tbl, x.tbl, x.mod, x.mod);
+    execute format('create policy app_%I_update on public.%I as restrictive for update to authenticated using (public.has_module_permission(%L,''edit'')) with check (public.has_module_permission(%L,''edit''))', x.tbl, x.tbl, x.mod, x.mod);
     execute format('drop policy if exists app_%I_delete on public.%I', x.tbl, x.tbl);
-    execute format('create policy app_%I_delete as restrictive on public.%I for delete to authenticated using (public.has_module_permission(%L,''delete''))', x.tbl, x.tbl, x.mod);
+    execute format('create policy app_%I_delete on public.%I as restrictive for delete to authenticated using (public.has_module_permission(%L,''delete''))', x.tbl, x.tbl, x.mod);
   end loop;
 end;
 $$;
 
 drop policy if exists app_regions_select on public.regions;
-create policy app_regions_select as restrictive on public.regions for select to authenticated
+create policy app_regions_select on public.regions as restrictive for select to authenticated
   using ((public.has_module_permission('Regions','view') or public.has_module_permission('Dashboard','view')) and public.can_access_region(id));
 drop policy if exists app_subregions_select on public.subregions;
-create policy app_subregions_select as restrictive on public.subregions for select to authenticated
+create policy app_subregions_select on public.subregions as restrictive for select to authenticated
   using ((public.has_module_permission('Subregions','view') or public.has_module_permission('Dashboard','view')) and public.can_access_data_scope(region_id,id,null));
 
 -- Also enforce the parent relationship when a user is assigned a subregion.

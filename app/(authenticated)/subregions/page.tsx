@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
 
@@ -224,10 +225,16 @@ export default function SubregionsPage() {
     getData()
   }, [])
 
+  const { sortedRows: sortedSubregions, sortHeader } = useTableSort(subregions, {
+    code: (row) => row.code,
+    name: (row) => row.name,
+    region: (row) => regions.find((region) => region.id === row.region_id)?.name ?? null,
+  })
+
   return (
     <main className="space-y-8">
       {/* Subregion Form */}
-      <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Subregions', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="mb-5">
           <h2 className="font-semibold">
             {editingId !== null
@@ -330,7 +337,7 @@ export default function SubregionsPage() {
 
         {/* Buttons */}
         <div className="mt-5 flex gap-2">
-          <button
+          <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveSubregion}
             disabled={loading || initialLoading || !authorization.can('Subregions', editingId === null ? 'add' : 'edit')}
@@ -343,7 +350,7 @@ export default function SubregionsPage() {
           </button>
 
           {editingId !== null && (
-            <button
+            <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
               onClick={clearForm}
               disabled={loading}
@@ -352,7 +359,6 @@ export default function SubregionsPage() {
             </button>
           )}
         </div>
-
         {/* Error */}
         {error && (
           <div
@@ -362,7 +368,7 @@ export default function SubregionsPage() {
             {error}
           </div>
         )}
-      </section>
+      </section> : null}
 
       {/* Subregions Table */}
       <section className="rounded-xl border bg-card shadow-sm">
@@ -375,24 +381,24 @@ export default function SubregionsPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[640px] table-fixed wrap-anywhere">
+            <colgroup>
+              {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <col className="w-[20%]" />}
+              <col className="w-[12%]" />
+              <col className="w-[14%]" />
+              <col />
+              <col className="w-[24%]" />
+            </colgroup>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[140px] pl-6">
-                  Code
-                </TableHead>
+                {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <TableHead className="px-3">Action</TableHead>}
+                <TableHead className="px-3">Status</TableHead>
+                <SortableHeader className="px-3" {...sortHeader('code')}>Code</SortableHeader>
 
-                <TableHead>Subregion Name</TableHead>
+                <SortableHeader className="px-3" {...sortHeader('name')}>Subregion Name</SortableHeader>
 
-                <TableHead>Parent Region</TableHead>
+                <SortableHeader className="px-3" {...sortHeader('region')}>Parent Region</SortableHeader>
 
-                <TableHead className="w-[120px]">
-                  Status
-                </TableHead>
-
-                <TableHead className="w-[180px]">
-                  Action
-                </TableHead>
               </TableRow>
             </TableHeader>
 
@@ -400,64 +406,54 @@ export default function SubregionsPage() {
               {initialLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
                     Loading subregions...
                   </TableCell>
                 </TableRow>
               ) : subregions.length > 0 ? (
-                subregions.map((subregion) => {
+                sortedSubregions.map((subregion) => {
                   const parentRegion = regions.find(
                     (region) => region.id === subregion.region_id
                   )
 
                   return (
                     <TableRow key={subregion.id}>
-                      <TableCell className="pl-6 font-medium">
-                        {subregion.code || '—'}
-                      </TableCell>
-
-                      <TableCell>{subregion.name}</TableCell>
-
-                      <TableCell>
-                        {parentRegion?.name ?? 'Unknown region'}
-                      </TableCell>
-
-                      <TableCell>
-                        {subregion.is_active
-                          ? 'Active'
-                          : 'Inactive'}
-                      </TableCell>
-
-                      <TableCell>
-                        <div className="flex justify-start gap-2">
-                          <button
+                    {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <TableCell className="px-3">
+                        {authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? <div className="flex flex-wrap justify-start gap-1.5">
+                          {authorization.can('Subregions', 'edit') && <button data-action-tone="caution"
                             className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
                             onClick={() => editSubregion(subregion)}
                             disabled={loading || !authorization.can('Subregions', 'edit')}
-                          >
-                            Edit
-                          </button>
-
-                          <button
+                          >Edit</button>}
+                          {authorization.can('Subregions', 'delete') && <button data-action-tone="danger"
                             className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-                            onClick={() =>
-                              deleteSubregion(subregion.id)
-                            }
+                            onClick={() => deleteSubregion(subregion.id)}
                             disabled={loading || !authorization.can('Subregions', 'delete')}
-                          >
-                            Delete
-                          </button>
-                        </div>
+                          >Delete</button>}
+                        </div> : <span className="text-sm text-muted-foreground">No Action</span>}
+                    </TableCell>}
+                    <TableCell className="px-3">
+                      {subregion.is_active ? 'Active' : 'Inactive'}
+                    </TableCell>
+                      <TableCell className="px-3 font-medium">
+                        {subregion.code || '—'}
                       </TableCell>
+
+                      <TableCell className="px-3">{subregion.name}</TableCell>
+
+                      <TableCell className="px-3">
+                        {parentRegion?.name ?? 'Unknown region'}
+                      </TableCell>
+
                     </TableRow>
                   )
                 })
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No subregions found.

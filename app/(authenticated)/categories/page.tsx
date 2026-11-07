@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
 
@@ -15,7 +16,7 @@ import {
 
 type Category = {
   id: number
-  code: string
+  code: string | null
   name: string
   description: string | null
   is_active: boolean
@@ -55,8 +56,8 @@ export default function CategoriesPage() {
     if (!authorization.can('Categories', editingId === null ? 'add' : 'edit')) return
     setError(null)
 
-    if (!code.trim() || !name.trim()) {
-      setError('Code and Name are required.')
+    if (!name.trim()) {
+      setError('Name is required.')
       return
     }
 
@@ -68,7 +69,7 @@ export default function CategoriesPage() {
       const { data, error } = await supabase
         .from('categories')
         .update({
-          code: code.trim(),
+          code: code.trim() || null,
           name: name.trim(),
           description: description.trim() || null,
           is_active: isActive,
@@ -93,7 +94,7 @@ export default function CategoriesPage() {
       const { data, error } = await supabase
         .from('categories')
         .insert({
-          code: code.trim(),
+          code: code.trim() || null,
           name: name.trim(),
           description: description.trim() || null,
           is_active: isActive,
@@ -121,8 +122,9 @@ export default function CategoriesPage() {
   }
 
   function editCategory(category: Category) {
+    if (!authorization.can('Categories', 'edit')) return
     setEditingId(category.id)
-    setCode(category.code)
+    setCode(category.code ?? '')
     setName(category.name)
     setDescription(category.description ?? '')
     setIsActive(category.is_active)
@@ -178,10 +180,16 @@ export default function CategoriesPage() {
     getCategories()
   }, [])
 
+  const { sortedRows: sortedCategories, sortHeader } = useTableSort(categories, {
+    code: (row) => row.code,
+    name: (row) => row.name,
+    description: (row) => row.description,
+  })
+
   return (
     <main className="space-y-8">
       {/* Form */}
-      <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Categories', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="mb-5">
           <h2 className="font-semibold">
             {editingId !== null
@@ -203,7 +211,7 @@ export default function CategoriesPage() {
               htmlFor="code"
               className="text-sm font-medium"
             >
-              Code
+              Code <span className="text-muted-foreground">(Optional)</span>
             </label>
 
             <input
@@ -272,7 +280,7 @@ export default function CategoriesPage() {
 
         {/* Buttons */}
         <div className="mt-5 flex gap-2">
-          <button
+          <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveCategory}
             disabled={loading || !authorization.can('Categories', editingId === null ? 'add' : 'edit')}
@@ -285,7 +293,7 @@ export default function CategoriesPage() {
           </button>
 
           {editingId !== null && (
-            <button
+            <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
               onClick={clearForm}
               disabled={loading}
@@ -294,14 +302,13 @@ export default function CategoriesPage() {
             </button>
           )}
         </div>
-
         {/* Error */}
         {error && (
           <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
-      </section>
+      </section> : null}
 
       {/* Table */}
       <section className="rounded-xl border bg-card shadow-sm">
@@ -316,37 +323,43 @@ export default function CategoriesPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <Table>
+          <Table saved>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-6 w-[150px]">
-                  Code
-                </TableHead>
+                {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableHead className="w-[180px] text-left">Action</TableHead>}
+                <TableHead className="w-[120px]">Status</TableHead>
+                <SortableHeader className="pl-6 w-[150px]" {...sortHeader('code')}>Code</SortableHeader>
 
-                <TableHead className="w-[250px]">
-                  Name
-                </TableHead>
+                <SortableHeader className="w-[250px]" {...sortHeader('name')}>Name</SortableHeader>
 
-                <TableHead>
-                  Description
-                </TableHead>
+                <SortableHeader {...sortHeader('description')}>Description</SortableHeader>
 
-                <TableHead className="w-[120px]">
-                  Status
-                </TableHead>
-
-                <TableHead className="w-[180px] text-left">
-                  Action
-                </TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
               {categories.length > 0 ? (
-                categories.map((category) => (
+                sortedCategories.map((category) => (
                   <TableRow key={category.id}>
+                    {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableCell>
+                      {authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? <div className="flex justify-start gap-2">
+                        {authorization.can('Categories', 'edit') && <button data-action-tone="caution"
+                          className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+                          onClick={() => editCategory(category)}
+                          disabled={!authorization.can('Categories', 'edit')}
+                        >Edit</button>}
+                        {authorization.can('Categories', 'delete') && <button data-action-tone="danger"
+                          className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                          onClick={() => deleteCategory(category.id)}
+                          disabled={!authorization.can('Categories', 'delete')}
+                        >Delete</button>}
+                      </div> : <span className="text-sm text-muted-foreground">No Action</span>}
+                    </TableCell>}
+                    <TableCell>
+                      {category.is_active ? 'Active' : 'Inactive'}
+                    </TableCell>
                     <TableCell className="pl-6 font-medium">
-  {category.code}
+                      {category.code || '—'}
 </TableCell>
 
                     <TableCell>
@@ -357,40 +370,12 @@ export default function CategoriesPage() {
                       {category.description || '—'}
                     </TableCell>
 
-                    <TableCell>
-                      {category.is_active
-                        ? 'Active'
-                        : 'Inactive'}
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex justify-start gap-2">
-                        <button
-                          className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
-                          onClick={() =>
-                            editCategory(category)
-                          }
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                          onClick={() =>
-                            deleteCategory(category.id)
-                          }
-                          disabled={!authorization.can('Categories', 'delete')}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No categories found.

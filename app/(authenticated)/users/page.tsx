@@ -1,22 +1,25 @@
 
 'use client'
 
+import { Table } from '@/components/ui/table'
+import { UsersExcelImport } from '@/components/users-excel-import'
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Pencil,
   Trash2,
   RefreshCw,
-  ShieldCheck,
   Plus,
-  X,
 } from 'lucide-react'
 
+import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
 import { createClient } from '@/lib/client'
 import {
   defaultPermissions as sharedDefaultPermissions,
   disabledPermissions,
   modules,
+  useAuthorization,
 } from '@/lib/authorization'
 import type { Action, ModuleName } from '@/lib/authorization'
 
@@ -118,6 +121,7 @@ function getDefaultPermissions(role: string): ModulePermission[] {
 
 export default function UsersPage() {
   const router = useRouter()
+  const authorization = useAuthorization()
   const [supabase] = useState(() => createClient())
 
   const [users, setUsers] = useState<User[]>([])
@@ -128,6 +132,7 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -142,11 +147,12 @@ export default function UsersPage() {
   const [isActive, setIsActive] = useState(false)
 
   // Create User state
-  const [showCreateUser, setShowCreateUser] = useState(false)
+  const [showUserPermissions, setShowUserPermissions] = useState(false)
   const [creatingUser, setCreatingUser] = useState(false)
   const [newFullName, setNewFullName] = useState('')
   const [newEmail, setNewEmail] = useState('')
-  const [newTemporaryPassword, setNewTemporaryPassword] = useState('')
+  const [newTemporaryPassword, setNewTemporaryPassword] = useState('#vita2026')
+  const [newIsActive, setNewIsActive] = useState(true)
   const [newRole, setNewRole] = useState<string>('User')
   const [newRegionId, setNewRegionId] = useState<number | null>(null)
   const [newSubregionId, setNewSubregionId] = useState<number | null>(null)
@@ -162,6 +168,7 @@ export default function UsersPage() {
   )
 
   const [hasSavedPermissions, setHasSavedPermissions] = useState(false)
+  const [permissionsDirty, setPermissionsDirty] = useState(false)
   const [loadingPermissions, setLoadingPermissions] = useState(false)
   const [permissionLoadError, setPermissionLoadError] = useState(false)
 
@@ -169,6 +176,10 @@ export default function UsersPage() {
     checkAccess()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (selectedUser) document.getElementById('user-editor')?.scrollIntoView({ block: 'start' })
+  }, [selectedUser])
 
   async function checkAccess() {
     setLoading(true)
@@ -205,28 +216,38 @@ export default function UsersPage() {
   }
 
   async function loadUsers() {
-    const { data, error } = await supabase
-      .from('users')
-      .select(`
-        id,
-        email,
-        full_name,
-        role,
-        region_id,
-        subregion_id,
-        position,
-        is_active,
-        created_at
-      `)
-      .order('full_name', { ascending: true })
+    const allUsers: User[] = []
+    let lastId: string | null = null
+    while (true) {
+      const query = supabase
+        .from('users')
+        .select(`
+          id,
+          email,
+          full_name,
+          role,
+          region_id,
+          subregion_id,
+          position,
+          is_active,
+          created_at
+        `)
+        .order('id').limit(500)
+      if (lastId !== null) query.gt('id', lastId)
+      const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))
 
-    if (error) {
-      console.error('Users Select Error:', error)
-      alert(`Unable to load users: ${error.message}`)
-      return
+      if (error) {
+        console.error('Users Select Error:', error)
+        alert(`Unable to load users: ${error.message}`)
+        return
+      }
+
+      const page = (data ?? []) as User[]
+      allUsers.push(...page)
+      if (page.length < 500) break
+      lastId = page[page.length - 1].id
     }
-
-    setUsers((data ?? []) as User[])
+    setUsers(allUsers.sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? '')))
   }
 
   async function loadRegions() {
@@ -306,17 +327,15 @@ export default function UsersPage() {
       return
     }
 
-    if (
-      !data ||
-      data.length === 0 ||
-      data.every((item) => item.is_default)
-    ) {
+    if (!data?.length) {
       setHasSavedPermissions(false)
+      setPermissionsDirty(false)
       setPermissions(getDefaultPermissions(selectedRole))
       setLoadingPermissions(false)
       return
     }
 
+    const roleDefaults = getDefaultPermissions(selectedRole)
     const savedPermissions = new Map(
       data.map((item) => [item.module, item]),
     )
@@ -324,24 +343,32 @@ export default function UsersPage() {
     const mergedPermissions: ModulePermission[] = modules.map(
       (module) => {
         const saved = savedPermissions.get(module)
+        const fallback = roleDefaults.find((permission) => permission.module === module)
 
-        return normalizePermission({
+        return normalizePermission(saved ? {
           module,
-          can_view: saved?.can_view ?? false,
-          can_add: saved?.can_add ?? false,
-          can_edit: saved?.can_edit ?? false,
-          can_delete: saved?.can_delete ?? false,
+          can_view: saved.can_view,
+          can_add: saved.can_add,
+          can_edit: saved.can_edit,
+          can_delete: saved.can_delete,
+        } : {
+          module,
+          can_view: fallback?.can_view ?? false,
+          can_add: fallback?.can_add ?? false,
+          can_edit: fallback?.can_edit ?? false,
+          can_delete: fallback?.can_delete ?? false,
         })
       },
     )
 
-    setHasSavedPermissions(true)
+    setHasSavedPermissions(data.some((item) => !item.is_default))
+    setPermissionsDirty(false)
     setPermissions(mergedPermissions)
     setLoadingPermissions(false)
   }
 
   async function selectUser(user: User) {
-    setShowCreateUser(false)
+    setShowUserPermissions(false)
     setSelectedUser(user)
     setFullName(user.full_name ?? '')
     setEmail(user.email)
@@ -357,7 +384,7 @@ export default function UsersPage() {
   function handleRoleChange(newRole: string) {
     setRole(newRole)
 
-    if (!hasSavedPermissions) {
+    if (!hasSavedPermissions && !permissionsDirty) {
       setPermissions(getDefaultPermissions(newRole))
     }
 
@@ -368,6 +395,7 @@ export default function UsersPage() {
   }
 
   function clearSelection() {
+    setShowUserPermissions(false)
     setSelectedUser(null)
     setFullName('')
     setEmail('')
@@ -378,27 +406,30 @@ export default function UsersPage() {
     setIsActive(false)
     setPermissions(createDefaultPermissions())
     setHasSavedPermissions(false)
+    setPermissionsDirty(false)
     setLoadingPermissions(false)
     setPermissionLoadError(false)
   }
 
   function resetCreateUserForm() {
+    setShowUserPermissions(false)
     setNewFullName('')
     setNewEmail('')
-    setNewTemporaryPassword('')
+    setNewTemporaryPassword('#vita2026')
+    setNewIsActive(true)
     setNewRole('User')
     setNewRegionId(null)
     setNewSubregionId(null)
     setNewPosition('')
     setNewPermissions(getDefaultPermissions('User'))
-    setShowCreateUser(false)
   }
 
   function openCreateUserForm() {
-    clearSelection()
-    resetCreateUserForm()
-    setNewPermissions(getDefaultPermissions('User'))
-    setShowCreateUser(true)
+    if (selectedUser) {
+      clearSelection()
+      resetCreateUserForm()
+    }
+    document.getElementById('user-editor')?.scrollIntoView({ block: 'start' })
   }
 
   function handleNewRoleChange(newRole: string) {
@@ -473,6 +504,7 @@ export default function UsersPage() {
     checked: boolean,
   ) {
     if (isPermissionDisabled(module, field)) return
+    setPermissionsDirty(true)
 
     setPermissions((current) =>
       current.map((permission) =>
@@ -490,6 +522,7 @@ export default function UsersPage() {
     module: ModuleName,
     checked: boolean,
   ) {
+    setPermissionsDirty(true)
     setPermissions((current) =>
       current.map((permission) => {
         if (permission.module !== module) return permission
@@ -508,6 +541,7 @@ export default function UsersPage() {
   }
 
   function toggleAllPermissions(checked: boolean) {
+    setPermissionsDirty(true)
     setPermissions((current) =>
       current.map((permission) => {
         const updated = { ...permission }
@@ -534,13 +568,8 @@ export default function UsersPage() {
       return
     }
 
-    if (newTemporaryPassword.length < 8) {
-      alert('The temporary password must be at least 8 characters.')
-      return
-    }
-
-    if (newTemporaryPassword.length > 128) {
-      alert('The temporary password must not exceed 128 characters.')
+    if (newTemporaryPassword.length < 8 || newTemporaryPassword.length > 128) {
+      alert('The temporary password must be between 8 and 128 characters.')
       return
     }
 
@@ -583,6 +612,7 @@ export default function UsersPage() {
           fullName: newFullName.trim(),
           email: newEmail.trim().toLowerCase(),
           temporaryPassword: newTemporaryPassword,
+          isActive: newIsActive,
           role: newRole,
           regionId: newRole === 'Admin' ? null : newRegionId,
           subregionId: newRole === 'Admin' ? null : newSubregionId,
@@ -618,7 +648,7 @@ export default function UsersPage() {
     }
   }
 
-  
+
   // Save both profile details and permissions through the server API.
   async function handleSave() {
     if (!selectedUser) return
@@ -755,6 +785,7 @@ export default function UsersPage() {
 
       setPermissions(normalizedPermissions)
       setHasSavedPermissions(true)
+      setPermissionsDirty(false)
       setPermissionLoadError(false)
 
       alert('User details and permissions saved successfully.')
@@ -808,7 +839,7 @@ export default function UsersPage() {
   }
 
   function getRegionName(id: number | null) {
-    if (id === null) return 'All Regions'
+    if (id === null) return '—'
 
     return regions.find((region) => region.id === id)?.name ?? '—'
   }
@@ -827,6 +858,32 @@ export default function UsersPage() {
     (subregion) => subregion.region_id === newRegionId,
   )
 
+  const formRole = selectedUser ? role : newRole
+  const formRegionId = selectedUser ? regionId : newRegionId
+  const formSubregions = selectedUser ? availableSubregions : availableNewSubregions
+  const setFormRegionId = selectedUser ? setRegionId : setNewRegionId
+  const setFormSubregionId = selectedUser ? setSubregionId : setNewSubregionId
+  const formBusy = importBusy || (selectedUser ? saving || deleting : creatingUser)
+  const permissionsBusy = formBusy || Boolean(selectedUser && (loadingPermissions || permissionLoadError))
+  const formPermissions = selectedUser ? permissions : newPermissions
+  const allFormPermissionsEnabled = formPermissions.every((permission) =>
+    permissionFields.every(({ field }) =>
+      isPermissionDisabled(permission.module, field) || permission[field]
+    )
+  )
+  const updateFormPermission = selectedUser ? updatePermission : updateNewPermission
+  const toggleFormModulePermissions = selectedUser ? toggleModulePermissions : toggleNewModulePermissions
+  const toggleFormPermissions = selectedUser ? toggleAllPermissions : toggleAllNewPermissions
+
+  const { sortedRows: sortedUsers, sortHeader } = useTableSort(users, {
+    name: (row) => row.full_name,
+    email: (row) => row.email,
+    role: (row) => row.role,
+    position: (row) => row.position,
+    region: (row) => getRegionName(row.region_id),
+    subregion: (row) => getSubregionName(row.subregion_id),
+  })
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -839,128 +896,25 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* User Accounts */}
-      <div className="rounded-xl border bg-background">
-        <div className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="font-semibold">User Accounts</h2>
-            <p className="text-sm text-muted-foreground">
-              {users.length} user{users.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={openCreateUserForm}
-              disabled={creatingUser}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              <Plus className="size-4" />
-              Add User
-            </button>
-
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="inline-flex items-center justify-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`size-4 ${refreshing ? 'animate-spin' : ''}`}
-              />
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40">
-                <th className="px-6 py-3 text-left font-medium">Full Name</th>
-                <th className="px-4 py-3 text-left font-medium">Email</th>
-                <th className="px-4 py-3 text-left font-medium">Role</th>
-                <th className="px-4 py-3 text-left font-medium">Region</th>
-                <th className="px-4 py-3 text-left font-medium">Subregion</th>
-                <th className="px-4 py-3 text-left font-medium">Position</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Action</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-6 py-8 text-center text-muted-foreground"
-                  >
-                    No users found.
-                  </td>
-                </tr>
-              ) : (
-                users.map((user) => (
-                  <tr
-                    key={user.id}
-                    className={`border-b last:border-0 ${
-                      selectedUser?.id === user.id ? 'bg-muted/40' : ''
-                    }`}
-                  >
-                    <td className="px-6 py-3">{user.full_name || '—'}</td>
-                    <td className="px-4 py-3">{user.email}</td>
-                    <td className="px-4 py-3">{user.role}</td>
-                    <td className="px-4 py-3">
-                      {getRegionName(user.region_id)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {getSubregionName(user.subregion_id)}
-                    </td>
-                    <td className="px-4 py-3">{user.position || '—'}</td>
-                    <td className="px-4 py-3">
-                      {user.is_active ? 'Active' : 'Pending'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => selectUser(user)}
-                        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
-                      >
-                        <Pencil className="size-4" />
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Create User */}
-      {showCreateUser && (
-        <div className="rounded-xl border bg-background">
-          <div className="flex items-start justify-between gap-4 border-b px-6 py-4">
+      {authorization.can('Users', 'add') && <UsersExcelImport
+        blocked={saving || deleting || creatingUser || refreshing}
+        onBusyChange={setImportBusy}
+        onCreated={loadUsers}
+      />}
+      {/* User form */}
+      {(selectedUser || authorization.can('Users', 'add')) && (
+        <div id="user-editor" className="scroll-mt-4 overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-semibold">Create User</h2>
+              <h2 className="font-semibold">{selectedUser ? 'Edit User' : 'Create User'}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Create an account and assign its initial role and permissions.
+                {selectedUser ? 'Update the account and its permissions.' : 'Create an account and assign its initial role and permissions.'}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={resetCreateUserForm}
-              disabled={creatingUser}
-              aria-label="Close Create User form"
-              className="rounded-md p-1.5 hover:bg-muted disabled:opacity-50"
-            >
-              <X className="size-4" />
-            </button>
           </div>
 
-          <div className="grid gap-4 p-6 md:grid-cols-2">
+          <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <label htmlFor="newFullName" className="text-sm font-medium">
                 Full Name <span className="text-destructive">*</span>
@@ -968,12 +922,12 @@ export default function UsersPage() {
               <input
                 id="newFullName"
                 type="text"
-                value={newFullName}
-                onChange={(e) => setNewFullName(e.target.value)}
+                value={selectedUser ? fullName : newFullName}
+                onChange={(e) => (selectedUser ? setFullName : setNewFullName)(e.target.value)}
                 maxLength={150}
                 autoComplete="name"
                 required
-                disabled={creatingUser}
+                disabled={formBusy}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 placeholder="Enter full name"
               />
@@ -986,68 +940,44 @@ export default function UsersPage() {
               <input
                 id="newEmail"
                 type="email"
-                value={newEmail}
+                value={selectedUser ? email : newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 maxLength={254}
                 autoComplete="off"
                 required
-                disabled={creatingUser}
+                disabled={formBusy || Boolean(selectedUser)}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 placeholder="user@company.com"
               />
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="newTemporaryPassword"
-                className="text-sm font-medium"
-              >
-                Temporary Password <span className="text-destructive">*</span>
+              <label htmlFor="newTemporaryPassword" className="text-sm font-medium">
+                Temporary Password
               </label>
               <input
                 id="newTemporaryPassword"
                 type="password"
-                value={newTemporaryPassword}
-                onChange={(e) => setNewTemporaryPassword(e.target.value)}
+                value={selectedUser ? '' : newTemporaryPassword}
+                onChange={(event) => setNewTemporaryPassword(event.target.value)}
+                autoComplete="new-password"
                 minLength={8}
                 maxLength={128}
-                autoComplete="new-password"
-                required
-                disabled={creatingUser}
+                required={!selectedUser}
+                disabled={formBusy || Boolean(selectedUser)}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                placeholder="At least 8 characters"
-              />
-              <p className="text-xs text-muted-foreground">
-                Share the temporary password securely. Do not send it in a
-                public channel.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="newPosition" className="text-sm font-medium">
-                Position
-              </label>
-              <input
-                id="newPosition"
-                type="text"
-                value={newPosition}
-                onChange={(e) => setNewPosition(e.target.value)}
-                maxLength={150}
-                disabled={creatingUser}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                placeholder="Enter position"
+                placeholder={selectedUser ? 'Set when creating the account' : 'At least 8 characters'}
               />
             </div>
-
             <div className="space-y-2">
               <label htmlFor="newRole" className="text-sm font-medium">
                 Role <span className="text-destructive">*</span>
               </label>
               <select
                 id="newRole"
-                value={newRole}
-                onChange={(e) => handleNewRoleChange(e.target.value)}
-                disabled={creatingUser}
+                value={formRole}
+                onChange={(e) => (selectedUser ? handleRoleChange : handleNewRoleChange)(e.target.value)}
+                disabled={formBusy}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
               >
                 {roles.map((item) => (
@@ -1056,34 +986,54 @@ export default function UsersPage() {
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground">
-                Default permissions for this role load automatically. You can
-                customize them below.
-              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="newPosition" className="text-sm font-medium">
+                Sales Position
+              </label>
+              <select
+                id="newPosition"
+                value={selectedUser ? position : newPosition}
+                onChange={(e) => (selectedUser ? setPosition : setNewPosition)(e.target.value)}
+                disabled={formBusy || formRole === 'Admin'}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+              >
+                <option value="">Select a sales position</option>
+                <option value="KAM">KAM</option>
+                <option value="RSM">RSM</option>
+                <option value="ASM">ASM</option>
+                <option value="Supervisor">Supervisor</option>
+              </select>
             </div>
 
             <div className="space-y-2">
               <label htmlFor="newRegion" className="text-sm font-medium">
                 Region{' '}
-                {newRole !== 'Admin' && (
+                {formRole !== 'Admin' && (
                   <span className="text-destructive">*</span>
                 )}
               </label>
 
-              {newRole === 'Admin' ? (
-                <div className="rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                  All Regions
-                </div>
+              {formRole === 'Admin' ? (
+                <select
+                  id="newRegion"
+                  value=""
+                  disabled
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none disabled:opacity-50"
+                >
+                  <option value="">No region selected</option>
+                </select>
               ) : (
                 <select
                   id="newRegion"
-                  value={newRegionId ?? ''}
+                  value={formRegionId ?? ''}
                   onChange={(e) => {
                     const value = e.target.value
-                    setNewRegionId(value ? Number(value) : null)
-                    setNewSubregionId(null)
+                    setFormRegionId(value ? Number(value) : null)
+                    setFormSubregionId(null)
                   }}
-                  disabled={creatingUser}
+                  disabled={formBusy}
                   required
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 >
@@ -1097,406 +1047,86 @@ export default function UsersPage() {
               )}
             </div>
 
-            {newRole !== 'Admin' && (
-              <div className="space-y-2">
-                <label htmlFor="newSubregion" className="text-sm font-medium">
-                  Subregion
-                </label>
+            <div className="space-y-2">
+              <label htmlFor="newSubregion" className="text-sm font-medium">
+                Subregion (Optional)
+              </label>
+              {formRole === 'Admin' ? (
                 <select
                   id="newSubregion"
-                  value={newSubregionId ?? ''}
+                  value=""
+                  disabled
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none disabled:opacity-50"
+                >
+                  <option value="">No subregion selected</option>
+                </select>
+              ) : (
+                <select
+                  id="newSubregion"
+                  value={(selectedUser ? subregionId : newSubregionId) ?? ''}
                   onChange={(e) => {
                     const value = e.target.value
-                    setNewSubregionId(value ? Number(value) : null)
+                    setFormSubregionId(value ? Number(value) : null)
                   }}
-                  disabled={creatingUser || newRegionId === null}
+                  disabled={formBusy || formRegionId === null}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">No subregion selected</option>
-                  {availableNewSubregions.map((subregion) => (
+                  {formSubregions.map((subregion) => (
                     <option key={subregion.id} value={subregion.id}>
                       {subregion.name}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-muted-foreground">
-                  Optional. Only subregions belonging to the selected region
-                  are shown.
-                </p>
-              </div>
-            )}
+              )}
+            </div>
+            <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={selectedUser ? isActive : newIsActive}
+                onChange={(event) => (selectedUser ? setIsActive : setNewIsActive)(event.target.checked)}
+                disabled={formBusy}
+                className="size-4"
+              />
+              Active
+            </label>
           </div>
 
           {/* Create User Permissions */}
-          <div className="space-y-4 border-t p-6">
+          <div className="flex flex-col gap-3 border-t px-6 pt-4 pb-2">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg border p-2">
-                  <ShieldCheck className="size-5" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">User Permissions</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Configure module access before creating the account.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleAllNewPermissions(true)}
-                disabled={creatingUser}
-                className="self-start rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 sm:self-auto"
-              >
-                Enable All
-              </button>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              Choose the actions this user can perform in each module.
-              Unavailable actions are disabled by your authorization rules.
-            </p>
-
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[650px] text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40">
-                    <th className="px-4 py-3 text-left font-medium">
-                      Module
-                    </th>
-                    {permissionFields.map(({ field, label }) => (
-                      <th
-                        key={field}
-                        className="px-4 py-3 text-center font-medium"
-                      >
-                        {label}
-                      </th>
-                    ))}
-                    <th className="px-4 py-3 text-center font-medium">
-                      All
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {newPermissions.map((permission) => {
-                    const availableFields = permissionFields.filter(
-                      ({ field }) =>
-                        !isPermissionDisabled(permission.module, field),
-                    )
-
-                    const allChecked =
-                      availableFields.length > 0 &&
-                      availableFields.every(
-                        ({ field }) => permission[field],
-                      )
-
-                    return (
-                      <tr
-                        key={permission.module}
-                        className="border-b last:border-0"
-                      >
-                        <td className="px-4 py-3 font-medium">
-                          {permission.module}
-                        </td>
-
-                        {permissionFields.map(({ field, label }) => {
-                          const disabled = isPermissionDisabled(
-                            permission.module,
-                            field,
-                          )
-
-                          return (
-                            <td
-                              key={field}
-                              className="px-4 py-3 text-center"
-                            >
-                              <input
-                                type="checkbox"
-                                aria-label={`${label} permission for ${permission.module}`}
-                                checked={permission[field]}
-                                disabled={disabled || creatingUser}
-                                title={
-                                  disabled
-                                    ? `${label} is not available for ${permission.module}`
-                                    : `${label} ${permission.module}`
-                                }
-                                onChange={(e) =>
-                                  updateNewPermission(
-                                    permission.module,
-                                    field,
-                                    e.target.checked,
-                                  )
-                                }
-                                className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
-                              />
-                            </td>
-                          )
-                        })}
-
-                        <td className="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
-                            aria-label={`All available permissions for ${permission.module}`}
-                            checked={allChecked}
-                            disabled={
-                              creatingUser || availableFields.length === 0
-                            }
-                            onChange={(e) =>
-                              toggleNewModulePermissions(
-                                permission.module,
-                                e.target.checked,
-                              )
-                            }
-                            className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">
-                {newPermissions.filter((p) => p.can_view).length} of{' '}
-                {modules.length} modules have View enabled.
-              </p>
-              <button
-                type="button"
-                onClick={() => toggleAllNewPermissions(false)}
-                disabled={creatingUser}
-                className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-              >
-                Clear All Permissions
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={resetCreateUserForm}
-              disabled={creatingUser}
-              className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleCreateUser}
-              disabled={creatingUser}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {creatingUser && (
-                <RefreshCw className="size-4 animate-spin" />
-              )}
-              {creatingUser ? 'Creating User...' : 'Create User'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User */}
-      {selectedUser && (
-        <div className="space-y-6">
-          <div className="rounded-xl border bg-background">
-            <div className="border-b px-6 py-4">
-              <h2 className="font-semibold">Edit User</h2>
-              <p className="text-sm text-muted-foreground">
-                Update the user's details, role, region, subregion, and status.
-              </p>
-            </div>
-
-            <div className="grid gap-4 p-6 md:grid-cols-2">
-              <div className="space-y-2">
-                <label htmlFor="fullName" className="text-sm font-medium">
-                  Full Name
-                </label>
-                <input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  disabled
-                  className="w-full rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="position" className="text-sm font-medium">
-                  Position
-                </label>
-                <input
-                  id="position"
-                  type="text"
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                  placeholder="Enter position"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="role" className="text-sm font-medium">
-                  Role
-                </label>
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => handleRoleChange(e.target.value)}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {roles.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-
-                {!hasSavedPermissions && (
-                  <p className="text-xs text-muted-foreground">
-                    Default permissions are applied for the selected role.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="region" className="text-sm font-medium">
-                  Region
-                </label>
-
-                {role === 'Admin' ? (
-                  <div className="w-full rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                    All Regions
-                  </div>
-                ) : (
-                  <select
-                    id="region"
-                    value={regionId ?? ''}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      const newId = value ? Number(value) : null
-
-                      setRegionId(newId)
-
-                      if (
-                        subregionId !== null &&
-                        !subregions.some(
-                          (subregion) =>
-                            subregion.id === subregionId &&
-                            subregion.region_id === newId,
-                        )
-                      ) {
-                        setSubregionId(null)
-                      }
-                    }}
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">Select region</option>
-                    {regions.map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="subregion" className="text-sm font-medium">
-                  Subregion
-                </label>
-
-                {role === 'Admin' ? (
-                  <div className="w-full rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                    All Subregions
-                  </div>
-                ) : (
-                  <select
-                    id="subregion"
-                    value={subregionId ?? ''}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setSubregionId(value ? Number(value) : null)
-                    }}
-                    disabled={regionId === null}
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="">No subregion selected</option>
-                    {availableSubregions.map((subregion) => (
-                      <option key={subregion.id} value={subregion.id}>
-                        {subregion.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  Subregion is optional and must belong to the selected region.
+              <div>
+                <h3 className="font-semibold">User Permissions</h3>
+                <p className="text-sm text-muted-foreground">
+                  {selectedUser ? 'Configure module access for this account.' : 'Configure module access before creating the account.'}
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <input
-                  id="isActive"
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="size-4"
-                />
-                <label htmlFor="isActive" className="text-sm font-medium">
-                  Active
-                </label>
+              <div className="flex flex-wrap gap-2">
+                <button data-action-tone="neutral"
+                  type="button"
+                  aria-expanded={showUserPermissions}
+                  aria-controls="user-editor-permissions"
+                  onClick={() => setShowUserPermissions((visible) => !visible)}
+                  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+                >
+                  {showUserPermissions ? 'Hide Permissions' : 'Show Permissions'}
+                </button>
+                {showUserPermissions && (
+                  <button
+                    type="button"
+                    data-action-tone={allFormPermissionsEnabled ? 'caution' : 'positive'}
+                    onClick={() => toggleFormPermissions(!allFormPermissionsEnabled)}
+                    disabled={permissionsBusy}
+                    className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                  >
+                    {allFormPermissionsEnabled ? 'Disable All' : 'Enable All'}
+                  </button>
+                )}
               </div>
             </div>
-          </div>
 
-          {/* Edit User Permissions */}
-          <div className="rounded-xl border bg-background">
-            <div className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg border p-2">
-                  <ShieldCheck className="size-5" />
-                </div>
-                <div>
-                  <h2 className="font-semibold">User Permissions</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Configure module access for{' '}
-                    {selectedUser.full_name || selectedUser.email}.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleAllPermissions(true)}
-                disabled={loadingPermissions || permissionLoadError || saving}
-                className="self-start rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 sm:self-auto"
-              >
-                Enable All
-              </button>
-            </div>
-
-            <div className="space-y-4 p-6">
-              <p className="text-sm text-muted-foreground">
-                Select the actions this user can perform in each module.
-                Disabled actions are not permitted for that module.
-              </p>
-
+            <div id="user-editor-permissions" hidden={!showUserPermissions} className="space-y-4">
               {permissionLoadError ? (
                 <div className="rounded-lg border border-destructive/40 p-4 text-sm">
                   <p className="font-medium">
@@ -1505,9 +1135,9 @@ export default function UsersPage() {
                   <p className="mt-1 text-muted-foreground">
                     Refresh the page or try again before saving changes.
                   </p>
-                  <button
+                  <button data-action-tone="neutral"
                     type="button"
-                    onClick={() => loadUserPermissions(selectedUser.id, role)}
+                    onClick={() => selectedUser && loadUserPermissions(selectedUser.id, role)}
                     className="mt-3 rounded-md border px-3 py-2 hover:bg-muted"
                   >
                     Retry
@@ -1517,163 +1147,247 @@ export default function UsersPage() {
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   Loading user permissions...
                 </div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full min-w-[650px] text-sm">
-                      <thead>
-                        <tr className="border-b bg-muted/40">
-                          <th className="px-4 py-3 text-left font-medium">
-                            Module
+              ) : (<>
+                <Table
+                  className="min-w-[650px]"
+                  containerProps={{ className: "max-h-[min(16rem,45vh)] overflow-auto rounded-lg border", tabIndex: 0, role: "region", "aria-label": "User permissions" }}
+                >
+                    <thead className="sticky top-0 z-10 bg-background">
+                      <tr className="border-b bg-muted/40">
+                        <th className="px-4 py-3 text-left font-medium">
+                          Module
+                        </th>
+                        {permissionFields.map(({ field, label }) => (
+                          <th
+                            key={field}
+                            className="px-4 py-3 text-center font-medium"
+                          >
+                            {label}
                           </th>
-                          {permissionFields.map(({ field, label }) => (
-                            <th
-                              key={field}
-                              className="px-4 py-3 text-center font-medium"
-                            >
-                              {label}
-                            </th>
-                          ))}
-                          <th className="px-4 py-3 text-center font-medium">
-                            All
-                          </th>
-                        </tr>
-                      </thead>
+                        ))}
+                        <th className="px-4 py-3 text-center font-medium">
+                          All
+                        </th>
+                      </tr>
+                    </thead>
 
-                      <tbody>
-                        {permissions.map((permission) => {
-                          const availableFields = permissionFields.filter(
-                            ({ field }) =>
-                              !isPermissionDisabled(permission.module, field),
+                    <tbody>
+                      {formPermissions.map((permission) => {
+                        const availableFields = permissionFields.filter(
+                          ({ field }) =>
+                            !isPermissionDisabled(permission.module, field),
+                        )
+
+                        const allChecked =
+                          availableFields.length > 0 &&
+                          availableFields.every(
+                            ({ field }) => permission[field],
                           )
 
-                          const allChecked =
-                            availableFields.length > 0 &&
-                            availableFields.every(
-                              ({ field }) => permission[field],
-                            )
+                        return (
+                          <tr
+                            key={permission.module}
+                            className="border-b last:border-0"
+                          >
+                            <td className="px-4 py-3 font-medium">
+                              {permission.module}
+                            </td>
 
-                          return (
-                            <tr
-                              key={permission.module}
-                              className="border-b last:border-0"
-                            >
-                              <td className="px-4 py-3 font-medium">
-                                {permission.module}
-                              </td>
+                            {permissionFields.map(({ field, label }) => {
+                              const disabled = isPermissionDisabled(
+                                permission.module,
+                                field,
+                              )
 
-                              {permissionFields.map(({ field, label }) => {
-                                const disabled = isPermissionDisabled(
-                                  permission.module,
-                                  field,
-                                )
+                              return (
+                                <td
+                                  key={field}
+                                  className="px-4 py-3 text-center"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`${label} permission for ${permission.module}`}
+                                    checked={permission[field]}
+                                    disabled={disabled || permissionsBusy}
+                                    title={
+                                      disabled
+                                        ? `${label} is not available for ${permission.module}`
+                                        : `${label} ${permission.module}`
+                                    }
+                                    onChange={(e) =>
+                                      updateFormPermission(
+                                        permission.module,
+                                        field,
+                                        e.target.checked,
+                                      )
+                                    }
+                                    className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
+                                  />
+                                </td>
+                              )
+                            })}
 
-                                return (
-                                  <td
-                                    key={field}
-                                    className="px-4 py-3 text-center"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      aria-label={`${label} permission for ${permission.module}`}
-                                      checked={permission[field]}
-                                      disabled={disabled || saving}
-                                      title={
-                                        disabled
-                                          ? `${label} is not available for ${permission.module}`
-                                          : `${label} ${permission.module}`
-                                      }
-                                      onChange={(e) =>
-                                        updatePermission(
-                                          permission.module,
-                                          field,
-                                          e.target.checked,
-                                        )
-                                      }
-                                      className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
-                                    />
-                                  </td>
-                                )
-                              })}
+                            <td className="px-4 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                aria-label={`All available permissions for ${permission.module}`}
+                                checked={allChecked}
+                                disabled={
+                                  permissionsBusy || availableFields.length === 0
+                                }
+                                onChange={(e) =>
+                                  toggleFormModulePermissions(
+                                    permission.module,
+                                    e.target.checked,
+                                  )
+                                }
+                                className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                </Table>
 
-                              <td className="px-4 py-3 text-center">
-                                <input
-                                  type="checkbox"
-                                  aria-label={`All available permissions for ${permission.module}`}
-                                  checked={allChecked}
-                                  disabled={
-                                    saving || availableFields.length === 0
-                                  }
-                                  onChange={(e) =>
-                                    toggleModulePermissions(
-                                      permission.module,
-                                      e.target.checked,
-                                    )
-                                  }
-                                  className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-                                />
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-muted-foreground">
-                      {permissions.filter((p) => p.can_view).length} of{' '}
-                      {modules.length} modules have View enabled.
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={() => toggleAllPermissions(false)}
-                      disabled={saving}
-                      className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                    >
-                      Clear All Permissions
-                    </button>
-                  </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    {formPermissions.filter((p) => p.can_view).length} of{' '}
+                    {modules.length} modules have View enabled.
+                  </p>
+                </div>
                 </>
               )}
             </div>
           </div>
 
-          {/* Edit User Actions */}
-          <div className="flex items-center justify-between rounded-xl border bg-background px-6 py-4">
-            <button
+          <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-6 py-4">
+            <button data-action-tone="primary" data-action-fill=""
               type="button"
-              onClick={handleDelete}
-              disabled={deleting || saving}
-              className="inline-flex items-center gap-2 rounded-md border border-destructive px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              onClick={selectedUser ? handleSave : handleCreateUser}
+              disabled={permissionsBusy}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              <Trash2 className="size-4" />
-              {deleting ? 'Deleting...' : 'Delete'}
+              {formBusy && (
+                <RefreshCw className="size-4 animate-spin" />
+              )}
+              {selectedUser ? (saving ? 'Saving...' : 'Save Changes') : (creatingUser ? 'Creating User...' : 'Create User')}
             </button>
-
-            <div className="flex gap-2">
-              <button
+            {selectedUser && authorization.can('Users', 'delete') && (
+              <button data-action-tone="danger"
                 type="button"
-                onClick={clearSelection}
-                disabled={saving || deleting}
-                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                onClick={handleDelete}
+                disabled={formBusy}
+                className="inline-flex items-center gap-2 rounded-md border border-destructive px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
               >
-                Cancel
+                <Trash2 className="size-4" />
+                {deleting ? 'Deleting...' : 'Delete'}
               </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || loadingPermissions || permissionLoadError}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* User Accounts */}
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold">User Accounts</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {users.length} user{users.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {selectedUser && authorization.can('Users', 'add') && <button data-action-tone="primary" data-action-fill=""
+              type="button"
+              onClick={openCreateUserForm}
+              disabled={formBusy || loadingPermissions}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Plus className="size-4" />
+              Create User
+            </button>}
+
+            <button data-action-tone="neutral"
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`size-4 ${refreshing ? 'animate-spin' : ''}`}
+              />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        <Table saved
+          containerProps={{ tabIndex: 0, role: "region", "aria-label": "User Accounts table" }}
+        >
+            <thead className="sticky top-0 z-10 bg-card">
+              <tr className="border-b bg-muted/40">
+                {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <th className="whitespace-nowrap px-4 py-3 text-left font-medium">Action</th>}
+                <th className="px-4 py-3 text-left font-medium">Status</th>
+                <SortableHeader plain className="px-6 py-3 text-left font-medium" {...sortHeader('name')}>Full Name</SortableHeader>
+                <SortableHeader plain className="px-4 py-3 text-left font-medium" {...sortHeader('email')}>Email</SortableHeader>
+                <SortableHeader plain className="px-4 py-3 text-left font-medium" {...sortHeader('role')}>Role</SortableHeader>
+                <SortableHeader plain className="px-4 py-3 text-left font-medium" {...sortHeader('position')}>Sales Position</SortableHeader>
+                <SortableHeader plain className="px-4 py-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
+                <SortableHeader plain className="px-4 py-3 text-left font-medium" {...sortHeader('subregion')}>Subregion</SortableHeader>
+              </tr>
+            </thead>
+
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete') ? 8 : 7}
+                    className="px-6 py-8 text-center text-muted-foreground"
+                  >
+                    No users found.
+                  </td>
+                </tr>
+              ) : (
+                sortedUsers.map((user) => (
+                  <tr
+                    key={user.id}
+                    className={`border-b last:border-0 ${
+                      selectedUser?.id === user.id ? 'bg-muted/40' : ''
+                    }`}
+                  >
+                    {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <td className="px-4 py-3">
+                      {authorization.can('Users', 'edit') ? (
+                      <button data-action-tone="caution"
+                        type="button"
+                        onClick={() => selectUser(user)}
+                        disabled={formBusy || loadingPermissions}
+                        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+                      >
+                        <Pencil className="size-4" />
+                        Edit
+                      </button>
+                      ) : <span className="text-sm text-muted-foreground">No Action</span>}
+                    </td>}
+                    <td className="px-4 py-3">{user.is_active ? 'Active' : 'Pending'}</td>
+                    <td className="px-6 py-3">{user.full_name || '—'}</td>
+                    <td className="px-4 py-3">{user.email}</td>
+                    <td className="px-4 py-3">{user.role}</td>
+                    <td className="px-4 py-3">{user.position || '—'}</td>
+                    <td className="px-4 py-3">
+                      {getRegionName(user.region_id)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {getSubregionName(user.subregion_id)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+        </Table>
+      </div>
+
     </div>
   )
 }

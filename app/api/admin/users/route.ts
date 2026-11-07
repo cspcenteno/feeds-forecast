@@ -248,9 +248,8 @@ export async function POST(request: Request) {
     const email =
       typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
     const temporaryPassword =
-      typeof body.temporaryPassword === 'string'
-        ? body.temporaryPassword
-        : ''
+      typeof body.temporaryPassword === 'string' ? body.temporaryPassword : ''
+    const isActive = body.isActive === undefined ? false : body.isActive
     const position =
       typeof body.position === 'string' ? body.position.trim() : ''
     const role = body.role as Role
@@ -284,6 +283,13 @@ export async function POST(request: Request) {
     if (temporaryPassword.length < 8 || temporaryPassword.length > 128) {
       return NextResponse.json(
         { error: 'The temporary password must be between 8 and 128 characters.' },
+        { status: 400 },
+      )
+    }
+
+    if (typeof isActive !== 'boolean') {
+      return NextResponse.json(
+        { error: 'The account status is invalid.' },
         { status: 400 },
       )
     }
@@ -351,7 +357,7 @@ export async function POST(request: Request) {
         role,
         region_id: regionId,
         subregion_id: subregionId,
-        is_active: false,
+        is_active: isActive,
         must_change_password: true,
       })
 
@@ -407,7 +413,7 @@ export async function POST(request: Request) {
           role,
           region_id: regionId,
           subregion_id: subregionId,
-          is_active: false,
+          is_active: isActive,
         },
       },
       { status: 201 },
