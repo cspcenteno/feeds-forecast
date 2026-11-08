@@ -2,8 +2,8 @@ export type RegionalVolumes = { region: string; budget: number; forecast: number
 export type VolumeMetric = 'budget' | 'forecast' | 'actual'
 
 export const dashboardComparisons = [
-  { id: 'forecast-budget', title: 'Forecast vs Budget', baseline: 'budget', measured: 'forecast' },
-  { id: 'budget-actual', title: 'Budget vs Actual', baseline: 'budget', measured: 'actual' },
+  { id: 'forecast-budget', title: 'Budget vs Forecast', baseline: 'budget', measured: 'forecast' },
+  { id: 'budget-actual', title: 'Actual vs Budget', baseline: 'budget', measured: 'actual' },
   { id: 'forecast-actual', title: 'Forecast vs Actual', baseline: 'forecast', measured: 'actual' },
 ] as const
 
@@ -15,7 +15,7 @@ export function actualInDashboardScope(
   viewer: { scope: string; regionId: number | null; subregionId: number | null; isSupervisor: boolean },
   kamKeys: Set<string>,
 ) {
-  if (viewer.isSupervisor) return viewer.regionId !== null && viewer.subregionId !== null && row.region_id === viewer.regionId && row.subregion_id === viewer.subregionId
+  if (viewer.isSupervisor) return viewer.regionId !== null && row.region_id === viewer.regionId
   if (viewer.scope === 'global') return true
   if (viewer.scope === 'kam') return kamKeys.has(JSON.stringify([row.region_id, row.customer_id, row.product_id]))
   return (viewer.scope === 'asm' || viewer.scope === 'rsm') && viewer.regionId !== null && row.region_id === viewer.regionId

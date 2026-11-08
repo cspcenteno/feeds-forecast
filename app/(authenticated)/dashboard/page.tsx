@@ -1,13 +1,16 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
+import { useForecastAttention } from '@/lib/use-forecast-attention'
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, LoaderCircle, RefreshCw } from 'lucide-react'
 import {
   Bar, BarChart, CartesianGrid, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { Table } from '@/components/ui/table'
+import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
 import { compareVolumes, dashboardComparisons, metricColors, metricLabels, type RegionalVolumes } from '@/lib/dashboard-comparisons'
 import type { DashboardLevel } from '@/lib/dashboard-performance'
 
@@ -21,7 +24,7 @@ type SalesDetail = {
   budget_id: number | null
   endorsed_by: string | null
   submitted_by: string | null
-  region: string
+  region: string | null
   subregion: string | null
   customer: string | null
   product: string
@@ -35,6 +38,7 @@ type SalesDetail = {
 }
 
 type DashboardData = {
+  areaLevel: 'region' | 'subregion'
   scope: 'global' | 'asm' | 'rsm' | 'kam'
   regions: RegionVolume[]
   details: SalesDetail[]
@@ -107,10 +111,13 @@ function buildSalesGroups(data: DashboardData) {
 
     return [...byId.entries()].map(([id, entry]) => {
       const key = JSON.stringify([parent, id])
+      const hasRsm = data.scope === 'global' || data.scope === 'asm'
+      const isRsm = hasRsm && depth === 0
+      const isKam = data.scope !== 'kam' && depth === (hasRsm ? 1 : 0)
       return {
         key,
         label: entry.label,
-        area: [...new Set(entry.rows.map((row) => [row.region, row.subregion].filter(Boolean).join(' - ')))].join(', '),
+        area: isRsm || isKam ? [...new Set(entry.rows.map((row) => (isRsm ? row.region : row.subregion) || '—'))].join(', ') : '',
         metrics: volumeTotals(entry.rows),
         children: depth + 1 < levels.length ? group(entry.rows, depth + 1, key) : [],
       }
@@ -142,14 +149,24 @@ const comparisonAppearance = {
   'forecast-actual': 'border-violet-700 bg-violet-700 text-white dark:border-violet-400',
 }
 const performanceLabels = {
-  company: { title: 'Area volume performance', column: 'Area', by: 'Area', plural: 'areas' },
-  region: { title: 'Regional volume performance', column: 'Region', by: 'Region', plural: 'regions' },
-  subregion: { title: 'Subregional volume performance', column: 'Subregion', by: 'Subregion', plural: 'subregions' },
-  'customer-product': { title: 'Customer / Product volume performance', column: 'Customer / Product', by: 'Customer / Product', plural: 'customer / product groups' },
+  company: { title: 'Area Volume performance', column: 'Area', by: 'Area', plural: 'areas' },
+  region: { title: 'Regional Volume performance', column: 'Region', by: 'Region', plural: 'regions' },
+  subregion: { title: 'Subregional Volume performance', column: 'Subregion', by: 'Subregion', plural: 'subregions' },
+  'customer': { title: 'Customer Volume performance', column: 'Customer', by: 'Customer', plural: 'customers' },
 }
 const shortLabel = (value: string) => value.length > 26 ? value.slice(0, 25) + '…' : value
 
+function LoadingIndicator({ label }: { label: string }) {
+  return (
+    <div role="status" className="flex min-h-16 flex-1 items-center justify-center p-3">
+      <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      <span className="sr-only">Loading {label}…</span>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
+  const attention = useForecastAttention()
   const [month, setMonth] = useState(() => new Intl.DateTimeFormat('sv-SE', {
     year: 'numeric', month: '2-digit', timeZone: 'Asia/Manila',
   }).format(new Date()))
@@ -158,6 +175,8 @@ export default function DashboardPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [comparisonId, setComparisonId] = useState<(typeof dashboardComparisons)[number]['id']>('forecast-budget')
   const comparison = dashboardComparisons.find((item) => item.id === comparisonId)!
+  const performanceMetrics = [comparison.baseline, comparison.measured]
+  const performanceColumnCount = performanceMetrics.length + 3
 
   useEffect(() => {
     const controller = new AbortController()
@@ -182,6 +201,7 @@ export default function DashboardPage() {
   }, [month, revision])
 
   const current = result?.month === month && result.revision === revision ? result : null
+  const loading = current === null
   const data = current?.data
   const regions = data?.performance.rows ?? []
   const performanceLevel = data?.performance.level ?? 'company'
@@ -205,9 +225,6 @@ export default function DashboardPage() {
     actual: Number(row.actual),
     variance: Number(row[comparison.measured]) - Number(row[comparison.baseline]),
   }))
-  const contributionRows = chartRows.filter((row) => row[comparison.measured] > 0)
-    .map((row, index) => ({ ...row, fill: regionColors[index % regionColors.length] }))
-  const contributionTotal = contributionRows.reduce((sum, row) => sum + row[comparison.measured], 0)
   const baselineContributionRows = chartRows.filter((row) => row[comparison.baseline] > 0)
     .map((row, index) => ({ ...row, fill: regionColors[index % regionColors.length] }))
   const baselineContributionTotal = baselineContributionRows.reduce((sum, row) => sum + row[comparison.baseline], 0)
@@ -221,13 +238,13 @@ export default function DashboardPage() {
     return (
       <Fragment key={group.key}>
         <tr className={isGroup ? 'border-b bg-emerald-50/70 font-semibold dark:border-slate-700 dark:bg-emerald-950/35 dark:text-emerald-100' : 'border-b hover:bg-sky-50/50 dark:border-slate-700 dark:hover:bg-slate-800'}>
-          <td className="px-3 py-2">
+          <td className="px-1.5 py-2 sm:px-2">
             {isGroup ? (
               <button
                 type="button"
                 aria-expanded={isExpanded}
-                className="flex items-start gap-2 text-left hover:text-primary"
-                style={{ paddingInlineStart: depth * 16 }}
+                className="flex w-full min-w-0 items-start gap-1 text-left hover:text-primary"
+                style={{ paddingInlineStart: depth * 10 }}
                 onClick={() => setExpanded((previous) => {
                   const next = new Set(previous)
                   if (next.has(group.key)) next.delete(group.key)
@@ -236,12 +253,12 @@ export default function DashboardPage() {
                 })}
               >
                 {isExpanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
-                <span className="wrap-anywhere">{group.label}</span>
+                <span className="min-w-0 wrap-anywhere">{group.label}</span>
               </button>
-            ) : <div className="wrap-anywhere text-xs" style={{ paddingInlineStart: depth * 16 + 24 }}>{group.label}</div>}
+            ) : <div className="wrap-anywhere text-xs" style={{ paddingInlineStart: depth * 10 + 20 }}>{group.label}</div>}
           </td>
-          <td className="px-3 py-2 wrap-anywhere">{group.area}</td>
-          {group.metrics.map((value, index) => <td key={index} className="px-3 py-2 text-right tabular-nums">{number.format(value)}</td>)}
+          <td className="px-1.5 py-2 wrap-anywhere sm:px-2">{group.area}</td>
+          {group.metrics.map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(value)}</td>)}
         </tr>
         {isExpanded && group.children.map((child) => renderSalesGroup(child, depth + 1))}
       </Fragment>
@@ -250,6 +267,13 @@ export default function DashboardPage() {
 
   return (
     <div className="sales-dashboard space-y-4 rounded-xl bg-slate-100/70 p-3 dark:bg-slate-950 dark:text-slate-100">
+      {attention && (attention.returned.length > 0 || attention.pending > 0 || attention.endorsed > 0) && (
+        <div aria-label="Forecasts needing attention" className="flex flex-wrap gap-3">
+          {attention.returned.length > 0 && <Link href="/forecast-input?status=Returned#saved-forecasts" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 hover:underline">{attention.returned.length} forecast{attention.returned.length === 1 ? '' : 's'} returned for revision →</Link>}
+          {attention.pending > 0 && <Link href="/approvals?stage=Pending" className="rounded-lg border bg-card px-4 py-3 text-sm font-medium hover:underline">{attention.pending} submission{attention.pending === 1 ? '' : 's'} awaiting endorsement →</Link>}
+          {attention.endorsed > 0 && <Link href="/approvals?stage=Endorsed" className="rounded-lg border bg-card px-4 py-3 text-sm font-medium hover:underline">{attention.endorsed} endorsed submission{attention.endorsed === 1 ? '' : 's'} awaiting approval →</Link>}
+        </div>
+      )}
       <header className="rounded-lg border border-t-4 border-t-emerald-500 bg-card px-4 py-3 shadow-sm dark:border-slate-600 dark:border-t-emerald-400 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -261,8 +285,8 @@ export default function DashboardPage() {
               if (!event.target.value) return
               setMonth(event.target.value)
               setExpanded(new Set())
-            }} className="h-9 min-w-0 rounded-sm border bg-background px-2 text-sm" />
-            <button type="button" onClick={() => setRevision((value) => value + 1)} disabled={!current}
+            }} className="h-10 w-48 min-w-0 rounded-md border bg-background px-3 text-sm" />
+            <button data-action-tone="neutral" type="button" onClick={() => setRevision((value) => value + 1)} disabled={!current}
               className="inline-flex h-9 shrink-0 items-center gap-2 rounded-sm border bg-background px-3 text-sm hover:bg-muted disabled:opacity-50">
               <RefreshCw className="size-4" /> Refresh
             </button>
@@ -270,51 +294,53 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {!current ? (
-        <p role="status" className="rounded-sm border bg-card p-6 text-sm text-muted-foreground">Loading monthly sales…</p>
-      ) : current.error ? (
+      {current?.error ? (
         <p role="alert" className="rounded-sm border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{current.error}</p>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3" role="group" aria-label="Sales volume controls">
             {[
-              { metric: 'budget' as const, label: 'Budget volume', value: number.format(totals.budget), unit: 'bags' },
-              { metric: 'forecast' as const, label: 'Forecast volume', value: number.format(totals.forecast), unit: 'bags' },
-              { metric: 'actual' as const, label: 'Actual volume', value: number.format(totals.actual), unit: 'bags' },
-            ].map(({ metric, label, value, unit }) => (
-              <div key={label} className={`rounded-lg border border-t-4 px-4 py-4 shadow-sm ${metricAppearance[metric]}`}>
-                <p className="text-sm font-semibold">{label}</p>
-                <p className="mt-2 text-3xl leading-tight font-bold tabular-nums">{value}</p>
-                <p className="mt-1 text-xs font-medium">{unit} · {monthLabel}</p>
-                {metric === 'actual' && data?.actualRecordCount === 0 && <p className="mt-1 text-xs">No Actual records for this month.</p>}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3" role="group" aria-label="Sales comparison">
-            {dashboardComparisons.map((item) => {
-              const values = compareVolumes(totals[item.baseline], totals[item.measured])
-              const active = comparisonId === item.id
-              return <button key={item.id} type="button" aria-pressed={active} aria-controls="dashboard-comparison-results" onClick={() => setComparisonId(item.id)}
-                className={`cursor-pointer rounded-lg border px-3 py-2 text-left shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${active ? comparisonAppearance[item.id] : 'border-slate-300 bg-card hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:hover:bg-slate-800'}`}>
-                <span className="flex items-center justify-between gap-2 text-sm font-semibold">{item.title}{active && <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />}</span>
-                <span className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-xl font-semibold tabular-nums">{formatPercent(values.percent)}</span>
-                  <span className={`text-sm font-semibold tabular-nums ${active ? 'text-white' : values.variance < 0 ? 'text-rose-700 dark:text-rose-300' : values.variance > 0 ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>{values.variance > 0 ? '+' : ''}{number.format(values.variance)} bags</span>
-                </span>
+              { metric: 'budget' as const, label: 'BUDGET VOLUME', comparison: dashboardComparisons[0] },
+              { metric: 'forecast' as const, label: 'FORECAST VOLUME', comparison: dashboardComparisons[2] },
+              { metric: 'actual' as const, label: 'ACTUAL VOLUME', comparison: dashboardComparisons[1] },
+            ].map(({ metric, label, comparison: cardComparison }) => {
+              const targetComparison = cardComparison.id
+              const active = comparisonId === targetComparison
+              const values = compareVolumes(totals[cardComparison.baseline], totals[cardComparison.measured])
+              return (
+              <button key={label} type="button" aria-pressed={active} aria-controls="dashboard-comparison-results"
+                aria-busy={loading}
+                onClick={() => setComparisonId(targetComparison)}
+                className={`cursor-pointer rounded-lg border border-t-4 px-3 py-2.5 text-left shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${active ? comparisonAppearance[targetComparison] : metricAppearance[metric]}`}>
+                <span className="flex items-center justify-between gap-2 text-sm font-semibold">{label}{active && <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />}</span>
+                {loading ? <LoadingIndicator label={label.toLowerCase()} /> : <p className="mt-1 text-2xl leading-tight font-bold tabular-nums">{number.format(totals[metric])} <span className="text-xs font-medium">bags</span></p>}
+                <div className="mt-2 border-t border-current/20 pt-2">
+                  <p className="text-xs font-medium">{cardComparison.title}</p>
+                  <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-base font-semibold tabular-nums">{loading ? '—' : formatPercent(values.percent)}</span>
+                    <span className={`text-xs font-semibold tabular-nums ${active ? 'text-white' : values.variance < 0 ? 'text-rose-700 dark:text-rose-300' : values.variance > 0 ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                      {loading ? '—' : `${values.variance > 0 ? '+' : ''}${number.format(values.variance)} bags`}
+                    </span>
+                  </div>
+                </div>
               </button>
+              )
             })}
           </div>
 
           <div id="dashboard-comparison-results" className="grid gap-3 xl:grid-cols-2">
             <div className="contents">
-              <section className={panel + ' order-1 flex flex-col'}>
-                <h3 className={panelTitle}>{performanceLabel.title} · {monthLabel}</h3>
+              <section aria-busy={loading} className={panel + ' order-1 flex flex-col'}>
+                <h3 className={panelTitle}>{performanceLabel.title}</h3>
                 <Table containerProps={{ className: 'max-h-[22rem] overflow-x-hidden overflow-y-auto' }} className="table-fixed text-xs">
-                  <colgroup><col className="w-[22%]" /><col className="w-[15%]" /><col className="w-[15%]" /><col className="w-[15%]" /><col className="w-[17%]" /><col className="w-[16%]" /></colgroup>
+                  <colgroup>
+                    <col className="w-[24%]" />
+                    {performanceMetrics.map((metric) => <col key={metric} />)}
+                    <col /><col />
+                  </colgroup>
                   <thead className="sticky top-0 z-10 bg-card text-muted-foreground">
-                    <tr>{[performanceLabel.column, 'Budget', 'Forecast', 'Actual', 'Variance', '% of ' + metricLabels[comparison.baseline]].map((label, index) =>
-                      <th key={label} scope="col" className={'px-1.5 py-3 wrap-anywhere sm:px-2 ' + (index === 0 ? 'text-left' : 'text-right')}>{label}</th>
+                    <tr>{[performanceLabel.column, ...performanceMetrics.map((metric) => metricLabels[metric]), 'Variance', 'Ach. %'].map((label, index) =>
+                      <th key={label} scope="col" title={label === 'Ach. %' ? 'Achievement percentage' : undefined} className={'px-1.5 py-3 wrap-anywhere sm:px-2 ' + (index === 0 ? 'text-left' : 'text-right')}>{label}</th>
                     )}</tr>
                   </thead>
                   <tbody>
@@ -322,27 +348,25 @@ export default function DashboardPage() {
                       const difference = Number(row[comparison.measured]) - Number(row[comparison.baseline])
                       return <tr key={row.key ?? row.region} className="border-b even:bg-muted/25">
                         <th scope="row" className="px-1.5 py-2 text-left font-medium wrap-anywhere sm:px-2">{row.region}</th>
-                        <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(row.budget)}</td>
-                        <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(row.forecast)}</td>
-                        <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(row.actual)}</td>
+                        {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(row[metric])}</td>)}
                         <td className={'px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2 ' + (difference < 0 ? 'text-red-700 dark:text-red-400' : '')}>{number.format(difference)}</td>
                         <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{formatPercent(achievement(row[comparison.measured], row[comparison.baseline]))}</td>
                       </tr>
                     })}
-                    {regions.length === 0 && <tr><td colSpan={6} className="px-3 py-3 text-center text-muted-foreground">No volume recorded for this month.</td></tr>}
+                    {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className="px-3 py-3 text-center text-muted-foreground">{loading ? <LoadingIndicator label="area volume performance" /> : 'No volume recorded for this month.'}</td></tr>}
                   </tbody>
-                  <tfoot className="sticky bottom-0 border-t-2 bg-card font-semibold">
+                  {!loading && <tfoot className="sticky bottom-0 border-t-2 bg-card font-semibold">
                     <tr><th scope="row" className="px-1.5 py-2 text-left wrap-anywhere sm:px-2">Grand total</th>
-                      {[totals.budget, totals.forecast, totals.actual, variance].map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(value)}</td>)}
+                      {[...performanceMetrics.map((metric) => totals[metric]), variance].map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(value)}</td>)}
                       <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{formatPercent(percent)}</td>
                     </tr>
-                  </tfoot>
+                  </tfoot>}
                 </Table>
               </section>
 
-              <section className={panel + ' order-3 flex h-[22rem] flex-col'}>
+              <section aria-busy={loading} className={panel + ' order-3 flex h-[22rem] flex-col'}>
                 <h3 className={panelTitle}>{comparison.title} by {performanceLabel.by} (bags)</h3>
-                {chartRows.length ? (
+                {loading ? <LoadingIndicator label="comparison chart" /> : chartRows.length ? (
                   <div className="min-h-0 flex-1 px-2 py-3 text-xs">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartRows} accessibilityLayer>
@@ -362,18 +386,18 @@ export default function DashboardPage() {
             </div>
 
             <div className="contents">
-              <section className={panel + ' order-2 flex min-h-64 flex-col'}>
+              <section aria-busy={loading} className={panel + ' order-2 flex min-h-64 flex-col'}>
                 <h3 className={panelTitle}>{metricLabels[comparison.baseline]} Volume Contribution by {performanceLabel.by}</h3>
-                {baselineContributionRows.length ? (
+                {loading ? <LoadingIndicator label="volume contribution chart" /> : baselineContributionRows.length ? (
                   <div className="grid min-h-0 flex-1 items-center gap-3 p-3 sm:grid-cols-2">
                     <div className="relative h-32 min-w-0 text-xs sm:h-44">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" className="relative z-10">
                         <PieChart accessibilityLayer>
                           <Pie data={baselineContributionRows} dataKey={comparison.baseline} nameKey="region" innerRadius="62%" outerRadius="92%" stroke="var(--card)" isAnimationActive={false} />
-                          <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: 'var(--popover-foreground)' }} formatter={(value) => number.format(Number(value)) + ' bags'} />
+                          <Tooltip wrapperStyle={{ zIndex: 20 }} contentStyle={tooltipStyle} itemStyle={{ color: 'var(--dashboard-tooltip-ink)' }} formatter={(value) => number.format(Number(value)) + ' bags'} />
                         </PieChart>
                       </ResponsiveContainer>
-                      <div className="pointer-events-none absolute inset-0 grid place-content-center text-center" aria-hidden="true">
+                      <div className="pointer-events-none absolute inset-0 z-0 grid place-content-center text-center" aria-hidden="true">
                         <span className="text-lg font-semibold tabular-nums">{number.format(baselineContributionTotal)}</span><span className="text-xs text-muted-foreground">bags</span>
                       </div>
                     </div>
@@ -390,42 +414,11 @@ export default function DashboardPage() {
                 {chartRows.some((row) => row[comparison.baseline] < 0) && <p className="px-3 pb-3 text-xs text-muted-foreground">Shares use positive volumes. Negative volumes remain in totals and comparisons.</p>}
               </section>
 
-              <section className={panel + ' order-5 flex flex-col xl:col-span-2'}>
-                <h3 className={panelTitle}>{metricLabels[comparison.measured]} Contribution by {performanceLabel.by}</h3>
-                {contributionRows.length ? (
-                  <div className="grid items-center gap-3 p-3 sm:grid-cols-2">
-                    <div className="relative h-32 min-w-0 text-xs sm:h-44">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart accessibilityLayer>
-                          <Pie data={contributionRows} dataKey={comparison.measured} nameKey="region"
-                            innerRadius="62%" outerRadius="92%" stroke="var(--card)" isAnimationActive={false} />
-                          <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: 'var(--popover-foreground)' }}
-                            formatter={(value) => number.format(Number(value)) + ' bags'} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="pointer-events-none absolute inset-0 grid place-content-center text-center" aria-hidden="true">
-                        <span className="text-lg font-semibold tabular-nums">{number.format(contributionTotal)}</span>
-                        <span className="text-xs text-muted-foreground">bags</span>
-                      </div>
-                    </div>
-                    <ul className="space-y-2 pr-1 text-xs">
-                      {contributionRows.map((row) => (
-                        <li key={row.key} className="flex items-center gap-2">
-                          <span className="size-2.5 shrink-0" style={{ backgroundColor: row.fill }} aria-hidden="true" />
-                          <span className="min-w-0 flex-1 wrap-anywhere">{row.region}</span>
-                          <span className="tabular-nums">{number.format(row[comparison.measured])}</span>
-                          <span className="w-10 text-right tabular-nums text-muted-foreground">{formatPercent(row[comparison.measured] / contributionTotal * 100)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : <p className="p-4 text-sm text-muted-foreground">No positive {metricLabels[comparison.measured].toLowerCase()} volume for this month.</p>}
-                {chartRows.some((row) => row[comparison.measured] < 0) && <p className="px-3 pb-3 text-xs text-muted-foreground">Contribution shares use positive volumes. Negative volumes are included in totals and comparisons.</p>}
-              </section>
 
-              <section className={panel + ' order-4 flex h-[22rem] flex-col'}>
-                <h3 className={panelTitle}>Monthly highlights</h3>
-                <ol className="min-h-0 flex-1 list-decimal divide-y overflow-y-auto px-4 pl-8 text-sm">
+
+              <section aria-busy={loading} className={panel + ' order-4 flex h-[22rem] flex-col'}>
+                <h3 className={panelTitle}>Monthly Highlights</h3>
+                {loading ? <LoadingIndicator label="monthly highlights" /> : <ol className="min-h-0 flex-1 list-decimal divide-y overflow-y-auto px-4 pl-8 text-sm">
                   {[
                     percent === null ? 'No positive ' + metricLabels[comparison.baseline].toLowerCase() + ' is available for this comparison.' : metricLabels[comparison.measured] + ' is ' + formatPercent(percent) + ' of ' + metricLabels[comparison.baseline].toLowerCase() + ', a variance of ' + number.format(variance) + ' bags.',
                     highestVolume && Number(highestVolume[comparison.measured]) > 0 ? highestVolume.region + ' contributes the most ' + metricLabels[comparison.measured].toLowerCase() + ' volume at ' + number.format(highestVolume[comparison.measured]) + ' bags.' : null,
@@ -433,34 +426,34 @@ export default function DashboardPage() {
                   ].filter((text): text is string => Boolean(text)).map((text) => (
                     <li key={text} className="py-2.5 pl-1">{text}</li>
                   ))}
-                </ol>
+                </ol>}
               </section>
             </div>
           </div>
 
-          <section className={panel}>
+          <section aria-busy={loading} className={panel}>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
               <div>
                 <h3 className="text-sm font-semibold">Monthly Sales · {monthLabel}</h3>
               </div>
-              <button type="button" disabled={keys.length === 0}
+              <button data-slot="expand-collapse-button" data-action-tone="neutral" type="button" disabled={keys.length === 0}
                 onClick={() => setExpanded(new Set(allExpanded ? [] : keys))}
                 className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
                 {allExpanded ? 'Collapse All' : 'Expand All'}
               </button>
             </div>
-            <Table saved className="table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
-              <colgroup><col className="w-[24%]" /><col className="w-[16%]" /><col /><col /><col /><col /><col /><col /></colgroup>
+            <Table data-monthly-sales className="min-w-[1000px] table-fixed text-xs" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
+              <colgroup><col /><col data-fixed-column="area" />{Array.from({ length: 6 }, (_, index) => <col key={index} data-volume-column="number" />)}</colgroup>
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b bg-muted/40">
-                  {['Sales structure', 'Area', 'Forecast (Qty.)', 'Volume (50kg)', 'Budget (Vol.)', 'Actual (Vol.)', 'Actual (Last Year Vol.)', 'Forecast (Vol.)'].map((label, index) =>
-                    <th key={label} scope="col" className={'px-3 py-3 font-medium ' + (index < 2 ? 'text-left' : 'text-right')}>{label}</th>
-                  )}
+                  <th scope="col" className="px-2 py-3 text-left font-semibold">Sales structure</th>
+                  <th scope="col" className="px-2 py-3 text-left font-semibold">Area</th>
+                  <MonthlySalesHeaders />
                 </tr>
               </thead>
               <tbody>
                 {salesGroups.length ? salesGroups.map((group) => renderSalesGroup(group, 0)) : (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No approved forecasts for this month.</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">{loading ? <LoadingIndicator label="monthly sales" /> : 'No approved forecasts for this month.'}</td></tr>
                 )}
               </tbody>
             </Table>

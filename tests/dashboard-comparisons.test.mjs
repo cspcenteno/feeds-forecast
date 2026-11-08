@@ -39,10 +39,15 @@ test('regional viewers can compare Actuals without forecasts but cannot see anot
   assert.equal(actualInDashboardScope(actual, { ...viewer, scope: 'rsm', regionId: null }, keys), false)
 })
 
-test('supervisors are restricted to both their region and subregion', () => {
+test('supervisor dashboards include every subregion in their assigned region', () => {
   assert.equal(actualInDashboardScope(actual, { ...viewer, isSupervisor: true }, keys), true)
-  assert.equal(actualInDashboardScope({ ...actual, subregion_id: 9 }, { ...viewer, isSupervisor: true }, keys), false)
-  assert.equal(actualInDashboardScope(actual, { ...viewer, isSupervisor: true, subregionId: null }, keys), false)
+  assert.equal(actualInDashboardScope({ ...actual, subregion_id: 9 }, { ...viewer, isSupervisor: true }, keys), true)
+  assert.equal(actualInDashboardScope(actual, { ...viewer, isSupervisor: true, subregionId: null }, keys), true)
+})
+
+test('supervisor dashboards cannot cross their region or use an unassigned region', () => {
+  assert.equal(actualInDashboardScope({ ...actual, region_id: 9 }, { ...viewer, isSupervisor: true }, keys), false)
+  assert.equal(actualInDashboardScope(actual, { ...viewer, isSupervisor: true, regionId: null }, keys), false)
 })
 
 test('KAM Actuals remain limited to their forecast customer/product keys', () => {

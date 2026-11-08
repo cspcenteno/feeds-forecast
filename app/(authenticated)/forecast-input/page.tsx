@@ -1,14 +1,22 @@
 'use client'
 
+import { useActionDialogs } from '@/components/action-dialogs'
+import { confirmationRecordDetails } from '@/lib/action-confirmation'
+import { customerMonthlyBudgetReference, monthlyBudgetReference } from '@/lib/monthly-budget-reference'
+import { forecastSubmissionConfirmation } from '@/lib/forecast-submission-confirmation'
+import { SelectionField } from '@/components/ui/selection-field'
+import { SearchableSelect } from '@/components/ui/searchable-select'
+import { TableActionButton } from '@/components/ui/table-action-button'
 import { Table } from '@/components/ui/table'
+import { useForecastAttention } from '@/lib/use-forecast-attention'
+import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
+import { LoadingSpinner, TableLoadingRow } from '@/components/ui/loading-spinner'
 import { ForecastExcelImport } from '@/components/forecast-excel-import'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
   Save,
-  Trash2,
-  Pencil,
   Send,
   ChevronDown,
   ChevronRight,
@@ -69,6 +77,7 @@ type SalesForecast = {
   status: string
   user_id: string
   remarks: string | null
+  returned_at: string | null
 }
 
 type SalesRow = {
@@ -129,6 +138,9 @@ function isEditableForecast(item: SalesForecast) {
 }
 
 export default function SalesInputPage() {
+  const attention = useForecastAttention()
+  const { confirmAction } = useActionDialogs()
+
   const supabase = createClient()
   const authorization = useAuthorization()
   const currentYear = new Date().getFullYear()
@@ -137,10 +149,11 @@ export default function SalesInputPage() {
   const [regions, setRegions] = useState<Region[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [customerAssignmentRestricted, setCustomerAssignmentRestricted] = useState(true)
   const [actualRecords, setActualRecords] = useState<ActualRecord[]>([])
+  const [selectedActualsLoading, setSelectedActualsLoading] = useState(false)
   const [savedActualRecords, setSavedActualRecords] = useState<ActualRecord[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
-  const [customerSearch, setCustomerSearch] = useState('')
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [products, setProducts] = useState<Product[]>([])
   const [budgets, setBudgets] = useState<BudgetRecord[]>([])
@@ -185,16 +198,33 @@ export default function SalesInputPage() {
   const [removedForecastCount, setRemovedForecastCount] = useState(0)
   const [submittedForecastCount, setSubmittedForecastCount] = useState(0)
   const [savedStatusFilter, setSavedStatusFilter] = useState('')
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('status') === 'Returned') {
+      void Promise.resolve().then(() => setSavedStatusFilter('Rejected'))
+    }
+  }, [])
+  const [savedError, setSavedError] = useState('')
+  const [savedMessage, setSavedMessage] = useState('')
+  const [savedTableLoading, setSavedTableLoading] = useState(true)
+  const [initializing, setInitializing] = useState(true)
+  const [budgetReferencesLoading, setBudgetReferencesLoading] = useState(true)
+  const [savedActualsLoading, setSavedActualsLoading] = useState(true)
+  const [savedActualsError, setSavedActualsError] = useState(false)
+  const savedActualRequest = useRef(0)
 
   useEffect(() => {
     async function initialize() {
-      const access = await loadUserAccess()
+    setSavedTableLoading(true)
+    try {
+        const access = await loadUserAccess()
 
-      if (!access) return
+        if (!access) return
 
-      await loadInitialData()
-      await loadForecasts(access.userId)
-    }
+        await Promise.all([loadInitialData(), loadForecasts(access.userId)])
+
+    } catch (error) { setError(error instanceof Error ? error.message : 'Unable to load forecasts.') }
+    finally { setSavedTableLoading(false); setInitializing(false) }
+  }
 
     initialize()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,7 +289,6 @@ export default function SalesInputPage() {
     setSelectedMonth(getMonthForWeek(newYear, newWeek))
 
     setSelectedCustomerId('')
-    setCustomerSearch('')
 
     setRows([
       {
@@ -284,9 +313,12 @@ export default function SalesInputPage() {
     async function loadActuals() {
       if (!selectedRegionId || !selectedCustomerId) {
         setActualRecords([])
+        setSelectedActualsLoading(false)
         return
       }
 
+      setSelectedActualsLoading(true)
+      try {
       const { data, error } = await loadActualRecords(supabase, [year, year - 1], {
         regionId: Number(selectedRegionId),
         customerId: Number(selectedCustomerId),
@@ -296,11 +328,14 @@ export default function SalesInputPage() {
 
       if (error) {
         setActualRecords([])
-        setError(error.message)
+        setError('Unable to load selected customer actuals. ' + error.message)
         return
       }
 
       setActualRecords(data ?? [])
+      } catch (error) {
+        if (!cancelled) setError(error instanceof Error ? error.message : 'Unable to load customer actuals.')
+      } finally { if (!cancelled) setSelectedActualsLoading(false) }
     }
 
     loadActuals()
@@ -415,77 +450,33 @@ export default function SalesInputPage() {
 
   async function loadInitialData() {
     setError('')
+    void loadBudgetReferences()
+    const [regionResult, subregionResult, categoryResult, customerResult, productResult] = await Promise.all([
+      supabase.from('regions').select('id, name, code').eq('is_active', true).order('name'),
+      supabase.from('subregions').select('id, name'),
+      supabase.from('categories').select('id, code, name').eq('is_active', true).order('name'),
+      (async () => {
+        const response = await fetch('/api/forecast-customers', { cache: 'no-store' })
+        const data = await response.json()
+        if (!response.ok) throw new Error('Unable to load customers. ' + (data.error ?? 'Please try again.'))
+        return data
+      })(),
+      supabase.from('products').select('id, category_id, code, name, weight').eq('is_active', true).order('name'),
+    ])
+    const failed = [regionResult, subregionResult, categoryResult, productResult].find((result) => result.error)
+    if (failed?.error) throw new Error('Unable to load forecast lookups. ' + failed.error.message)
+    setRegions(regionResult.data ?? [])
+    setSubregions(subregionResult.data ?? [])
+    setCategories(categoryResult.data ?? [])
+    setCustomers(customerResult.customers as Customer[])
+    setCustomerAssignmentRestricted(customerResult.restricted === true)
+    setProducts(productResult.data ?? [])
+  }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      setError('User session not found.')
-      return
-    }
-
-    const { data: loadedRegions, error: regionsError } = await supabase
-      .from('regions')
-      .select('id, name, code')
-      .eq('is_active', true)
-      .order('name')
-
-    if (regionsError) {
-      setError(regionsError.message)
-      return
-    }
-
-    setRegions(loadedRegions ?? [])
-
-    const { data: loadedSubregions, error: subregionsError } = await supabase
-      .from('subregions')
-      .select('id, name')
-
-    if (subregionsError) {
-      setError(subregionsError.message)
-    }
-    setSubregions(loadedSubregions ?? [])
-
-    const { data: loadedCategories, error: categoriesError } = await supabase
-      .from('categories')
-      .select('id, code, name')
-      .eq('is_active', true)
-      .order('name')
-
-    if (categoriesError) {
-      setError(categoriesError.message)
-      return
-    }
-
-    setCategories(loadedCategories ?? [])
-
-    const { data: loadedCustomers, error: customersError } = await supabase
-      .from('customers')
-      .select('id, customer, region_id')
-      .eq('is_active', true)
-      .order('customer')
-
-    if (customersError) {
-      setError(customersError.message)
-      return
-    }
-
-    setCustomers((loadedCustomers ?? []) as Customer[])
-
-    const { data: loadedProducts, error: productsError } = await supabase
-      .from('products')
-      .select('id, category_id, code, name, weight')
-      .eq('is_active', true)
-      .order('name')
-
-    if (productsError) {
-      setError(productsError.message)
-      return
-    }
-
-    setProducts(loadedProducts ?? [])
-
+  async function loadBudgetReferences() {
+    setBudgetReferencesLoading(true)
+    setBudgetLoadError('')
+    try {
     const loadedBudgets: BudgetRecord[] = []
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error } = await supabase
@@ -495,7 +486,7 @@ export default function SalesInputPage() {
         .range(from, from + PAGE_SIZE - 1)
 
       if (error) {
-        setBudgetLoadError(error.message)
+        setBudgetLoadError('Unable to load budget references. ' + error.message)
         return
       }
 
@@ -504,6 +495,8 @@ export default function SalesInputPage() {
     }
 
     setBudgets(loadedBudgets)
+    } catch (error) { setBudgetLoadError(error instanceof Error ? error.message : 'Unable to load budget references.') }
+    finally { setBudgetReferencesLoading(false) }
   }
 
   const canChooseRegion = role === 'Admin' || (role === 'Superuser' && salesPosition !== 'Supervisor')
@@ -516,91 +509,118 @@ export default function SalesInputPage() {
   }, [regions, canChooseRegion, assignedRegionId])
 
   async function loadForecasts(ownerId: string) {
-    setError('')
+    setSavedTableLoading(true)
+    try {
+      setSavedError('')
 
-    const baseQuery = supabase
-      .from('sales_forecasts')
-      .select(`
-        id,
-        year,
-        week,
-        region_id,
-        subregion_id,
-        customer_id,
-        category_id,
-        product_id,
-        forecast,
-        volume,
-        status,
-        user_id,
-        remarks
-      `)
-      .eq('user_id', ownerId)
-      .order('year', { ascending: false })
-      .order('week', { ascending: false })
-      .order('id', { ascending: false })
+      const baseQuery = supabase
+        .from('sales_forecasts')
+        .select(`
+          id,
+          year,
+          week,
+          region_id,
+          subregion_id,
+          customer_id,
+          category_id,
+          product_id,
+          forecast,
+          volume,
+          status,
+          user_id,
+          remarks,
+          returned_at
+        `)
+        .eq('user_id', ownerId)
+        .order('year', { ascending: false })
+        .order('week', { ascending: false })
+        .order('id', { ascending: false })
 
-    const allForecasts: SalesForecast[] = []
-    let from = 0
+      const allForecasts: SalesForecast[] = []
+      let from = 0
 
-    while (true) {
-      const { data, error } = await baseQuery.range(
-        from,
-        from + PAGE_SIZE - 1
+      while (true) {
+        const { data, error } = await baseQuery.range(
+          from,
+          from + PAGE_SIZE - 1
+        )
+
+        if (error) {
+          setSavedError('Unable to load saved forecasts. ' + error.message)
+          return
+        }
+
+        const page = (data ?? []) as SalesForecast[]
+        allForecasts.push(...page)
+
+        if (page.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
+
+      setForecasts(allForecasts)
+      window.dispatchEvent(new Event('forecast-workflow-changed'))
+
+      void loadSavedActualReferences(allForecasts)
+
+    } finally { setSavedTableLoading(false) }
+  }
+
+  async function loadSavedActualReferences(allForecasts: SalesForecast[]) {
+    const request = ++savedActualRequest.current
+    setSavedActualsLoading(true)
+    setSavedActualsError(false)
+    try {
+      // Load actual records for the years represented in the saved forecasts
+      // and the corresponding previous years. These are lookup-only values.
+      const lookupYears = Array.from(
+        new Set(
+          allForecasts.flatMap((item) => [item.year, item.year - 1])
+        )
       )
 
-      if (error) {
-        setError(error.message)
+      if (lookupYears.length === 0) {
+        setSavedActualRecords([])
         return
       }
 
-      const page = (data ?? []) as SalesForecast[]
-      allForecasts.push(...page)
+      const { data, error } = await loadActualRecords(supabase, lookupYears, {
+        regionIds: [...new Set(allForecasts.flatMap((item) => item.region_id == null ? [] : [item.region_id]))],
+        customerIds: [...new Set(allForecasts.flatMap((item) => item.customer_id == null ? [] : [item.customer_id]))],
+      })
+      if (request !== savedActualRequest.current) return
+      if (error) {
+        setSavedActualsError(true)
+        setSavedActualRecords([])
+        setSavedError('Unable to load saved forecast actuals. ' + error.message)
+        return
+      }
 
-      if (page.length < PAGE_SIZE) break
-      from += PAGE_SIZE
-    }
+      setSavedActualRecords(data ?? [])
 
-    setForecasts(allForecasts)
-
-    // Load actual records for the years represented in the saved forecasts
-    // and the corresponding previous years. These are lookup-only values.
-    const lookupYears = Array.from(
-      new Set(
-        allForecasts.flatMap((item) => [item.year, item.year - 1])
-      )
-    )
-
-    if (lookupYears.length === 0) {
-      setSavedActualRecords([])
-      return
-    }
-
-    const { data, error } = await loadActualRecords(supabase, lookupYears)
-    if (error) {
-      setSavedActualRecords([])
-      setError(error.message)
-      return
-    }
-
-    setSavedActualRecords(data ?? [])
+    } catch (error) {
+      if (request !== savedActualRequest.current) return
+      setSavedActualsError(true)
+      setSavedError(error instanceof Error ? error.message : 'Unable to load saved forecast actuals.')
+    } finally { if (request === savedActualRequest.current) setSavedActualsLoading(false) }
   }
 
   async function checkWeekLock(
     checkYear = year,
-    checkWeek = week
+    checkWeek = week,
+    scope: 'form' | 'saved' = 'form'
   ): Promise<boolean> {
-    setCheckingWeekLock(true)
+    if (scope === 'form') setCheckingWeekLock(true)
     try {
       const states = await loadForecastWeekStates(supabase, [{ year: checkYear, week: checkWeek }])
       const status = states[0].status
-      setWeekStatus(status)
+      if (scope === 'form') setWeekStatus(status)
       return status !== 'Open'
     } catch (error) {
-      setWeekStatus('Locked')
-      setError(error instanceof Error ? error.message : 'Unable to verify the week lock.')
+      if (scope === 'form') setWeekStatus('Locked')
+      const report = scope === 'saved' ? setSavedError : setError
+      report(error instanceof Error ? error.message : 'Unable to verify the week lock.')
       return true
-    } finally { setCheckingWeekLock(false) }
+    } finally { if (scope === 'form') setCheckingWeekLock(false) }
   }
 
   function getRowVolume(row: SalesRow) {
@@ -775,12 +795,6 @@ export default function SalesInputPage() {
     )
   }
 
-  function getAreaName(regionId: number | null, subregionId: number | null) {
-    const region = regions.find((item) => item.id === regionId)
-    const subregion = subregions.find((item) => item.id === subregionId)
-    return [region?.code?.trim() || region?.name, subregion?.name].filter(Boolean).join(' - ') || '-'
-  }
-
   function getCategoryName(id: number | null) {
     const category = categories.find((item) => item.id === id)
 
@@ -815,7 +829,7 @@ export default function SalesInputPage() {
     row: SalesRow,
     targetYear = year
   ) {
-    if (!row.product_id || !selectedCustomerId) return 0
+    if (!selectedCustomerId) return 0
 
     return actualRecords
       .filter(
@@ -824,7 +838,7 @@ export default function SalesInputPage() {
           item.region_id === Number(selectedRegionId) &&
           item.year === targetYear &&
           item.month === selectedMonth &&
-          item.product_id === Number(row.product_id)
+          (!row.product_id || item.product_id === Number(row.product_id))
       )
       .reduce((total, item) => total + Number(item.volume || 0), 0)
   }
@@ -837,33 +851,7 @@ export default function SalesInputPage() {
     customerId: number | null,
     productId: number | null
   ) {
-    if (!regionId || !productId) return 0
-
-    const matching = budgets.filter((item) =>
-      item.year === targetYear &&
-      item.region_id === regionId &&
-      item.product_id === productId &&
-      (item.customer_id === customerId || item.customer_id === null) &&
-      (item.subregion_id === subregionId || item.subregion_id === null)
-    )
-
-    const scopes = [
-      matching.filter((item) => item.customer_id === customerId && item.subregion_id === subregionId),
-      matching.filter((item) => item.customer_id === customerId && item.subregion_id === null),
-      matching.filter((item) => item.customer_id === null && item.subregion_id === subregionId),
-      matching.filter((item) => item.customer_id === null && item.subregion_id === null),
-    ]
-
-    const scoped = scopes.find((items) =>
-      items.some((item) => item.month === targetMonth || item.month === null)
-    )
-    if (!scoped) return 0
-
-    const monthly = scoped.find((item) => item.month === targetMonth)
-    if (monthly) return Number(monthly.volume) || 0
-
-    const yearly = scoped.find((item) => item.month === null)
-    return (Number(yearly?.volume) || 0) / 12
+    return monthlyBudgetReference(budgets, targetYear, targetMonth, regionId, subregionId, customerId, productId)
   }
 
   function getFormSubregionId() {
@@ -877,6 +865,10 @@ export default function SalesInputPage() {
   }
 
   function getMonthlyBudgetForRow(row: SalesRow) {
+    if (!row.product_id) {
+      return customerMonthlyBudgetReference(budgets, year, selectedMonth,
+        Number(selectedRegionId) || null, getFormSubregionId(), Number(selectedCustomerId) || null)
+    }
     return getMonthlyBudget(
       year,
       selectedMonth,
@@ -888,7 +880,7 @@ export default function SalesInputPage() {
   }
 
   function getForecastMonthlyForRow(row: SalesRow) {
-    if (!row.product_id || !selectedCustomerId) return 0
+    if (!selectedCustomerId) return 0
 
     return forecasts
       .filter(
@@ -897,7 +889,7 @@ export default function SalesInputPage() {
           item.year === year &&
           item.region_id === Number(selectedRegionId) &&
           item.customer_id === Number(selectedCustomerId) &&
-          item.product_id === Number(row.product_id) &&
+          (!row.product_id || item.product_id === Number(row.product_id)) &&
           getMonthForWeek(item.year, item.week) === selectedMonth
       )
       .reduce((total, item) => total + Number(item.volume || 0), 0)
@@ -1000,6 +992,11 @@ export default function SalesInputPage() {
       return false
     }
 
+    if (customerAssignmentRestricted && !customers.some((customer) => customer.id === Number(selectedCustomerId))) {
+      setError('You can only forecast for customers assigned to your name.')
+      return false
+    }
+
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]
       const rowNumber = index + 1
@@ -1057,7 +1054,7 @@ export default function SalesInputPage() {
     const locked = await checkWeekLock(year, week)
 
     if (locked) {
-      setError(`Week ${week} - ${year} is locked and cannot be modified.`)
+      // The form's week-lock notice already explains why saving is disabled.
       return
     }
 
@@ -1111,13 +1108,14 @@ export default function SalesInputPage() {
 
     if (saveError) {
       setPendingAction(null)
-      setError(saveError.message)
+      setError('Unable to save drafts. ' + saveError.message)
       return
     }
 
-    setMessage('Forecasts saved successfully.')
+    const revised = rows.some((row) => row.status === 'Rejected')
+    setMessage(revised ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts back to your RSM.' : 'Forecasts saved successfully.')
+    if (revised) setSavedStatusFilter('Draft')
     setSelectedCustomerId('')
-    setCustomerSearch('')
 
     setRows([
       {
@@ -1140,31 +1138,31 @@ export default function SalesInputPage() {
     if (!authorization.can('Forecast Input', 'edit')) return
 
     if (!isEditableForecast(item)) {
-      setError('Only draft or returned forecasts can be edited.')
+      setSavedError('Only draft or returned forecasts can be edited.')
       return
     }
 
     if (role === 'Manager' && item.region_id !== assignedRegionId) {
-      setError('You can only edit forecasts from your assigned region.')
+      setSavedError('You can only edit forecasts from your assigned region.')
       return
     }
 
     if (item.user_id !== userId) {
-      setError('You can only edit your own forecasts.')
+      setSavedError('You can only edit your own forecasts.')
       return
     }
 
-    const locked = await checkWeekLock(item.year, item.week)
+    const locked = await checkWeekLock(item.year, item.week, 'saved')
 
     if (locked) {
-      setError(
+      setSavedError(
         `Week ${item.week} - ${item.year} is locked. This forecast cannot be edited.`
       )
       return
     }
 
-    setError('')
-    setMessage('')
+    setSavedError('')
+    setSavedMessage('')
 
     setYear(item.year)
     setWeek(item.week)
@@ -1183,7 +1181,6 @@ export default function SalesInputPage() {
     )
 
     setSelectedCustomerId(String(item.customer_id ?? ''))
-    setCustomerSearch(getCustomerName(item.customer_id))
 
     const selectedProduct = products.find(
       (product) => product.id === item.product_id
@@ -1210,22 +1207,22 @@ export default function SalesInputPage() {
     if (!authorization.can('Forecast Input', 'edit') || items.length === 0) return
     const first = items[0]
     if (items.some((item) => item.region_id !== first.region_id || item.subregion_id !== first.subregion_id)) {
-      setError('This customer has forecasts across multiple areas. Edit the products individually.')
+      setSavedError('This customer has forecasts across multiple areas. Edit the products individually.')
       return
     }
     for (const item of items) {
       if (!isEditableForecast(item) || (role === 'Manager' && item.region_id !== assignedRegionId) || item.user_id !== userId) {
-        setError('You can only edit eligible forecasts from your assigned area or account.')
+        setSavedError('You can only edit eligible forecasts from your assigned area or account.')
         return
       }
-      if (await checkWeekLock(item.year, item.week)) {
-        setError(`Week ${item.week} - ${item.year} is locked. These forecasts cannot be edited.`)
+      if (await checkWeekLock(item.year, item.week, 'saved')) {
+        setSavedError(`Week ${item.week} - ${item.year} is locked. These forecasts cannot be edited.`)
         return
       }
     }
 
-    setError('')
-    setMessage('')
+    setSavedError('')
+    setSavedMessage('')
     setYear(first.year)
     setWeek(first.week)
     setSelectedMonth(getMonthForWeek(first.year, first.week))
@@ -1233,7 +1230,6 @@ export default function SalesInputPage() {
     setSelectedRegionId(first.region_id ? String(first.region_id) : '')
     setSelectedSubregionId(first.subregion_id ? String(first.subregion_id) : '')
     setSelectedCustomerId(String(first.customer_id ?? ''))
-    setCustomerSearch(getCustomerName(first.customer_id))
     setRows(items.map((item) => {
       const selectedProduct = products.find((product) => product.id === item.product_id)
       return {
@@ -1251,76 +1247,87 @@ export default function SalesInputPage() {
 
   function canSubmitItem(item: SalesForecast) {
     return item.status === 'Draft' && item.user_id === userId &&
+      (!customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
       item.region_id !== null &&
       (isAdmin || (item.region_id === assignedRegionId && item.subregion_id === assignedSubregionId))
   }
 
   async function handleSubmitCustomer(items: SalesForecast[]) {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!canSubmitForecasts) return
     const eligibleItems = items.filter(canSubmitItem)
     if (eligibleItems.length === 0) {
-      setError('There are no eligible forecasts for this customer.')
+      setSavedError('There are no eligible forecasts for this customer.')
       return
     }
     for (const item of eligibleItems) {
-      if (await checkWeekLock(item.year, item.week)) {
-        setError(`Week ${item.week} - ${item.year} is locked. These forecasts cannot be submitted.`)
+      if (await checkWeekLock(item.year, item.week, 'saved')) {
+        setSavedError(`Week ${item.week} - ${item.year} is locked. These forecasts cannot be submitted.`)
         return
       }
     }
-    if (!window.confirm(`Submit all ${eligibleItems.length} forecast record(s) for this customer?`)) return
+    if (!(actionConfirmation = await confirmAction(forecastSubmissionConfirmation(eligibleItems, getCustomerName(eligibleItems[0].customer_id), getCustomerName, getProductName)))) return
     setSubmittedForecastCount(0)
     setPendingAction('submit')
-    setError('')
-    setMessage('')
+    setSavedError('')
+    setSavedMessage('')
     const { data, error } = await supabase.rpc('transition_forecast_review', {
       p_ids: eligibleItems.map((item) => item.id),
       p_action: 'submit',
     })
     setPendingAction(null)
     if (error) {
-      setError(error.message)
+      setSavedError(error.message)
       return
     }
     setSubmittedForecastCount(Number(data))
     await loadForecasts(userId)
+
+    } finally { actionConfirmation?.finish() }
   }
 
   async function handleDeleteMany(items: SalesForecast[], scope: 'customer' | 'product' = 'customer') {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!authorization.can('Forecast Input', 'delete') || items.length === 0) return
     for (const item of items) {
       if (!isEditableForecast(item) || (role === 'Manager' && item.region_id !== assignedRegionId) || item.user_id !== userId) {
-        setError('You can only delete eligible forecasts from your assigned area or account.')
+        setSavedError('You can only delete eligible forecasts from your assigned area or account.')
         return
       }
-      if (await checkWeekLock(item.year, item.week)) {
-        setError(`Week ${item.week} - ${item.year} is locked. These forecasts cannot be deleted.`)
+      if (await checkWeekLock(item.year, item.week, 'saved')) {
+        setSavedError(`Week ${item.week} - ${item.year} is locked. These forecasts cannot be deleted.`)
         return
       }
     }
-    const confirmed = window.confirm(`Remove ${items.length} forecast record(s) ${scope === 'customer' ? 'for this customer' : 'for this product'}?`)
+    const confirmed = (actionConfirmation = await confirmAction({ message: `Remove ${items.length} forecast record(s) ${scope === 'customer' ? 'for this customer' : 'for this product'}?`, details: confirmationRecordDetails(items, 'Total volume (50kg)') }))
     if (!confirmed) return
     setRemovedForecastCount(0)
     const { error } = await supabase.from('sales_forecasts').delete().in('id', items.map((item) => item.id)).eq('user_id', userId)
     if (error) {
-      setError(error.message)
+      setSavedError(error.message)
       return
     }
     setRemovedForecastCount(items.length)
     await loadForecasts(userId)
+
+    } finally { actionConfirmation?.finish() }
   }
 
   async function handleSubmitAll() {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!canSubmitForecasts) return
 
-    setError('')
-    setMessage('')
+    setSavedError('')
+    setSavedMessage('')
     setSubmittedForecastCount(0)
 
     const draftForecasts = forecasts.filter(canSubmitItem)
 
     if (draftForecasts.length === 0) {
-      setError('There are no eligible forecasts to submit.')
+      setSavedError('There are no eligible forecasts to submit.')
       return
     }
 
@@ -1341,7 +1348,7 @@ export default function SalesInputPage() {
       lockResults = await loadForecastWeekStates(supabase, uniqueWeeks)
     } catch (error) {
       setPendingAction(null)
-      setError(error instanceof Error ? error.message : 'Unable to verify forecast week locks.')
+      setSavedError(error instanceof Error ? error.message : 'Unable to verify forecast week locks.')
       return
     }
 
@@ -1351,7 +1358,7 @@ export default function SalesInputPage() {
 
     if (lockedWeeks.length > 0) {
       setPendingAction(null)
-      setError(
+      setSavedError(
         `Submission stopped. The following week(s) are locked: ${
           lockedWeeks
             .map(
@@ -1364,9 +1371,7 @@ export default function SalesInputPage() {
       return
     }
 
-    const confirmed = window.confirm(
-      `Submit all ${draftForecasts.length} forecast record(s) across all weeks?`
-    )
+    const confirmed = (actionConfirmation = await confirmAction(forecastSubmissionConfirmation(draftForecasts, 'All Draft Forecasts', getCustomerName, getProductName)))
 
     if (!confirmed) {
       setPendingAction(null)
@@ -1380,7 +1385,7 @@ export default function SalesInputPage() {
 
     if (submitError) {
       setPendingAction(null)
-      setError(submitError.message)
+      setSavedError(submitError.message)
       return
     }
 
@@ -1389,12 +1394,15 @@ export default function SalesInputPage() {
     setPendingAction(null)
 
     await loadForecasts(userId)
+
+    } finally { actionConfirmation?.finish() }
   }
 
   const visibleSavedForecasts = useMemo(() => forecasts.filter((item) =>
+    (!customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
     Object.hasOwn(savedStatusLabels, item.status) &&
-    (!savedStatusFilter || item.status === savedStatusFilter)
-  ), [forecasts, savedStatusFilter])
+    (!savedStatusFilter || item.status === savedStatusFilter || (savedStatusFilter === 'Rejected' && item.status === 'Draft' && item.returned_at !== null))
+  ), [forecasts, savedStatusFilter, customerAssignmentRestricted, customers])
 
   // Group by week and customer, keeping each review status separate.
   const savedWeekGroups = useMemo<SavedWeekGroup[]>(() => {
@@ -1522,7 +1530,6 @@ export default function SalesInputPage() {
       date.toLocaleDateString('en-US', {
         day: '2-digit',
         month: 'short',
-        year: 'numeric',
         timeZone: 'UTC',
       })
 
@@ -1563,8 +1570,7 @@ export default function SalesInputPage() {
   const canShowActions =
     authorization.can('Forecast Input', 'edit') ||
     authorization.can('Forecast Input', 'delete')
-  const showReturnRemarks = visibleSavedForecasts.some((item) => item.status === 'Rejected')
-  const savedColumnCount = 10 + Number(canShowActions) + Number(showReturnRemarks)
+  const savedColumnCount = 10 + Number(canShowActions)
 
   return (
     <div className="space-y-6">
@@ -1608,8 +1614,8 @@ export default function SalesInputPage() {
                   checkingWeekLock
                     ? 'bg-muted text-muted-foreground'
                     : isLocked
-                      ? 'bg-muted text-muted-foreground'
-                      : 'bg-primary/10 text-primary'
+                      ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                 }`}
               >
                 Week {week} · {year} ·{' '}
@@ -1620,10 +1626,21 @@ export default function SalesInputPage() {
 
           <div className="p-6">
             <div className="mb-6 space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {rows.some((row) => row.status === 'Rejected') && (
+                <div role="status" className="w-full max-w-lg space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                  {rows.filter((row) => row.status === 'Rejected').map((row) => {
+                    const info = attention?.returned.find((record) => record.id === row.id)
+                    return <div key={row.tempId} className="space-y-1 break-words">
+                      <p className="font-medium">Returned by {info?.reviewer || 'Reviewer'}{info?.returned_at ? ` · ${new Date(info.returned_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })}` : ''}</p>
+                      <p><span className="font-medium">Reason:</span> {info?.remarks || forecasts.find((record) => record.id === row.id)?.remarks || 'No remarks provided.'}</p>
+                    </div>
+                  })}
+                </div>
+              )}
+              <div className="app-field-row">
                 {/* WEEK */}
 
-                <div className="space-y-2">
+                <div data-field-size="compact" className="space-y-2">
                   <label className="text-sm font-medium">
                     Week Date
                   </label>
@@ -1644,20 +1661,18 @@ export default function SalesInputPage() {
                     Region
                   </label>
 
-                  <select
-                    value={selectedRegionId}
-                    onChange={(e) => {
-                      setSelectedRegionId(e.target.value)
+                  <SelectionField value={selectedRegionId}
+                  onValueChange={(selectionValue) => {
+                      setSelectedRegionId(selectionValue)
                       setSelectedSubregionId('')
                       setSelectedCustomerId('')
-                      setCustomerSearch('')
                     }}
-                    disabled={
+                  disabled={
                       isFormDisabled ||
                       (role !== 'Admin' && role !== 'Superuser')
                     }
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  >
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Region">
                     <option value="">Select region</option>
 
                     {availableRegions.map((region) => (
@@ -1665,77 +1680,34 @@ export default function SalesInputPage() {
                         {region.name}
                       </option>
                     ))}
-                  </select>
+                  </SelectionField>
                 </div>
 
                 {/* CUSTOMER */}
 
-                <div className="space-y-2">
+                <div data-field-size="wide" className="space-y-2">
                   <label className="text-sm font-medium">
                     Customer
                   </label>
 
-                  <input
-                    type="text"
-                    list="forecast-customer-options"
-                    value={
-                      selectedCustomerId
-                        ? availableCustomers.find(
-                            (item) =>
-                              String(item.id) === selectedCustomerId
-                          )?.customer ?? customerSearch
-                        : customerSearch
-                    }
-                    onChange={(e) => {
-                      const value = e.target.value
-
-                      const match = availableCustomers.find(
-                        (item) =>
-                          item.customer.toLowerCase() ===
-                          value.trim().toLowerCase()
-                      )
-
-                      setCustomerSearch(value)
-                      setSelectedCustomerId(
-                        match ? String(match.id) : ''
-                      )
-                    }}
-                    onBlur={() => {
-                      const match = availableCustomers.find(
-                        (item) =>
-                          item.customer.toLowerCase() ===
-                          customerSearch.trim().toLowerCase()
-                      )
-
-                      if (match) {
-                        setSelectedCustomerId(String(match.id))
-                        setCustomerSearch(match.customer)
-                      } else if (!selectedCustomerId) {
-                        setCustomerSearch('')
-                      }
+                  <SearchableSelect value={selectedCustomerId}
+                    options={availableCustomers.map((customer) => ({ value: String(customer.id), label: customer.customer }))}
+                    onValueChange={(id) => {
+                      setSelectedCustomerId(id)
                     }}
                     disabled={isFormDisabled || !selectedRegionId}
-                    placeholder={
-                      selectedRegionId
-                        ? 'Search customer...'
-                        : 'Select region first'
-                    }
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                  />
+                    placeholder={selectedRegionId ? 'Search customer...' : 'Select region first'}
+                    className="w-full" aria-label="Customer" />
 
-                  <datalist id="forecast-customer-options">
-                    {availableCustomers.map((item) => (
-                      <option key={item.id} value={item.customer} />
-                    ))}
-                  </datalist>
+
                 </div>
               </div>
             </div>
 
             {/* FORECAST INPUT TABLE */}
 
-            <Table
-              className="min-w-[900px] table-fixed"
+            <Table data-monthly-sales
+              className="min-w-[1000px] table-fixed"
               containerProps={{ className: "w-full overflow-x-auto rounded-lg border" }}
             >
                 <colgroup>{[
@@ -1749,7 +1721,7 @@ export default function SalesInputPage() {
                   'w-[10%]',
                   'w-[10%]',
                 ].map((width, index) => (
-                  <col key={index} className={width} />
+                  <col data-action-column={index === 0 ? "single" : undefined} key={index} data-volume-column={index >= 3 ? "number" : undefined} className={index >= 3 ? undefined : width} />
                 ))}</colgroup>
 
     <thead>
@@ -1758,31 +1730,29 @@ export default function SalesInputPage() {
           colSpan={5}
           className="px-2 py-2 text-left text-sm font-semibold"
         >
-          Forecast details
+          Forecast Details
         </th>
 
         <th
           colSpan={4}
           className="border-l-2 border-dashed border-muted-foreground/30 bg-muted/70 px-2 py-2 text-left text-sm font-semibold text-muted-foreground"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>Sales reference</span>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <span>Monthly Sales Reference</span>
 
             <div className="flex items-center gap-2">
               <label
                 htmlFor="row-input-month-filter"
                 className="whitespace-nowrap text-xs font-medium"
               >
-                Month:
               </label>
 
-              <select
-                id="row-input-month-filter"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                disabled={isFormDisabled}
-                className="h-8 w-28 rounded-md border bg-background px-2 text-xs font-normal text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <SelectionField id="row-input-month-filter"
+                  value={selectedMonth}
+                  onValueChange={(selectionValue) => setSelectedMonth(Number(selectionValue))}
+                  disabled={isFormDisabled}
+                  className="h-9 w-36 rounded-md border bg-background px-3 text-sm font-normal text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Month:">
                 {Array.from({ length: 12 }, (_, index) => (
                   <option key={index + 1} value={index + 1}>
                     {new Date(2000, index, 1).toLocaleString('en', {
@@ -1790,14 +1760,14 @@ export default function SalesInputPage() {
                     })}
                   </option>
                 ))}
-              </select>
+              </SelectionField>
             </div>
           </div>
         </th>
       </tr>
 
       <tr className="border-b bg-muted/40">
-        <th className="whitespace-nowrap px-0 py-3 text-center font-medium">
+        <th data-action-column="single" className="whitespace-nowrap px-0 py-3 text-center font-medium">
           Action
         </th>
 
@@ -1809,34 +1779,13 @@ export default function SalesInputPage() {
           Product
         </th>
 
-        <th className="break-words px-1 py-3 text-right font-medium">
-          Forecast<br />(Qty.)
-        </th>
-
-        <th className="break-words px-1 py-3 text-right font-medium">
-          Volume<br />(50kg)
-        </th>
-
-        <th className="break-words border-l-2 border-dashed border-muted-foreground/30 bg-muted/50 px-1 py-3 text-right font-medium text-muted-foreground">
-          Budget<br />(Vol.)
-        </th>
-
-        <th className="break-words bg-muted/50 px-1 py-3 text-right font-medium text-muted-foreground">
-          Actual<br />(Vol.)
-        </th>
-
-        <th className="break-words bg-muted/50 px-1 py-3 text-right font-medium text-muted-foreground">
-          Actual (Last<br />Year Vol.)
-        </th>
-
-        <th className="break-words bg-muted/50 px-1 py-3 text-right font-medium text-muted-foreground">
-          Forecast<br />(Vol.)
-        </th>
+        <MonthlySalesHeaders />
       </tr>
     </thead>
 
     <tbody>
       {rows.map((row, index) => {
+        const referenceReady = Boolean(selectedRegionId && selectedCustomerId)
         const rowVolume = getRowVolume(row)
         const rowMonthlyBudget = getMonthlyBudgetForRow(row)
         const rowActualMonthly = getActualMonthlyForRow(row)
@@ -1845,16 +1794,14 @@ export default function SalesInputPage() {
 
         return (
           <tr key={row.tempId} className="border-b last:border-0">
-            <td className="px-0 py-3 text-center">
-              <button data-action-tone="danger"
+            <td data-action-column="single" className="px-0 py-3 text-center">
+              <TableActionButton action="delete" data-action-tone="danger"
                 type="button"
                 onClick={() => removeRow(row.tempId)}
                 disabled={isFormDisabled || !selectedCustomerId}
                 className="inline-flex size-4 items-center justify-center rounded-md border transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                 title="Remove row"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
+               />
             </td>
 
             <td className="px-0 py-3 text-center text-muted-foreground">
@@ -1862,27 +1809,14 @@ export default function SalesInputPage() {
             </td>
 
             <td className="px-1 py-3">
-              <input
-                type="text"
-                list={`product-options-${row.tempId}`}
-                value={row.product_search}
-                onChange={(e) =>
-                  updateRow(row.tempId, 'product_search', e.target.value)
-                }
+              <SearchableSelect value={row.product_id}
+                options={products.map((product) => ({ value: String(product.id), label: `${product.code} - ${product.name}` }))}
+                onValueChange={(id) => updateRow(row.tempId, 'product_id', id)}
                 disabled={isFormDisabled || !selectedCustomerId}
                 placeholder="Search product by code or name..."
-                autoComplete="off"
-                className="h-10 w-full min-w-0 rounded-md border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              />
+                className="w-full min-w-0" aria-label="Product" />
 
-              <datalist id={`product-options-${row.tempId}`}>
-                {products.map((product) => (
-                  <option
-                    key={product.id}
-                    value={`${product.code} - ${product.name}`}
-                  />
-                ))}
-              </datalist>
+
             </td>
 
             <td className="px-1 py-3">
@@ -1905,19 +1839,19 @@ export default function SalesInputPage() {
             </td>
 
             <td className="break-words border-l-2 border-dashed border-muted-foreground/30 bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {formatNumber(rowMonthlyBudget)}
+              {!referenceReady ? '—' : budgetReferencesLoading ? <LoadingSpinner label="budget reference" /> : budgetLoadError ? '—' : formatNumber(rowMonthlyBudget)}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {formatNumber(rowActualMonthly)}
+              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="actual reference" /> : formatNumber(rowActualMonthly)}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {formatNumber(rowActualLastYear)}
+              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="prior-year actual reference" /> : formatNumber(rowActualLastYear)}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {formatNumber(rowForecastMonthly)}
+              {!referenceReady ? '—' : formatNumber(rowForecastMonthly)}
             </td>
           </tr>
         )
@@ -1974,7 +1908,7 @@ export default function SalesInputPage() {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Save className="size-4" />
-                {pendingAction === 'save' ? 'Saving...' : 'Save Draft'}
+                {pendingAction === 'save' ? 'Saving...' : rows.some((row) => row.id !== null) ? 'Save Changes' : 'Save Draft'}
               </button>
             </div>
 
@@ -1989,14 +1923,6 @@ export default function SalesInputPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   Forecast entries cannot be added, edited, or submitted for
                   this week.
-                </p>
-              </div>
-            )}
-
-            {checkingWeekLock && (
-              <div className="mt-5 rounded-lg border bg-muted/40 px-4 py-3">
-                <p className="text-sm text-muted-foreground">
-                  Checking week lock status...
                 </p>
               </div>
             )}
@@ -2018,7 +1944,7 @@ export default function SalesInputPage() {
 
       {/* SAVED FORECASTS */}
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div id="saved-forecasts" className="scroll-mt-4 rounded-xl border bg-card shadow-sm">
         <div className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold">
@@ -2033,45 +1959,42 @@ export default function SalesInputPage() {
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-sm">
               Status
-              <select
-                value={savedStatusFilter}
-                onChange={(event) => setSavedStatusFilter(event.target.value)}
-                className="h-9 rounded-md border bg-background px-3 text-sm"
-              >
+              <SelectionField value={savedStatusFilter}
+                  onValueChange={(selectionValue) => setSavedStatusFilter(selectionValue)}
+                  className="h-9 w-44 rounded-md border bg-background px-3 text-sm"
+                  aria-label="Status">
                 <option value="">All open statuses</option>
                 {Object.entries(savedStatusLabels).map(([status, label]) => (
                   <option key={status} value={status}>{label}</option>
                 ))}
-              </select>
+              </SelectionField>
             </label>
           </div>
         </div>
 
-        {/* SAVED FORECAST TABLE */}
+        {savedError && <div role="alert" className="mx-6 my-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{savedError}</div>}
+      {savedMessage && <div role="status" className="mx-6 my-4 rounded-lg border bg-muted px-4 py-3 text-sm">{savedMessage}</div>}
 
-        <Table saved
+      {/* SAVED FORECAST TABLE */}
+
+        <Table data-volume-layout="forecast" saved aria-busy={savedTableLoading || initializing}
           className="table-fixed"
           containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Forecasts table" }}
         >
             <colgroup>
-              {canShowActions && <col className="w-[5%]" />}
-              <col className="w-[6%]" />
-              <col className="w-[10%]" />
-              <col className="w-[12%]" />
-              <col className="w-[12%]" />
-              <col className="w-[6%]"/>
-              <col className="w-[6%]"/>
-              <col className="w-[6%]"/>
-              <col className="w-[6%]"/>
-              <col className="w-[6%]"/>
-              <col className="w-[6%]"/>
-              {showReturnRemarks && <col className="w-52" />}
+              {canShowActions && <col data-action-column="forecast" />}
+              <col data-volume-column="status" className="w-[6%]" />
+              <col data-volume-column="area" className="w-[10%]" />
+              {/* Flexible description columns absorb spare width instead of Action. */}
+              <col data-volume-column="customer" />
+              <col data-volume-column="product" />
+              {Array.from({ length: 6 }, (_, index) => <col key={index} data-volume-column="number" className="w-[6%]" />)}
             </colgroup>
 
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b bg-muted/40">
                 {canShowActions && (
-                  <th className="whitespace-nowrap px-2 py-3 text-center font-medium">
+                  <th data-action-column="forecast" className="whitespace-nowrap px-2 py-3 text-center font-medium">
                     Action
                   </th>
                 )}
@@ -2092,30 +2015,7 @@ export default function SalesInputPage() {
                   Product
                 </th>
 
-                <th className="px-2 py-3 text-right font-medium">
-                  Forecast<br />(Qty.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Volume<br />(50kg)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Budget<br />(Vol.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Actual<br />(Vol.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Actual (Last<br />Year Vol.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Forecast<br />(Vol.)
-                </th>
-                {showReturnRemarks && <th scope="col" className="px-2 py-3 text-left font-medium">Remarks</th>}
+                <MonthlySalesHeaders />
               </tr>
             </thead>
 
@@ -2127,7 +2027,9 @@ export default function SalesInputPage() {
                   </td>
                 </tr>
               )}
-              {savedWeekGroups.length === 0 ? (
+              {savedTableLoading || initializing ? (
+                <TableLoadingRow columns={savedColumnCount} label="saved forecasts" />
+              ) : savedWeekGroups.length === 0 ? (
                 <tr>
                   <td
                     colSpan={savedColumnCount}
@@ -2160,11 +2062,6 @@ export default function SalesInputPage() {
                       )
 
                       const allItems = customerGroup.items
-                      const uniqueAreas = Array.from(
-                        new Set(
-                          allItems.map((item) => getAreaName(item.region_id, item.subregion_id))
-                        )
-                      )
 
                       const customerForecast = allItems.reduce(
                         (total, item) =>
@@ -2203,9 +2100,6 @@ export default function SalesInputPage() {
                           0
                         )
 
-                      const returnReasons = Array.from(new Set(allItems.flatMap((item) =>
-                        item.status === 'Rejected' && item.remarks ? [item.remarks] : []
-                      )))
 
                       const status = allItems[0].status as keyof typeof savedStatusLabels
                       const customerStatus = savedStatusLabels[status]
@@ -2226,11 +2120,11 @@ export default function SalesInputPage() {
 
                           <tr className="border-b bg-background hover:bg-muted/30">
                             {canShowActions && (
-                              <td className="px-2 py-3 text-center">
+                              <td data-action-column="forecast" className="px-2 py-3 text-center">
                                 <div className="flex flex-wrap items-center justify-center gap-1">
-                                  {customerCanEdit && <button data-action-tone="caution" type="button" onClick={() => handleEditCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Edit customer forecasts"><Pencil className="size-4" /></button>}
-                                  {customerCanDelete && <button data-action-tone="danger" type="button" onClick={() => handleDeleteMany(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Delete customer forecasts"><Trash2 className="size-4" /></button>}
-                                  {customerCanSubmit && <button data-action-tone="transfer" type="button" onClick={() => handleSubmitCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Submit customer forecasts"><Send className="size-4" /></button>}
+                                  {customerCanEdit && <TableActionButton action="edit" data-action-tone="caution" type="button" onClick={() => handleEditCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Edit customer forecasts" />}
+                                  {customerCanDelete && <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Delete customer forecasts" />}
+                                  {customerCanSubmit && <TableActionButton action="submit" data-action-tone="transfer" type="button" onClick={() => handleSubmitCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Submit customer forecasts" />}
                                 </div>
                               </td>
                             )}
@@ -2241,12 +2135,7 @@ export default function SalesInputPage() {
                               </span>
                             </td>
 
-                            <td
-                              className="px-2 py-3"
-                              title={uniqueAreas.join(', ')}
-                            >
-                              {uniqueAreas.join(', ')}
-                            </td>
+                            <td className="px-2 py-3 text-center">{allItems.every((record) => record.subregion_id === null) ? '—' : null}</td>
 
                             <td className="px-2 py-3">
                               <button
@@ -2289,25 +2178,20 @@ export default function SalesInputPage() {
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {formatNumber(customerBudget)}
+                              {budgetReferencesLoading ? <LoadingSpinner label="budget reference" /> : budgetLoadError ? '—' : formatNumber(customerBudget)}
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {formatNumber(customerActualMonthly)}
+                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(customerActualMonthly)}
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {formatNumber(customerActualLastYear)}
+                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(customerActualLastYear)}
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
                               {formatNumber(customerForecastMonthly)}
                             </td>
-                            {showReturnRemarks && (
-                              <td className="space-y-1 px-2 py-3 text-xs text-muted-foreground">
-                                {returnReasons.map((reason) => <p key={reason}>{reason}</p>)}
-                              </td>
-                            )}
                           </tr>
 
                           {/* EXPANDED PRODUCT ROWS */}
@@ -2325,12 +2209,12 @@ export default function SalesInputPage() {
                                   className="border-b bg-muted/20 last:border-0 hover:bg-muted/40"
                                 >
                                   {canShowActions && (
-                                    <td className="whitespace-nowrap px-2 py-2">
+                                    <td data-action-column="forecast" className="whitespace-nowrap px-2 py-2">
                                       <div className="flex items-center justify-center gap-1">
                                         {singleItem && (
                                           <>
                                           {customerCanEdit && (
-                                            <button data-action-tone="caution"
+                                            <TableActionButton action="edit" data-action-tone="caution"
                                               type="button"
                                               onClick={() =>
                                                 handleEdit(singleItem)
@@ -2342,13 +2226,11 @@ export default function SalesInputPage() {
                                               }
                                               className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                                               title="Edit"
-                                            >
-                                              <Pencil className="size-4" />
-                                            </button>
+                                             />
                                           )}
 
                                           {customerCanDelete && (
-                                            <button data-action-tone="danger"
+                                            <TableActionButton action="delete" data-action-tone="danger"
                                               type="button"
                                               onClick={() => handleDeleteMany(productGroup.items, 'product')}
                                               disabled={
@@ -2358,14 +2240,12 @@ export default function SalesInputPage() {
                                               }
                                               className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                                               title="Remove product forecasts"
-                                            >
-                                              <Trash2 className="size-4" />
-                                            </button>
+                                             />
                                           )}
                                           </>
                                         )}
                                         {customerCanDelete && !singleItem && (
-                                          <button data-action-tone="danger" type="button" onClick={() => handleDeleteMany(productGroup.items, 'product')} disabled={loading} className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title="Remove product forecasts"><Trash2 className="size-4" /></button>
+                                          <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany(productGroup.items, 'product')} disabled={loading} className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title="Remove product forecasts" />
                                         )}
                                         </div>
                                     </td>
@@ -2408,19 +2288,15 @@ export default function SalesInputPage() {
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {formatNumber(productGroup.budget)}
+                                    {budgetReferencesLoading ? <LoadingSpinner label="budget reference" /> : budgetLoadError ? '—' : formatNumber(productGroup.budget)}
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {formatNumber(
-                                      productGroup.actualMonthly
-                                    )}
+                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(productGroup.actualMonthly)}
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {formatNumber(
-                                      productGroup.actualLastYear
-                                    )}
+                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(productGroup.actualLastYear)}
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
@@ -2428,7 +2304,6 @@ export default function SalesInputPage() {
                                       productGroup.forecastMonthly
                                     )}
                                   </td>
-                                  {showReturnRemarks && <td />}
                                 </tr>
                               )
                             })}
@@ -2454,7 +2329,7 @@ export default function SalesInputPage() {
                 {pendingAction === 'submitAll' ? 'Submitting...' : 'Submit All'}
               </button>
             )}
-          <button
+          <button data-slot="expand-collapse-button"
             type="button"
             data-action-tone="neutral"
             onClick={() => setExpandedCustomers(new Set(

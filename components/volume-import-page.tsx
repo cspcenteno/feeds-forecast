@@ -1,7 +1,13 @@
 
 'use client'
 
+import { useActionDialogs } from '@/components/action-dialogs'
+import { confirmationRecordDetails } from '@/lib/action-confirmation'
+import { SelectionField } from '@/components/ui/selection-field'
+import { TableActionButton } from '@/components/ui/table-action-button'
 import { Table } from '@/components/ui/table'
+import { LoadingSpinner, TableLoadingRow } from '@/components/ui/loading-spinner'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
@@ -18,6 +24,9 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { getActualPeriod } from '@/lib/actual-records'
+import { getBudgetImportKey } from '@/lib/budget-import-key'
+import { groupedTableKeys } from '@/lib/grouped-table-keys'
+import { persistSavedVolumeUpdate, validateSavedVolumePeriod } from '@/lib/saved-volume-records'
 import { useAuthorization } from '@/lib/authorization'
 import { downloadImportTemplate } from '@/lib/download-import-template'
 
@@ -71,6 +80,17 @@ type BudgetImportRecord = {
   product_code: string | null
   product_name: string | null
   volume: string | null
+}
+
+type SavedRecordDraft = {
+  original: BudgetRecord
+  year: string
+  month: string
+  actualDate: string
+  customerId: string
+  productId: string
+  volume: string
+  kam: string
 }
 
 type ImportPreview = {
@@ -193,27 +213,6 @@ function parseActualDate(value: unknown, date1904 = false) {
   return date.toISOString().slice(0, 10)
 }
 
-function getBudgetImportKey(
-  year: number,
-  month: number,
-  regionId: number,
-  customerId: number,
-  productId: number,
-  asm: string | null,
-  rsm: string | null,
-  kam: string | null
-) {
-  return [
-    year,
-    month,
-    regionId,
-    customerId,
-    productId,
-    normalizeText(asm),
-    normalizeText(rsm),
-    normalizeText(kam),
-  ].join('|')
-}
 
 function getImportStatusLabel(status: ImportPreview['status']) {
   switch (status) {
@@ -254,6 +253,8 @@ function getImportStatusClass(status: ImportPreview['status']) {
 }
 
 export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actual' }) {
+  const { confirmAction } = useActionDialogs()
+
   const isActual = moduleName === 'Actual'
   const label = moduleName.toLowerCase()
   const savedTitle = isActual ? 'Saved Actuals' : 'Saved Budgets'
@@ -269,6 +270,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   const currentYear = currentDate.getFullYear()
 
   const [regions, setRegions] = useState<Region[]>([])
+  const [subregions, setSubregions] = useState<{ id: number; name: string; region_id: number }[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [budgets, setBudgets] = useState<BudgetRecord[]>([])
@@ -291,6 +293,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   const [filterCustomer, setFilterCustomer] = useState('')
   const [filterProduct, setFilterProduct] = useState('')
   const searchingSavedRecords = filterCustomer.trim() !== '' || filterProduct.trim() !== ''
+  const [manualSavedSearchQuery, setManualSavedSearchQuery] = useState<string | null>(null)
+  const savedSearchQuery = JSON.stringify([filterCustomer, filterProduct, filterYear, filterMonth, filterRegionId])
+  const autoExpandSavedSearch = searchingSavedRecords && manualSavedSearchQuery !== savedSearchQuery
 
   const [expandedImportGroups, setExpandedImportGroups] = useState(
     () => new Set(['["invalid"]', '["valid"]'])
@@ -312,10 +317,13 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   const [uploadingExcel, setUploadingExcel] = useState(false)
   const [importing, setImporting] = useState(false)
   const [editingImport, setEditingImport] = useState<BudgetImportRecord | null>(null)
+  const [editingSaved, setEditingSaved] = useState<SavedRecordDraft | null>(null)
+  const [savedEditError, setSavedEditError] = useState('')
+  const savedEditorRef = useRef<HTMLFormElement>(null)
   const stagingEditorRef = useRef<HTMLInputElement>(null)
   const [savingImport, setSavingImport] = useState(false)
   const [addingCustomer, setAddingCustomer] = useState(false)
-  const importBusy = savingImport || addingCustomer || uploadingExcel || importing || loadingStaging
+  const importBusy = initializing || savingImport || addingCustomer || uploadingExcel || importing || loadingStaging
   const [showImportPreview, setShowImportPreview] = useState(false)
 
   const [error, setError] = useState('')
@@ -392,6 +400,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       regionsResult,
       customersResult,
       productsResult,
+      subregionsResult,
     ] = await Promise.all([
       supabase
         .from('regions')
@@ -407,6 +416,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
         .select('id, category_id, code, name, weight')
         .eq('is_active', true)
         .order('name'),
+      supabase.from('subregions').select('id, name, region_id').order('name')
+        .abortSignal(AbortSignal.timeout(LOAD_REQUEST_TIMEOUT_MS)),
     ])
 
     if (regionsResult.error) {
@@ -424,9 +435,15 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       return
     }
 
+    if (subregionsResult.error) {
+      setError(subregionsResult.error.message)
+      return
+    }
+
     setRegions((regionsResult.data ?? []) as Region[])
     setCustomers((customersResult.data ?? []) as Customer[])
     setProducts((productsResult.data ?? []) as Product[])
+    setSubregions(subregionsResult.data ?? [])
 
     setInitializing(false)
     await loadBudgets()
@@ -644,18 +661,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
         region: findHeader(['region', 'area']),
         month: findHeader(['month']),
         actual_date: findHeader(['date', 'actual date', 'sales date', 'transaction date']),
-        asm: findHeader([
-          'asm',
-          'area sales manager',
-          'area manager',
-        ]),
-        rsm: findHeader([
-          'rsm',
-          'regional sales manager',
-          'regional manager',
-        ]),
         kam: findHeader([
           'kam',
+          'kam / salesman',
           'salesman',
           'sales person',
           'salesperson',
@@ -750,8 +758,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
               }
             : { year: getCellValue(row, columnMap.year) || null, month: getCellValue(row, columnMap.month) || null }),
           region: getCellValue(row, columnMap.region) || null,
-          asm: getCellValue(row, columnMap.asm) || null,
-          rsm: getCellValue(row, columnMap.rsm) || null,
+          asm: null,
+          rsm: null,
           kam: getCellValue(row, columnMap.kam) || null,
           customer: getCellValue(row, columnMap.customer) || null,
           product_code:
@@ -935,8 +943,6 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
               item.region_id ?? 0,
               item.customer_id ?? 0,
               item.product_id ?? 0,
-              item.asm,
-              item.rsm,
               item.kam
             )
       )
@@ -1050,8 +1056,6 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
               matchedRegion.id,
               matchedCustomer.id,
               matchedProduct.id,
-              source.asm,
-              source.rsm,
               source.kam
             )
 
@@ -1142,6 +1146,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     return groups
   }, [visibleImportPreview])
 
+  const importGroupKeys = useMemo(() => groupedTableKeys(importGroups), [importGroups])
+  const allImportGroupsExpanded = importGroupKeys.length > 0 && importGroupKeys.every((key) => expandedImportGroups.has(key))
+
   const groupedBudgets = useMemo<SavedKamGroup[]>(() => {
     const kams = new Map<string, { kam: string; customers: Map<string, SavedCustomerGroup> }>()
 
@@ -1174,6 +1181,19 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     })).sort((a, b) => a.kam.localeCompare(b.kam))
   }, [filteredBudgets, customers])
 
+  const savedKamKeys = groupedBudgets.map((group) => group.key)
+  const savedCustomerKeys = groupedBudgets.flatMap((group) => group.customers.map((customer) => customer.key))
+  const allSavedGroupsExpanded = savedKamKeys.length > 0 && (autoExpandSavedSearch || (
+    savedKamKeys.every((key) => expandedBudgetKams.has(key)) &&
+    savedCustomerKeys.every((key) => expandedBudgetCustomers.has(key))
+  ))
+
+  function toggleAllSavedGroups() {
+    setManualSavedSearchQuery(savedSearchQuery)
+    setExpandedBudgetKams(new Set(allSavedGroupsExpanded ? [] : savedKamKeys))
+    setExpandedBudgetCustomers(new Set(allSavedGroupsExpanded ? [] : savedCustomerKeys))
+  }
+
   function getRegionName(id: number | null) {
     return regions.find((region) => region.id === id)?.name ?? '-'
   }
@@ -1204,7 +1224,19 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }
 
   function toggleBudgetKam(key: string) {
-    toggleSet(setExpandedBudgetKams, key)
+    setManualSavedSearchQuery(savedSearchQuery)
+    if (autoExpandSavedSearch) {
+      setExpandedBudgetKams(new Set(savedKamKeys.filter((item) => item !== key)))
+      setExpandedBudgetCustomers(new Set(savedCustomerKeys))
+    } else toggleSet(setExpandedBudgetKams, key)
+  }
+
+  function toggleBudgetCustomer(key: string) {
+    setManualSavedSearchQuery(savedSearchQuery)
+    if (autoExpandSavedSearch) {
+      setExpandedBudgetKams(new Set(savedKamKeys))
+      setExpandedBudgetCustomers(new Set(savedCustomerKeys.filter((item) => item !== key)))
+    } else toggleSet(setExpandedBudgetCustomers, key)
   }
 
   async function deleteStagingRows(ids: number[], deletedIds: Set<number>) {
@@ -1221,11 +1253,13 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }
 
   async function deleteAllStagingRecords() {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (importBusy || !authorization.can(moduleName, 'delete')) return
 
     const ids = visibleImportPreview.filter((item) => !item.source.savedActual).map((item) => item.source.id)
     if (ids.length === 0) return
-    if (!window.confirm(`Discard all ${ids.length} staging rows available to you? ${savedTitle} will be kept.`)) return
+    if (!(actionConfirmation = await confirmAction({ message: `Discard all ${ids.length} staging rows available to you? ${savedTitle} will be kept.` }))) return
 
     setSavingImport(true)
     setError('')
@@ -1251,12 +1285,16 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
         setSavingImport(false)
       }
     }
+
+    } finally { actionConfirmation?.finish() }
   }
 
   async function saveStagingRecord(record: BudgetImportRecord, action: 'edit' | 'delete') {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (record.savedActual) return
     if (importBusy || !authorization.can(moduleName, action)) return
-    if (action === 'delete' && !window.confirm('Discard this uploaded record from staging?')) return
+    if (action === 'delete' && !(actionConfirmation = await confirmAction({ message: 'Discard this uploaded record from staging?' }))) return
 
     setSavingImport(true)
     setError('')
@@ -1281,6 +1319,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     } finally {
       setSavingImport(false)
     }
+
+    } finally { actionConfirmation?.finish() }
   }
 
   function renderImportGroup(group: ImportGroup, path: string[]): React.ReactNode {
@@ -1291,7 +1331,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     return (
       <Fragment key={key}>
         <tr className={path.length === 1 && group.label === 'Invalid' ? 'border-b bg-destructive/10' : 'border-b bg-muted/30'}>
-          <td colSpan={isActual ? 11 : 12}>
+          <td colSpan={isActual ? 9 : 10}>
             <button
               type="button"
               aria-expanded={expanded}
@@ -1317,10 +1357,12 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }
 
   async function addMissingCustomer(item: ImportPreview) {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     const name = item.source.customer?.trim()
     if (importBusy || !authorization.can('Customers', 'add') || !name || !item.region) return
     if (!canWriteAllRegions && item.region.id !== assignedRegionId) return
-    if (!window.confirm(`Add "${name}" to Customers in ${item.region.name}?`)) return
+    if (!(actionConfirmation = await confirmAction({ message: `Add "${name}" to Customers in ${item.region.name}?` }))) return
 
     setAddingCustomer(true)
     setError('')
@@ -1352,21 +1394,19 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     } finally {
       setAddingCustomer(false)
     }
+
+    } finally { actionConfirmation?.finish() }
   }
 
   function renderImportRow(item: ImportPreview) {
     return (
       <tr key={item.source.id} className="border-b last:border-0 hover:bg-muted/20">
-        <td className="whitespace-nowrap px-3 py-3">
+        <td data-action-column="standard" className="whitespace-nowrap px-3 py-3">
           {!item.source.savedActual && authorization.can(moduleName, 'edit') && (
-            <button data-action-tone="caution" type="button" className="mr-2 rounded-md border px-2 py-1" disabled={importBusy} onClick={() => setEditingImport(item.source)}>
-              Edit
-            </button>
+            <TableActionButton action="edit" data-action-tone="caution" type="button" className="mr-2 rounded-md border px-2 py-1" disabled={importBusy} onClick={() => setEditingImport(item.source)} />
           )}
           {!item.source.savedActual && authorization.can(moduleName, 'delete') && (
-            <button data-action-tone="danger" type="button" className="rounded-md border px-2 py-1" disabled={importBusy} onClick={() => saveStagingRecord(item.source, 'delete')}>
-              Discard
-            </button>
+            <TableActionButton action="discard" data-action-tone="danger" type="button" className="rounded-md border px-2 py-1" disabled={importBusy} onClick={() => saveStagingRecord(item.source, 'delete')} />
           )}
         </td>
         <td className="whitespace-nowrap px-3 py-3">
@@ -1377,13 +1417,11 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
         {!isActual && <td className="px-3 py-3">{item.year ?? (item.source.year || '-')}</td>}
         <td className="px-3 py-3">{isActual ? item.actualDate ?? (item.source.actual_date || '-') : item.source.month || '-'}</td>
         <td className="px-3 py-3">{item.source.region || '-'}</td>
-        <td className="px-3 py-3">{item.source.asm || '-'}</td>
-        <td className="px-3 py-3">{item.source.rsm || '-'}</td>
         <td className="px-3 py-3">{item.source.kam || '-'}</td>
         <td className="max-w-40 px-3 py-3 wrap-anywhere" title={item.source.customer ?? ''}>
           {item.source.customer || '-'}
           {item.region && item.issues.some((issue) => issue.startsWith('Customer not found:')) && authorization.can('Customers', 'add') && (
-            <button type="button" className="mt-1 block rounded-md border px-2 py-1 text-xs" disabled={importBusy} onClick={() => addMissingCustomer(item)}>
+            <button data-action-tone="primary" type="button" className="mt-1 block rounded-md border px-2 py-1 text-xs" disabled={importBusy} onClick={() => addMissingCustomer(item)}>
               Add to Customers
             </button>
           )}
@@ -1398,6 +1436,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }
 
   async function handleImport() {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (importBusy || loadingSavedRecords || !savedRecordsComplete || stagingError || !stagingLoaded) return
     if (!authorization.can(moduleName, 'add')) return
     if (isSupervisor && assignedSubregionId === null) {
@@ -1406,9 +1446,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     }
     if (readyImportCount === 0) return
 
-    const confirmed = window.confirm(
-      `Import ${readyImportCount} valid ${label} record(s) into ${savedTitle}? Rows that need review will stay in the preview.`
-    )
+    const confirmed = (actionConfirmation = await confirmAction({ message: `Import ${readyImportCount} valid ${label} record(s) into ${savedTitle}? Rows that need review will stay in the preview.`, details: confirmationRecordDetails(visibleImportPreview.filter((item) => item.status === 'Ready' && !item.source.savedActual)) }))
 
     if (!confirmed) return
 
@@ -1429,8 +1467,6 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       customer_id: item.customer!.id,
       category_id: item.product!.category_id,
       product_id: item.product!.id,
-      asm: item.source.asm?.trim() || null,
-      rsm: item.source.rsm?.trim() || null,
       kam: item.source.kam?.trim() || null,
       volume: item.volume!,
     }))
@@ -1470,9 +1506,13 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     } finally {
       setImporting(false)
     }
+
+    } finally { actionConfirmation?.finish() }
   }
 
   async function handleDeleteMany(items: BudgetRecord[]) {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (loadingSavedRecords || !authorization.can(moduleName, 'delete') || items.length === 0) return
 
     if (
@@ -1483,9 +1523,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       return
     }
 
-    const confirmed = window.confirm(
-      `Delete ${items.length} ${label} record(s)? This action cannot be undone.`
-    )
+    const confirmed = (actionConfirmation = await confirmAction({ message: `Delete ${items.length} ${label} record(s)? This action cannot be undone.`, details: confirmationRecordDetails(items) }))
 
     if (!confirmed) return
 
@@ -1511,20 +1549,87 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
 
     setMessage(`${items.length} ${label} record(s) deleted successfully.`)
     await loadBudgets()
+
+    } finally { actionConfirmation?.finish() }
   }
 
-  const canShowActions = authorization.can(moduleName, 'delete')
-
-  if (initializing) {
-    return (
-      <div className="flex min-h-[300px] items-center justify-center">
-        <RefreshCw className="mr-2 size-4 animate-spin" />
-        <span className="text-sm text-muted-foreground">
-          Loading {label} records...
-        </span>
-      </div>
-    )
+  function editSavedRecord(item: BudgetRecord) {
+    if (loading || loadingSavedRecords || !authorization.can(moduleName, 'edit')) return
+    if (!canWriteAllRegions && item.region_id !== assignedRegionId) {
+      setError('You can only edit records from your assigned region.')
+      return
+    }
+    setSavedEditError('')
+    setEditingSaved({
+      original: item, year: String(item.year), month: item.month == null ? '' : String(item.month),
+      actualDate: item.actual_date ?? '', customerId: item.customer_id == null ? '' : String(item.customer_id),
+      productId: item.product_id == null ? '' : String(item.product_id), volume: String(item.volume),
+      kam: item.kam?.trim() ?? '',
+    })
   }
+
+  const kamGroupingLabels = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const name of [...budgets.map((item) => item.kam), ...stagingRecords.map((item) => item.kam), 'Vacant']) {
+      const label = name?.trim()
+      if (label && !names.has(normalizeText(label))) names.set(normalizeText(label), label)
+    }
+    return [...names.values()].sort((a, b) => a.localeCompare(b))
+  }, [budgets, stagingRecords])
+
+  const editingSavedId = editingSaved?.original.id
+  useEffect(() => {
+    if (editingSavedId === undefined) return
+    savedEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    savedEditorRef.current?.querySelector<HTMLInputElement>('[name="saved-volume"]')?.focus({ preventScroll: true })
+  }, [editingSavedId])
+
+  async function saveSavedRecord(event: React.FormEvent) {
+    event.preventDefault()
+    if (!editingSaved || loading || loadingSavedRecords || !authorization.can(moduleName, 'edit')) return
+    const draft = editingSaved
+    const original = draft.original
+    setSavedEditError('')
+    try {
+      validateSavedVolumePeriod(draft.volume, isActual, draft.year, draft.month, draft.actualDate)
+    } catch (error) {
+      setSavedEditError(error instanceof Error ? error.message : 'Enter valid record details.')
+      return
+    }
+    const volume = Number(draft.volume)
+    const year = Number(draft.year)
+    const month = draft.month === '' ? null : Number(draft.month)
+    if (!canWriteAllRegions && original.region_id !== assignedRegionId) {
+      setSavedEditError('You can only edit records from your assigned region.')
+      return
+    }
+    const customerId = draft.customerId === '' ? null : Number(draft.customerId)
+    const productId = draft.productId === '' ? null : Number(draft.productId)
+    const product = products.find((item) => item.id === productId)
+    if ((customerId !== original.customer_id && !customers.some((item) => item.id === customerId && item.region_id === original.region_id)) ||
+      (productId !== original.product_id && !product)) {
+      setSavedEditError('Choose a valid customer in this region and a valid product.')
+      return
+    }
+    setLoading(true)
+    try {
+      const payload = {
+        ...(isActual ? { actual_date: draft.actualDate } : { year, month }),
+        volume, customer_id: customerId, product_id: productId,
+        category_id: productId === original.product_id ? original.category_id : product?.category_id ?? null,
+        kam: draft.kam.trim() || null,
+      }
+      await persistSavedVolumeUpdate(supabase, savedTable, original, payload)
+      setEditingSaved(null)
+      await loadBudgets()
+      setMessage(`${moduleName} record updated successfully.`)
+    } catch (error) {
+      setSavedEditError(error instanceof Error ? error.message : 'Unable to update this record.')
+    } finally { setLoading(false) }
+  }
+
+  const canShowActions = authorization.can(moduleName, 'edit') || authorization.can(moduleName, 'delete')
+  const savedActionColumn = authorization.can(moduleName, 'edit') && authorization.can(moduleName, 'delete') ? 'standard' : 'single'
 
   return (
     <div className="space-y-6">
@@ -1558,7 +1663,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
           </div>
 
           <div className="flex max-w-full shrink-0 flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap [&>button]:shrink-0">
-            <button
+            <button data-action-tone="neutral"
               type="button"
               onClick={() => downloadImportTemplate(moduleName)}
               disabled={importBusy}
@@ -1604,7 +1709,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
               Refresh
             </button>
 
-            <button data-action-tone="neutral"
+            <button data-slot="show-hide-button" data-action-tone="neutral"
               type="button"
               onClick={() => {
                 setShowImportPreview(!showImportPreview)
@@ -1730,11 +1835,11 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                 void saveStagingRecord(editingImport, 'edit')
               }}>
                 <h3 className="text-sm font-medium">Edit uploaded record #{editingImport.id}</h3>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="app-field-row">
                   {([
                     ...(isActual ? [['actual_date', 'Date']] as const : [['year', 'Year'], ['month', 'Month']] as const),
                     ['region', 'Region'],
-                    ['asm', 'ASM'], ['rsm', 'RSM'], ['kam', 'KAM'],
+                    ['kam', 'KAM / Salesman'],
                     ['customer', 'Customer'], ['product_code', 'Product Code'],
                     ['product_name', 'Product Name'], ['volume', volumeLabel],
                   ] as const).map(([field, label]) => (
@@ -1764,20 +1869,26 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
               </form>
             )}
 
-            <Table
+            <div className="flex justify-end">
+              <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={importBusy || importGroupKeys.length === 0}
+                aria-expanded={allImportGroupsExpanded} aria-controls={moduleName.toLowerCase() + '-import-records'}
+                onClick={() => setExpandedImportGroups(new Set(allImportGroupsExpanded ? [] : importGroupKeys))}
+                className="rounded-md border px-3 py-2 text-sm">
+                {allImportGroupsExpanded ? 'Collapse All' : 'Expand All'}
+              </button>
+            </div>
+            <Table data-volume-layout="import" id={moduleName.toLowerCase() + '-import-records'}
               className="min-w-[1600px]"
-              containerProps={{ className: "max-h-[min(22rem,50vh)] w-full overflow-auto rounded-lg border", tabIndex: 0, role: "region", "aria-label": moduleName + ' upload preview' }}
+              containerProps={{ className: "max-h-[min(22rem,50vh)] w-full overflow-auto rounded-lg border", tabIndex: 0, role: "region", "aria-label": moduleName + ' upload preview', 'aria-busy': loadingStaging }}
             >
                 <thead className="sticky top-0 z-10 bg-card">
                   <tr className="border-b bg-muted/40">
-                    <th className="px-3 py-3 text-left font-medium">Action</th>
+                    <th data-action-column="standard" className="px-3 py-3 text-left font-medium">Action</th>
                     <th className="px-3 py-3 text-left font-medium">Status / Group</th>
                     {!isActual && <th className="px-3 py-3 text-left font-medium">Year</th>}
                     <th className="px-3 py-3 text-left font-medium">{isActual ? 'Date' : 'Month'}</th>
                     <th className="px-3 py-3 text-left font-medium">Region</th>
-                    <th className="px-3 py-3 text-left font-medium">ASM</th>
-                    <th className="px-3 py-3 text-left font-medium">RSM</th>
-                    <th className="px-3 py-3 text-left font-medium">KAM</th>
+                    <th data-fixed-column="person" className="px-3 py-3 text-left font-medium">KAM / Salesman</th>
                     <th className="w-40 px-3 py-3 text-left font-medium">Customer</th>
                     <th className="px-3 py-3 text-left font-medium">Product Code</th>
                     <th className="w-44 px-3 py-3 text-left font-medium">Product Name</th>
@@ -1787,19 +1898,11 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
 
                 <tbody>
                   {loadingStaging ? (
-                    <tr>
-                      <td
-                        colSpan={isActual ? 11 : 12}
-                        className="px-4 py-10 text-center text-muted-foreground"
-                      >
-                        <RefreshCw className="mr-2 inline size-4 animate-spin" />
-                        Loading staging records...
-                      </td>
-                    </tr>
+                    <TableLoadingRow columns={isActual ? 9 : 10} label="uploaded records" />
                   ) : visibleImportPreview.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={isActual ? 11 : 12}
+                        colSpan={isActual ? 9 : 10}
                         className="px-4 py-10 text-center text-muted-foreground"
                       >
                         {stagingError || (!stagingLoaded
@@ -1808,7 +1911,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                             ? 'Uploaded records exist, but none match your assigned region.'
                             : isActual
                               ? loadingSavedRecords
-                                ? 'Loading previously imported Actual records...'
+                                ? <LoadingSpinner label="previously imported Actual records" />
                                 : !savedRecordsComplete
                                   ? 'Refresh Saved Actuals to load previously imported records for review.'
                                   : 'No uploaded or previously imported Actual records found.'
@@ -1843,28 +1946,100 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
               Saved {isActual ? 'daily' : 'monthly'} {label} entries grouped by KAM, customer, and product.
             </p>
           </div>
-          <button data-action-tone="neutral"
-            type="button"
-            onClick={loadBudgets}
-            disabled={loading || loadingSavedRecords}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className="size-4" />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" onClick={toggleAllSavedGroups}
+              disabled={initializing || loadingSavedRecords || savedKamKeys.length === 0}
+              aria-expanded={allSavedGroupsExpanded} aria-controls={moduleName.toLowerCase() + '-saved-records'}
+              className="rounded-md border px-3 py-2 text-sm">
+              {allSavedGroupsExpanded ? 'Collapse All' : 'Expand All'}
+            </button>
+            <button data-action-tone="neutral"
+              type="button"
+              onClick={loadBudgets}
+              disabled={initializing || loading || loadingSavedRecords}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw className="size-4" />
+              Refresh
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 border-b p-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <div className="space-y-1.5">
+        {editingSaved && (
+          <form ref={savedEditorRef} onSubmit={saveSavedRecord} className="scroll-mt-4 space-y-4 border-b bg-muted/20 p-4 sm:p-6">
+            <div>
+              <h3 className="text-sm font-semibold">Edit saved {label} record</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Record #{editingSaved.original.id} · {getRegionName(editingSaved.original.region_id)}</p>
+            </div>
+            <fieldset disabled={loading || loadingSavedRecords} className="app-field-row min-w-0 disabled:opacity-60">
+              {isActual ? <label className="min-w-0 space-y-1.5 text-sm font-medium">Date
+                <input type="date" required value={editingSaved.actualDate} onChange={(event) => setEditingSaved((draft) => draft && ({ ...draft, actualDate: event.target.value }))} className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm" />
+              </label> : <>
+                <label className="space-y-1.5 text-sm font-medium">Year
+                  <input type="number" required min={2020} max={2100} step={1} value={editingSaved.year} onChange={(event) => setEditingSaved((draft) => draft && ({ ...draft, year: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3 text-sm" />
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">Month
+                  <SelectionField disabled={loading || loadingSavedRecords} value={editingSaved.month}
+                  onValueChange={(selectionValue) => setEditingSaved((draft) => draft && ({ ...draft, month: selectionValue }))}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  aria-label="Month">
+                    <option value="">Annual</option>
+                    {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{getMonthName(index + 1, Number(editingSaved.year) || currentYear)}</option>)}
+                  </SelectionField>
+                </label>
+              </>}
+              <SearchableSelect label="Customer" value={editingSaved.customerId} placeholder="Search customers…" disabled={loading || loadingSavedRecords}
+                options={[
+                  ...(editingSaved.original.customer_id === null ? [{ value: '', label: 'Unassigned' }] : []),
+                  ...(editingSaved.original.customer_id !== null && !customers.some((item) => item.id === editingSaved.original.customer_id && item.region_id === editingSaved.original.region_id)
+                    ? [{ value: String(editingSaved.original.customer_id), label: 'Existing customer #' + editingSaved.original.customer_id, disabled: true }] : []),
+                  ...customers.filter((item) => item.region_id === editingSaved.original.region_id).map((item) => ({ value: String(item.id), label: item.customer })),
+                ]}
+                onValueChange={(customerId) => setEditingSaved((draft) => draft && ({ ...draft, customerId }))} />
+              <SearchableSelect label="Product" value={editingSaved.productId} placeholder="Search product code or name…" disabled={loading || loadingSavedRecords}
+                options={[
+                  ...(editingSaved.original.product_id === null ? [{ value: '', label: 'Unassigned' }] : []),
+                  ...(editingSaved.original.product_id !== null && !products.some((item) => item.id === editingSaved.original.product_id)
+                    ? [{ value: String(editingSaved.original.product_id), label: 'Existing product #' + editingSaved.original.product_id, disabled: true }] : []),
+                  ...products.map((item) => ({ value: String(item.id), label: item.code + ' — ' + item.name })),
+                ]}
+                onValueChange={(productId) => setEditingSaved((draft) => draft && ({ ...draft, productId }))} />
+              <label className="space-y-1.5 text-sm font-medium">Volume
+                <input name="saved-volume" type="number" min={0} step="any" required value={editingSaved.volume} onChange={(event) => setEditingSaved((draft) => draft && ({ ...draft, volume: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3 text-sm" />
+              </label>
+              <div className="min-w-0 space-y-1.5">
+                <label htmlFor="saved-kam-label" className="text-sm font-medium">KAM</label>
+                <SelectionField id="saved-kam-label" disabled={loading || loadingSavedRecords}
+                  autoComplete="off"
+                  value={editingSaved.kam}
+                  onValueChange={(selectionValue) => setEditingSaved((draft) => draft && ({ ...draft, kam: selectionValue }))}
+                  placeholder="Choose or enter a grouping label"
+                  aria-describedby="saved-kam-hint"
+                  className="h-10 w-full rounded-md border bg-background px-3 text-base outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:text-sm"
+                  aria-label="KAM"
+                  freeText>{kamGroupingLabels.map((name) => <option key={name} value={name} />)}</SelectionField>
+
+                <p id="saved-kam-hint" className="text-xs text-muted-foreground">Choose an existing label or type a new one, such as Vacant.</p>
+              </div>
+            </fieldset>
+            {savedEditError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{savedEditError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || loadingSavedRecords} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">{loading ? 'Saving…' : 'Save changes'}</button>
+              <button data-action-tone="neutral" type="button" disabled={loading} onClick={() => { setEditingSaved(null); setSavedEditError('') }} className="h-10 rounded-md border px-4 text-sm disabled:opacity-50">Cancel</button>
+            </div>
+          </form>
+        )}
+
+        <div className="app-field-row border-b p-6">
+          <div data-field-size="compact" className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
               Year
             </label>
 
-            <select
-              value={filterYear}
-              onChange={(event) => setFilterYear(event.target.value)}
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            >
+            <SelectionField value={filterYear}
+                  onValueChange={(selectionValue) => setFilterYear(selectionValue)}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  aria-label="Year">
               <option value="">All Years</option>
 
               {Array.from(
@@ -1876,19 +2051,18 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                     {itemYear}
                   </option>
                 ))}
-            </select>
+            </SelectionField>
           </div>
 
-          <div className="space-y-1.5">
+          <div data-field-size="compact" className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
               Month
             </label>
 
-            <select
-              value={filterMonth}
-              onChange={(event) => setFilterMonth(event.target.value)}
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            >
+            <SelectionField value={filterMonth}
+                  onValueChange={(selectionValue) => setFilterMonth(selectionValue)}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  aria-label="Month">
               <option value="">All Months</option>
 
               {Array.from({ length: 12 }, (_, index) => index + 1).map(
@@ -1898,7 +2072,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                   </option>
                 )
               )}
-            </select>
+            </SelectionField>
           </div>
 
           <div className="space-y-1.5">
@@ -1906,14 +2080,13 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
               Region
             </label>
 
-            <select
-              value={filterRegionId}
-              onChange={(event) => {
-                setFilterRegionId(event.target.value)
+            <SelectionField value={filterRegionId}
+                  onValueChange={(selectionValue) => {
+                setFilterRegionId(selectionValue)
                 setFilterCustomer('')
               }}
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            >
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  aria-label="Region">
               <option value="">All Regions</option>
 
               {availableRegions.map((region) => (
@@ -1921,63 +2094,57 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                   {region.name}
                 </option>
               ))}
-            </select>
+            </SelectionField>
           </div>
 
-          <div className="space-y-1.5">
+          <div data-field-size="wide" className="space-y-1.5">
             <label htmlFor="saved-budget-customer-search" className="text-xs font-medium text-muted-foreground">
               Search customer
             </label>
 
-            <input
-              id="saved-budget-customer-search"
-              list="saved-budget-customer-options"
-              type="search"
-              value={filterCustomer}
-              onChange={(event) => setFilterCustomer(event.target.value)}
-              placeholder="Search customer..."
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            />
-            <datalist id="saved-budget-customer-options">
+            <SelectionField id="saved-budget-customer-search"
+                  value={filterCustomer}
+                  onValueChange={(selectionValue) => setFilterCustomer(selectionValue)}
+                  placeholder="Search customer..."
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  aria-label="Search customer"
+                  freeText>
               {savedCustomerOptions.map((name) => <option key={name} value={name} />)}
-            </datalist>
+            </SelectionField>
+
           </div>
-          <div className="space-y-1.5">
+          <div data-field-size="wide" className="space-y-1.5">
             <label htmlFor="saved-product-search" className="text-xs font-medium text-muted-foreground">
               Search product
             </label>
-            <input
-              id="saved-product-search"
-              list="saved-product-options"
-              type="search"
-              value={filterProduct}
-              onChange={(event) => setFilterProduct(event.target.value)}
-              placeholder="Product code or name"
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            />
-            <datalist id="saved-product-options">
+            <SelectionField id="saved-product-search"
+                  value={filterProduct}
+                  onValueChange={(selectionValue) => setFilterProduct(selectionValue)}
+                  placeholder="Product code or name"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  aria-label="Search product"
+                  freeText>
               {Array.from(productLabels, ([id, name]) => <option key={id} value={name} />)}
-            </datalist>
+            </SelectionField>
+
           </div>
         </div>
 
-        <Table saved
-          className="table-fixed wrap-anywhere"
-          containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": savedTitle + ' table' }}
+        <Table id={moduleName.toLowerCase() + '-saved-records'}
+          className="min-w-[760px] table-fixed text-xs wrap-anywhere md:min-w-0"
+          containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": savedTitle + ' table', 'aria-busy': initializing || loadingSavedRecords }}
         >
             <colgroup>
-              {canShowActions && <col className="w-[9%]" />}
-              <col className="w-[34%]" />
-              <col className="w-[10%]" />
-              <col className="w-[14%]" />
-              <col className="w-[15%]" />
+              {canShowActions && <col data-action-column={savedActionColumn} />}
+              <col />
               <col className="w-[18%]" />
+              <col className="w-[22%]" />
             </colgroup>
 
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b bg-muted/40">
                 {canShowActions && (
-                  <th className="px-2 py-3 text-center font-medium">
+                  <th data-action-column={savedActionColumn} className="px-2 py-3 text-center font-medium">
                     Action
                   </th>
                 )}
@@ -1987,15 +2154,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                 </th>
 
                 <th className="px-3 py-3 text-left font-medium">
-                  Region
-                </th>
-
-                <th className="px-3 py-3 text-left font-medium">
-                  ASM
-                </th>
-
-                <th className="px-3 py-3 text-left font-medium">
-                  RSM
+                  Area
                 </th>
 
                 <th className="px-3 py-3 text-right font-medium">
@@ -2005,64 +2164,61 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
             </thead>
 
             <tbody>
-              {groupedBudgets.length === 0 ? (
+              {initializing || (loadingSavedRecords && groupedBudgets.length === 0) ? (
+                <TableLoadingRow columns={canShowActions ? 4 : 3} label={label + ' records'} />
+              ) : groupedBudgets.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={canShowActions ? 6 : 5}
+                    colSpan={canShowActions ? 4 : 3}
                     className="px-4 py-10 text-center text-sm text-muted-foreground"
                   >
-                    {loadingSavedRecords ? 'Loading saved ' + label + ' records…' : 'No saved ' + label + ' records found.'}
+                    {'No saved ' + label + ' records found.'}
                   </td>
                 </tr>
               ) : (
                 groupedBudgets.map((kamGroup) => {
-                  const kamExpanded = searchingSavedRecords || expandedBudgetKams.has(kamGroup.key)
+                  const kamExpanded = autoExpandSavedSearch || expandedBudgetKams.has(kamGroup.key)
                   const kamItems = kamGroup.customers.flatMap((customer) => customer.items)
                   const kamBudget = kamItems.reduce((total, item) => total + (Number(item.volume) || 0), 0)
-                  const kamRegions = Array.from(new Set(kamItems.map((item) => getRegionName(item.region_id)).filter((name) => name !== '-')))
-                  const kamAsms = Array.from(new Set(kamItems.map((item) => item.asm?.trim()).filter(Boolean)))
-                  const kamRsms = Array.from(new Set(kamItems.map((item) => item.rsm?.trim()).filter(Boolean)))
+                  const kamAreas = Array.from(new Set(kamItems.map((item) =>
+                    subregions.find((subregion) => subregion.id === item.subregion_id && subregion.region_id === item.region_id)?.name || '—'
+                  )))
 
                   return (
                     <Fragment key={kamGroup.key}>
                       <tr className="border-b bg-muted/60">
                         {canShowActions && <td />}
                         <td className="px-3 py-3">
-                          <button type="button" aria-expanded={kamExpanded} disabled={searchingSavedRecords} onClick={() => toggleBudgetKam(kamGroup.key)} className="flex w-full items-center gap-2 text-left">
+                          <button type="button" aria-expanded={kamExpanded} onClick={() => toggleBudgetKam(kamGroup.key)} className="flex w-full min-w-0 flex-wrap items-center gap-2 text-left">
                             {kamExpanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
-                            <span className="font-semibold">KAM: {kamGroup.kam}</span>
+                            <span className="min-w-0 font-semibold wrap-anywhere">KAM: {kamGroup.kam}</span>
                             <span className="text-xs font-normal text-muted-foreground">({kamItems.length} records)</span>
                           </button>
                         </td>
-                        <td className="px-3 py-3">{kamRegions.join(', ') || '-'}</td>
-                        <td className="px-3 py-3">{kamAsms.join(', ') || '-'}</td>
-                        <td className="px-3 py-3">{kamRsms.join(', ') || '-'}</td>
+                        <td className="px-3 py-3">{kamAreas.join(', ') || '—'}</td>
                         <td className="px-3 py-3 text-right font-medium tabular-nums">{formatNumber(kamBudget)}</td>
                       </tr>
 
                       {kamExpanded && kamGroup.customers.map((customerGroup) => {
                         const customerBudget = customerGroup.items.reduce((total, item) => total + (Number(item.volume) || 0), 0)
-                        const customerExpanded = searchingSavedRecords || expandedBudgetCustomers.has(customerGroup.key)
+                        const customerExpanded = autoExpandSavedSearch || expandedBudgetCustomers.has(customerGroup.key)
                         return (
                           <Fragment key={customerGroup.key}>
                             <tr className="border-b bg-muted/30">
                               {canShowActions && (
-                                <td className="px-2 py-2 text-center">
+                                <td data-action-column={savedActionColumn} className="px-2 py-2 text-center">
                                   <div className="flex items-center justify-center gap-1">
                                     {authorization.can(moduleName, 'delete') && (
-                                      <button data-action-tone="danger" type="button" onClick={() => handleDeleteMany(customerGroup.items)} disabled={loading || loadingSavedRecords} className="inline-flex size-8 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title={'Delete customer ' + label + ' records'}>
-                                        <Trash2 className="size-4" />
-                                      </button>
+                                      <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany(customerGroup.items)} disabled={loading || loadingSavedRecords} className="inline-flex size-8 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title={'Delete customer ' + label + ' records'} />
                                     )}
                                   </div>
                                 </td>
                               )}
-                              <td colSpan={canShowActions ? 5 : 4} className="px-3 py-2">
+                              <td colSpan={3} className="px-3 py-2">
                                 <button
                                     type="button"
                                     aria-expanded={customerExpanded}
-                                    disabled={searchingSavedRecords}
-                                    onClick={() => toggleSet(setExpandedBudgetCustomers, customerGroup.key)}
+                                    onClick={() => toggleBudgetCustomer(customerGroup.key)}
                                     className="flex w-full items-center gap-2 pl-4 text-left"
                                   >
                                     {customerExpanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
@@ -2075,12 +2231,11 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                             {customerExpanded && customerGroup.items.map((item) => (
                               <tr key={item.id} className="border-b bg-muted/20 last:border-0 hover:bg-muted/40">
                                 {canShowActions && (
-                                  <td className="px-2 py-2 text-center">
+                                  <td data-action-column={savedActionColumn} className="px-2 py-2 text-center">
                                     <div className="flex items-center justify-center gap-1">
+                                      {authorization.can(moduleName, 'edit') && <TableActionButton action="edit" type="button" onClick={() => editSavedRecord(item)} disabled={loading || loadingSavedRecords} title={'Edit ' + label + ' record'} className="rounded-md border hover:bg-muted disabled:opacity-40" />}
                                       {authorization.can(moduleName, 'delete') && (
-                                        <button data-action-tone="danger" type="button" onClick={() => handleDeleteMany([item])} disabled={loading || loadingSavedRecords} className="inline-flex size-8 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title={'Delete ' + label + ' record'}>
-                                          <Trash2 className="size-4" />
-                                        </button>
+                                        <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany([item])} disabled={loading || loadingSavedRecords} className="inline-flex size-8 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title={'Delete ' + label + ' record'} />
                                       )}
                                     </div>
                                   </td>
@@ -2096,7 +2251,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                                     </div>
                                   </div>
                                 </td>
-                                <td colSpan={3} />
+                                <td />
                                 <td className="px-3 py-2 text-right tabular-nums">{formatNumber(item.volume)}</td>
                               </tr>
                             ))}
@@ -2112,7 +2267,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
 
         <div className="flex flex-col gap-2 border-t px-6 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>
-            Showing {filteredBudgets.length} {label} record(s).{loadingSavedRecords && ' Loading more…'}
+            {!initializing && <>Showing {filteredBudgets.length} {label} record(s). {loadingSavedRecords && <LoadingSpinner label="more records" />}</>}
           </span>
 
           <span>

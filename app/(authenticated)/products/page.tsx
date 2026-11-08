@@ -1,5 +1,12 @@
 'use client'
 
+import { ActiveField } from '@/components/ui/active-field'
+
+import { useActionDialogs } from '@/components/action-dialogs'
+import { SelectionField } from '@/components/ui/selection-field'
+import { TableActionButton } from '@/components/ui/table-action-button'
+import { TableLoadingRow } from '@/components/ui/loading-spinner'
+import { GroupedTableRows, TableGroupProvider, TableGroupToggle } from '@/components/ui/grouped-table-rows'
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
 import { createClient } from '@/lib/client'
@@ -45,6 +52,8 @@ const sortableColumns = [
 type SortKey = (typeof sortableColumns)[number]['key']
 
 export default function ProductsPage() {
+  const { confirmAction } = useActionDialogs()
+
   const authorization = useAuthorization()
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean } | null>(null)
   const [products, setProducts] = useState<Product[]>([])
@@ -62,21 +71,28 @@ export default function ProductsPage() {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [tableLoading, setTableLoading] = useState(true)
 
   async function getProducts() {
-    const supabase = createClient()
+    setTableLoading(true)
+    try {
+      const supabase = createClient()
 
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, category_id, code, name, product_line, species, weight, is_active, created_at')
-      .order('id')
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, category_id, code, name, product_line, species, weight, is_active, created_at')
+        .order('id')
 
-    if (error) {
-      setError(error.message)
-      return
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      setProducts(data ?? [])
+
+    } finally {
+      setTableLoading(false)
     }
-
-    setProducts(data ?? [])
   }
 
   async function getCategories() {
@@ -184,10 +200,10 @@ export default function ProductsPage() {
   }
 
   async function deleteProduct(id: number) {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!authorization.can('Products', 'delete')) return
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this product?'
-    )
+    const confirmed = (actionConfirmation = await confirmAction({ message: 'Are you sure you want to delete this product?', details: [{ label: 'Product', value: products.find((item) => item.id === id)?.name || '#' + id }] }))
 
     if (!confirmed) {
       return
@@ -216,6 +232,8 @@ export default function ProductsPage() {
     await getProducts()
 
     setLoading(false)
+
+    } finally { actionConfirmation?.finish() }
   }
 
   function clearForm() {
@@ -277,7 +295,7 @@ export default function ProductsPage() {
           </p>
         </div>
 
-        <div className="grid items-end gap-4 md:grid-cols-4">
+        <div className="app-field-row">
           {/* Category */}
           <div className="space-y-2">
             <label
@@ -287,12 +305,11 @@ export default function ProductsPage() {
               Category
             </label>
 
-            <select
-              id="category"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
+            <SelectionField id="category"
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  value={categoryId}
+                  onValueChange={(selectionValue) => setCategoryId(selectionValue)}
+                  aria-label="Category">
               <option value="">Select category</option>
 
               {categories.filter((category) => category.is_active || (editingId !== null && String(category.id) === categoryId)).map((category) => (
@@ -303,11 +320,11 @@ export default function ProductsPage() {
                   {category.code ? category.code + ' - ' : ''}{category.name}
                 </option>
               ))}
-            </select>
+            </SelectionField>
           </div>
 
           {/* Product Code */}
-          <div className="space-y-2">
+          <div data-field-size="compact" className="space-y-2">
             <label
               htmlFor="code"
               className="text-sm font-medium"
@@ -325,7 +342,7 @@ export default function ProductsPage() {
           </div>
 
           {/* Name */}
-          <div className="space-y-2">
+          <div data-field-size="wide" className="space-y-2">
             <label
               htmlFor="name"
               className="text-sm font-medium"
@@ -362,7 +379,7 @@ export default function ProductsPage() {
             />
           </div>
 
-          <div className="space-y-2">
+          <div data-field-size="compact" className="space-y-2">
             <label htmlFor="weight" className="text-sm font-medium">Weight</label>
             <input
               id="weight"
@@ -374,21 +391,13 @@ export default function ProductsPage() {
           </div>
 
           {/* Active */}
-          <div className="flex items-end">
-            <label className="flex h-10 cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+          <div data-field-size="toggle" className="flex items-end">
+            <ActiveField
                 checked={isActive}
                 onChange={(e) =>
                   setIsActive(e.target.checked)
                 }
-                className="size-4"
               />
-
-              <span className="font-medium">
-                Active
-              </span>
-            </label>
           </div>
         </div>
 
@@ -426,8 +435,10 @@ export default function ProductsPage() {
       </section> : null}
 
       {/* Table */}
+      <TableGroupProvider groupKeys={sortedProducts.map((product) => String(product.category_id))}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div className="border-b px-6 py-5">
+        <div className="flex items-start justify-between gap-3 border-b px-6 py-5">
+          <div>
           <h2 className="font-semibold">
             Saved Products
           </h2>
@@ -435,14 +446,16 @@ export default function ProductsPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             List of products currently available in the system.
           </p>
+          </div>
+          <TableGroupToggle disabled={tableLoading} />
         </div>
 
         <div className="overflow-x-auto">
-          <Table saved className="table-fixed">
+          <Table saved aria-busy={tableLoading} className="table-fixed">
             <TableHeader>
               <TableRow>
-                {canShowActions && <TableHead className="w-[13%] text-left">Action</TableHead>}
-                <TableHead className="w-[8%]">Status</TableHead>
+                {canShowActions && <TableHead data-action-column="standard" className="w-[13%] text-left">Action</TableHead>}
+                <TableHead data-fixed-column="status" className="w-[8%]">Status</TableHead>
                 {sortableColumns.map(({ key, label, className }) => {
                   const active = sort?.key === key
                   const SortIcon = active ? (sort.descending ? ChevronDown : ChevronUp) : ChevronsUpDown
@@ -459,28 +472,32 @@ export default function ProductsPage() {
                     </TableHead>
                   )
                 })}
-                <TableHead className="w-[8%]">Weight</TableHead>
+                <TableHead className="w-[8%] text-right">Weight</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {sortedProducts.length > 0 ? sortedProducts.map((product) => (
+              {tableLoading ? (
+                <TableLoadingRow columns={columnCount} label="products" />
+              ) : sortedProducts.length > 0 ? <GroupedTableRows rows={sortedProducts} columnCount={columnCount}
+                getGroup={(product) => ({ key: String(product.category_id), label: 'Category: ' + categoryLabel(product.category_id) })}>
+                {(product) => (
                 <TableRow key={product.id}>
                   {canShowActions && (
-                    <TableCell>
+                    <TableCell data-action-column="standard">
                       {authorization.can('Products', 'edit') || authorization.can('Products', 'delete') ? (
-                        <div className="flex flex-wrap justify-start gap-2">
+                        <div className="flex flex-nowrap justify-start gap-2">
                           {authorization.can('Products', 'edit') && (
-                            <button data-action-tone="caution"
+                            <TableActionButton action="edit" data-action-tone="caution"
                               className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
                               onClick={() => editProduct(product)}
-                            >Edit</button>
+                             />
                           )}
                           {authorization.can('Products', 'delete') && (
-                            <button data-action-tone="danger"
+                            <TableActionButton action="delete" data-action-tone="danger"
                               className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                               onClick={() => deleteProduct(product.id)}
-                            >Delete</button>
+                             />
                           )}
                         </div>
                       ) : <span className="text-sm text-muted-foreground">No Action</span>}
@@ -493,9 +510,9 @@ export default function ProductsPage() {
                   <TableCell>{product.product_line || '—'}</TableCell>
                   <TableCell>{product.species || '—'}</TableCell>
                   <TableCell>{product.created_at ? new Date(product.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</TableCell>
-                  <TableCell>{Number(product.weight).toLocaleString('en-PH')}</TableCell>
+                  <TableCell className="text-right">{Number(product.weight).toLocaleString('en-PH')}</TableCell>
                 </TableRow>
-              )) : (
+              )}</GroupedTableRows> : (
                 <TableRow>
                   <TableCell colSpan={columnCount} className="h-24 text-center text-muted-foreground">
                     No products found.
@@ -506,6 +523,7 @@ export default function ProductsPage() {
           </Table>
         </div>
       </section>
+      </TableGroupProvider>
     </main>
   )
 }

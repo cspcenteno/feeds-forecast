@@ -21,6 +21,33 @@ type PermissionInput = {
 
 const validRoles: Role[] = ['User', 'Superuser', 'Manager', 'Admin']
 
+export async function PUT(request: Request) {
+  const auth = await getActiveAdmin()
+  if (auth.error || !auth.user) return auth.error
+  try {
+    if (!(await canManageModule(auth.user.id, 'can_edit'))) {
+      return NextResponse.json({ error: 'You do not have permission to reset passwords.' }, { status: 403 })
+    }
+    const body = await request.json()
+    const userId = typeof body.userId === 'string' ? body.userId.trim() : ''
+    const password = typeof body.temporaryPassword === 'string' ? body.temporaryPassword : ''
+    if (!userId || password.length < 8 || password.length > 128) {
+      return NextResponse.json({ error: 'Select a user and enter a temporary password of 8–128 characters.' }, { status: 400 })
+    }
+    // Set the requirement first so a replacement password never bypasses the
+    // application's existing mandatory password-change flow.
+    const { data: profile, error: profileError } = await supabaseAdmin.from('users')
+      .update({ must_change_password: true }).eq('id', userId).select('id').maybeSingle()
+    if (profileError) return NextResponse.json({ error: 'Unable to prepare the password reset.' }, { status: 500 })
+    if (!profile) return NextResponse.json({ error: 'User account not found.' }, { status: 404 })
+    const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password })
+    if (resetError) return NextResponse.json({ error: 'The password could not be reset. The account will still require a password change at the next sign-in.' }, { status: 400 })
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Unable to reset the password. Please try again.' }, { status: 500 })
+  }
+}
+
 const permissionFields = [
   'can_view',
   'can_add',

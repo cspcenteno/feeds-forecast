@@ -3,6 +3,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import Image from 'next/image'
+import { LoaderCircle } from 'lucide-react'
 import { createClient } from '@/lib/client'
 
 import {
@@ -268,8 +270,10 @@ export function AuthorizationProvider({
 
   if (state.loading) {
     return (
-      <div className="p-6 text-sm text-muted-foreground">
-        Checking access…
+      <div role="status" aria-label="Loading your workspace" className="flex min-h-svh w-full flex-col items-center justify-center gap-5 bg-background p-6">
+        <Image src="/vitarich-logo.png" alt="Vitarich" width={96} height={96} preload className="size-24 object-contain" />
+        <LoaderCircle aria-hidden="true" className="size-6 animate-spin text-emerald-600 motion-reduce:animate-none dark:text-emerald-400" />
+        <span className="sr-only">Loading your workspace…</span>
       </div>
     )
   }

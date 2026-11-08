@@ -13,7 +13,7 @@ function Table({ className, containerProps, saved = false, ...props }: TableProp
   return (
     <div
       data-slot="table-container"
-      className={cn("app-table-scroll relative h-auto w-full max-h-[min(32rem,65vh)] overflow-auto", containerClassName)}
+      className={cn("app-table-scroll @container relative isolate h-auto w-full max-h-[min(32rem,65vh)] overflow-auto", containerClassName)}
       {...containerAttributes}
     >
       <table

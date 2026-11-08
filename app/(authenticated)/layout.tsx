@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { usePathname } from "next/navigation"
 import { AuthorizationProvider } from "@/lib/authorization"
+import { ForecastAttentionProvider } from "@/lib/use-forecast-attention"
 
 export default function AuthenticatedLayout({
   children,
@@ -34,6 +35,7 @@ export default function AuthenticatedLayout({
   return (
     <SidebarProvider>
       <AuthorizationProvider>
+      <ForecastAttentionProvider>
       <AppSidebar />
       <main className="w-full min-w-0">
         <div className="flex h-14 items-center border-b px-4">
@@ -46,6 +48,7 @@ export default function AuthenticatedLayout({
           {children}
         </div>
       </main>
+      </ForecastAttentionProvider>
       </AuthorizationProvider>
     </SidebarProvider>
   )

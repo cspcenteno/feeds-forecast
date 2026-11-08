@@ -1,5 +1,10 @@
 'use client'
 
+import { ActiveField } from '@/components/ui/active-field'
+
+import { useActionDialogs } from '@/components/action-dialogs'
+import { TableActionButton } from '@/components/ui/table-action-button'
+import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { ChevronDown, ChevronRight, Download, RefreshCw, Upload } from 'lucide-react'
@@ -14,6 +19,8 @@ type Outcome = { status: 'Created' | 'Failed'; message: string }
 export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
   blocked: boolean; onBusyChange: (value: boolean) => void; onCreated: () => Promise<void>
 }) {
+  const { confirmAction } = useActionDialogs()
+
   const authorization = useAuthorization()
   const client = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<UserImportRow[]>([])
@@ -21,6 +28,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
   const [referencesReady, setReferencesReady] = useState(false)
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({})
   const [temporaryPassword, setTemporaryPassword] = useState('')
+  const [isActive, setIsActive] = useState(true)
   const [busy, setBusy] = useState(false)
   const [show, setShow] = useState(false)
   const [editing, setEditing] = useState<UserImportRow | null>(null)
@@ -30,7 +38,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
   const fileInput = useRef<HTMLInputElement>(null)
   const working = useRef(false)
   const disabled = busy || blocked || !authorization.can('Users', 'add')
-  const preview = useMemo(() => validateUserImport(rows, refs), [rows, refs])
+  const preview = useMemo(() => validateUserImport(rows, refs, isActive), [rows, refs, isActive])
   const ready = preview.filter((row) => row.status === 'Ready' && outcomes[row.source.id]?.status !== 'Created')
 
   async function loadReferences() {
@@ -89,11 +97,13 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
 
   async function createUsers() {
     await run(async () => {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
       if (temporaryPassword.length < 8 || temporaryPassword.length > 128) throw new Error('Set a temporary password between 8 and 128 characters.')
       const latest = await loadReferences()
-      const eligible = validateUserImport(rows, latest).filter((row) => row.status === 'Ready' && outcomes[row.source.id]?.status !== 'Created')
+      const eligible = validateUserImport(rows, latest, isActive).filter((row) => row.status === 'Ready' && outcomes[row.source.id]?.status !== 'Created')
       if (!eligible.length) { setMessage('No new valid users remain to create.'); return }
-      if (!window.confirm(`Create ${eligible.length} new user account(s) with role-default permissions? All accounts will require a password change at first sign-in.`)) return
+      if (!(actionConfirmation = await confirmAction({ message: `Create ${eligible.length} new user account(s) with role-default permissions? Accounts will be ${isActive ? 'active' : 'inactive'}. All accounts will require a password change at first sign-in.` }))) return
       let created = 0
       let failed = 0
       try {
@@ -124,7 +134,9 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
         await onCreated()
         if (created) setTemporaryPassword('')
       }
-    })
+
+    } finally { actionConfirmation?.finish() }
+  })
   }
 
   function downloadTemplate() {
@@ -140,31 +152,35 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
       <div><h2 className="font-semibold">Users Excel Import</h2><p className="mt-1 text-sm text-muted-foreground">Create new accounts from Excel or CSV using region and subregion names.</p></div>
       <div className="flex flex-wrap gap-2">
         <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} />
-        <button type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Template</button>
-        <button type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload Excel</button>
-        <button type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
-        <button type="button" disabled={disabled} aria-expanded={show} onClick={() => setShow(!show)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
+        <button data-action-tone="neutral" type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Template</button>
+        <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload Excel</button>
+        <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
+        <button data-slot="show-hide-button" data-action-tone="neutral" type="button" disabled={disabled} aria-expanded={show} onClick={() => setShow(!show)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
       </div>
     </div>
     {error && <p role="alert" className="m-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
     {message && <p role="status" className="m-4 rounded-md border p-3 text-sm">{message}</p>}
     {show && <div className="space-y-4 p-6">
-      {busy && <p role="status" className="text-sm">{progress || 'Loading and validating users…'}</p>}
+      {busy && progress && <p role="status" className="text-sm">{progress}</p>}
       <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-lg space-y-2"><h3 className="text-sm font-medium">Create validated users</h3><p className="text-xs text-muted-foreground">Ready rows create new accounts with role-default permissions. Existing accounts are kept. Users must change their temporary password when signing in.</p>
-          <label htmlFor="users-import-password" className="block text-sm font-medium">Temporary password for new accounts</label><input id="users-import-password" type="password" autoComplete="new-password" minLength={8} maxLength={128} disabled={disabled} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm" /></div>
-        <button type="button" disabled={disabled || !referencesReady || !ready.length || temporaryPassword.length < 8} onClick={() => void createUsers()} className="h-10 shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">Create {ready.length} User(s)</button>
+        <div className="min-w-0 flex-1 space-y-3"><div className="max-w-lg space-y-2"><h3 className="text-sm font-medium">Create validated users</h3><p className="text-xs text-muted-foreground">Ready rows create new accounts with role-default permissions. Existing accounts are kept. Users must change their temporary password when signing in. The Active setting applies to all new accounts in this import.</p></div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-full space-y-1.5 sm:w-64"><label htmlFor="users-import-password" className="block text-sm font-medium">Temporary Password</label><input id="users-import-password" type="password" autoComplete="new-password" placeholder="At least 8 characters" minLength={8} maxLength={128} disabled={disabled} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="block h-10 w-full rounded-md border bg-background px-3 text-sm" /></div>
+            <ActiveField id="users-import-active" disabled={disabled} checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
+          </div>
+        </div>
+        <button data-action-tone="primary" data-action-fill="" type="button" disabled={disabled || !referencesReady || !ready.length || temporaryPassword.length < 8} onClick={() => void createUsers()} className="h-10 shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">Create {ready.length} User(s)</button>
       </div>
-      {editing && <form onSubmit={(event) => { event.preventDefault(); setRows((current) => current.map((row) => row.id === editing.id ? editing : row)); setOutcomes((current) => { const next = { ...current }; delete next[editing.id]; return next }); setEditing(null) }} className="space-y-3 rounded-lg border p-4"><h3 className="text-sm font-medium">Edit uploaded user</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{userImportColumns.map((column) => <label key={column} className="space-y-1 text-sm"><span>{column}</span><input value={editing[column]} disabled={disabled} onChange={(event) => setEditing({ ...editing, [column]: event.target.value })} className="h-10 w-full rounded-md border bg-background px-3" /></label>)}</div><div className="flex gap-2"><button type="submit" disabled={disabled} className="rounded-md border px-3 py-2 text-sm">Save changes</button><button type="button" disabled={disabled} onClick={() => setEditing(null)} className="rounded-md border px-3 py-2 text-sm">Cancel</button></div></form>}
-      {referencesReady && <Table className="min-w-[1400px] table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Users import preview' }}>
-        <colgroup>{[8, 20, 14, 18, 8, 8, 10, 8, 6].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
-        <thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Action', 'Status / Validation', ...userImportColumns].map((label) => <th key={label} className="px-3 py-3 text-left font-medium">{label}</th>)}</tr></thead>
-        <tbody>{!rows.length ? <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">Upload a file to review new users.</td></tr> : preview.map((row) => { const outcome = outcomes[row.source.id]; return <tr key={row.source.id} className="border-b align-top">
-          <td className="px-3 py-3"><button type="button" disabled={disabled || outcome?.status === 'Created'} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs disabled:opacity-50">Edit</button></td>
+      {editing && <form onSubmit={(event) => { event.preventDefault(); setRows((current) => current.map((row) => row.id === editing.id ? editing : row)); setOutcomes((current) => { const next = { ...current }; delete next[editing.id]; return next }); setEditing(null) }} className="space-y-3 rounded-lg border p-4"><h3 className="text-sm font-medium">Edit uploaded user</h3><div className="app-field-row">{userImportColumns.map((column) => <label key={column} className="space-y-1 text-sm"><span>{column}</span><input value={editing[column]} disabled={disabled} onChange={(event) => setEditing({ ...editing, [column]: event.target.value })} className="h-10 w-full rounded-md border bg-background px-3" /></label>)}</div><div className="flex gap-2"><button data-action-tone="primary" data-action-fill="" type="submit" disabled={disabled} className="rounded-md border px-3 py-2 text-sm">Save changes</button><button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => setEditing(null)} className="rounded-md border px-3 py-2 text-sm">Cancel</button></div></form>}
+      <Table className="min-w-[1400px] table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Users import preview', 'aria-busy': busy }}>
+        <colgroup>{[8, 20, 16, 20, 8, 8, 10, 10].map((width, index) => <col data-action-column={index === 0 ? "single" : undefined} key={index} style={{ width: index === 0 ? undefined : `${width}%` }} />)}</colgroup>
+        <thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Action', 'Status / Validation', ...userImportColumns].map((label) => <th data-action-column={label === "Action" ? "single" : undefined} key={label} className="px-3 py-3 text-left font-medium">{label}</th>)}</tr></thead>
+        <tbody>{busy && !progress ? <TableLoadingRow columns={8} label="user import preview" /> : !rows.length ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">Upload a file to review new users.</td></tr> : preview.map((row) => { const outcome = outcomes[row.source.id]; return <tr key={row.source.id} className="border-b align-top">
+          <td data-action-column="single" className="px-3 py-3"><TableActionButton action="edit" type="button" disabled={disabled || outcome?.status === 'Created'} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs disabled:opacity-50" /></td>
           <td className={`px-3 py-3 text-xs leading-5 wrap-anywhere ${row.status === 'Invalid' || outcome?.status === 'Failed' ? 'text-destructive' : ''}`}><p className="font-medium">{outcome?.status ?? row.status}</p>{outcome?.message ?? row.issues.join(' ')}</td>
           {userImportColumns.map((column) => <td key={column} className="px-3 py-3 wrap-anywhere">{row.source[column] || '—'}</td>)}
         </tr> })}</tbody>
-      </Table>}
+      </Table>
     </div>}
   </section>
 }

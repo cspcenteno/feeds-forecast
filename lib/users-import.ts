@@ -1,4 +1,4 @@
-export const userImportColumns = ['full_name', 'email', 'role', 'position', 'region_name', 'subregion_name', 'is_active'] as const
+export const userImportColumns = ['full_name', 'email', 'role', 'position', 'region_name', 'subregion_name'] as const
 export type UserImportRow = Record<(typeof userImportColumns)[number], string> & { id: string }
 export type UserImportReferences = {
   users: { email: string | null }[]
@@ -18,7 +18,6 @@ export function parseUserImportSheets(sheets: { name: string; rows: unknown[][] 
     position: ['position', 'jobposition'],
     region_name: ['regionname', 'region'],
     subregion_name: ['subregionname', 'subregion'],
-    is_active: ['isactive', 'active', 'accountstatus'],
   }
   let best: { count: number; sheet: string; row: number; missing: string[] } | null = null
   let emptyHeaderFound = false
@@ -46,7 +45,7 @@ export function parseUserImportSheets(sheets: { name: string; rows: unknown[][] 
   throw new Error('No user header row was found in any worksheet. Expected: ' + userImportColumns.join(', ') + '.')
 }
 
-export function validateUserImport(rows: UserImportRow[], refs: UserImportReferences) {
+export function validateUserImport(rows: UserImportRow[], refs: UserImportReferences, isActive = true) {
   const existing = new Set(refs.users.map((user) => user.email?.trim().toLowerCase()))
   const seen = new Set<string>()
   return rows.map((source) => {
@@ -69,10 +68,6 @@ export function validateUserImport(rows: UserImportRow[], refs: UserImportRefere
       if (!region) issues.push('Region name is required and must match one active region.')
       if (source.subregion_name.trim() && !subregion) issues.push('Subregion must match one active subregion in the selected region.')
     }
-    const activeText = normalize(source.is_active)
-    const isActive = ['true', 'yes', '1', 'active'].includes(activeText) ? true
-      : ['false', 'no', '0', 'inactive'].includes(activeText) ? false : null
-    if (isActive === null) issues.push('is_active must be TRUE/FALSE, Yes/No, or 1/0.')
     const status = issues.length ? 'Invalid' : existing.has(email) ? 'Already exists' : seen.has(email) ? 'Duplicate in file' : 'Ready'
     if (!issues.length) seen.add(email)
     return { source, issues, status, values: { fullName, email, role, position, isActive, regionId: role === 'Admin' ? null : region?.id ?? null, subregionId: role === 'Admin' ? null : subregion?.id ?? null } }

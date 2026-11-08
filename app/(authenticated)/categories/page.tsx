@@ -1,5 +1,10 @@
 'use client'
 
+import { ActiveField } from '@/components/ui/active-field'
+
+import { useActionDialogs } from '@/components/action-dialogs'
+import { TableActionButton } from '@/components/ui/table-action-button'
+import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { useEffect, useState } from 'react'
 import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
 import { createClient } from '@/lib/client'
@@ -23,6 +28,8 @@ type Category = {
 }
 
 export default function CategoriesPage() {
+  const { confirmAction } = useActionDialogs()
+
   const authorization = useAuthorization()
   const [categories, setCategories] = useState<Category[]>([])
 
@@ -35,21 +42,28 @@ export default function CategoriesPage() {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [tableLoading, setTableLoading] = useState(true)
 
   async function getCategories() {
-    const supabase = createClient()
+    setTableLoading(true)
+    try {
+      const supabase = createClient()
 
-    const { data, error } = await supabase
-      .from('categories')
-      .select('id, code, name, description, is_active')
-      .order('id')
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, code, name, description, is_active')
+        .order('id')
 
-    if (error) {
-      setError(error.message)
-      return
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      setCategories(data ?? [])
+
+    } finally {
+      setTableLoading(false)
     }
-
-    setCategories(data ?? [])
   }
 
   async function saveCategory() {
@@ -132,10 +146,10 @@ export default function CategoriesPage() {
   }
 
   async function deleteCategory(id: number) {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!authorization.can('Categories', 'delete')) return
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this category?'
-    )
+    const confirmed = (actionConfirmation = await confirmAction({ message: 'Are you sure you want to delete this category?', details: [{ label: 'Category', value: categories.find((item) => item.id === id)?.name || '#' + id }] }))
 
     if (!confirmed) {
       return
@@ -165,6 +179,8 @@ export default function CategoriesPage() {
     await getCategories()
 
     setLoading(false)
+
+    } finally { actionConfirmation?.finish() }
   }
 
   function clearForm() {
@@ -204,9 +220,9 @@ export default function CategoriesPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="app-field-row">
           {/* Code */}
-          <div className="space-y-2">
+          <div data-field-size="compact" className="space-y-2">
             <label
               htmlFor="code"
               className="text-sm font-medium"
@@ -224,7 +240,7 @@ export default function CategoriesPage() {
           </div>
 
           {/* Name */}
-          <div className="space-y-2">
+          <div data-field-size="wide" className="space-y-2">
             <label
               htmlFor="name"
               className="text-sm font-medium"
@@ -242,7 +258,7 @@ export default function CategoriesPage() {
           </div>
 
           {/* Description */}
-          <div className="space-y-2">
+          <div data-field-size="wide" className="space-y-2">
             <label
               htmlFor="description"
               className="text-sm font-medium"
@@ -260,21 +276,13 @@ export default function CategoriesPage() {
           </div>
 
           {/* Active */}
-          <div className="flex items-end">
-            <label className="flex h-10 cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+          <div data-field-size="toggle" className="flex items-end">
+            <ActiveField
                 checked={isActive}
                 onChange={(e) =>
                   setIsActive(e.target.checked)
                 }
-                className="size-4"
               />
-
-              <span className="font-medium">
-                Active
-              </span>
-            </label>
           </div>
         </div>
 
@@ -323,11 +331,11 @@ export default function CategoriesPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <Table saved>
+          <Table saved aria-busy={tableLoading}>
             <TableHeader>
               <TableRow>
-                {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableHead className="w-[180px] text-left">Action</TableHead>}
-                <TableHead className="w-[120px]">Status</TableHead>
+                {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableHead data-action-column="standard" className="w-[180px] text-left">Action</TableHead>}
+                <TableHead data-fixed-column="status" className="w-[120px]">Status</TableHead>
                 <SortableHeader className="pl-6 w-[150px]" {...sortHeader('code')}>Code</SortableHeader>
 
                 <SortableHeader className="w-[250px]" {...sortHeader('name')}>Name</SortableHeader>
@@ -338,21 +346,23 @@ export default function CategoriesPage() {
             </TableHeader>
 
             <TableBody>
-              {categories.length > 0 ? (
+              {tableLoading ? (
+                <TableLoadingRow columns={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 5 : 4} label="categories" />
+              ) : categories.length > 0 ? (
                 sortedCategories.map((category) => (
                   <TableRow key={category.id}>
-                    {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableCell>
+                    {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableCell data-action-column="standard">
                       {authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? <div className="flex justify-start gap-2">
-                        {authorization.can('Categories', 'edit') && <button data-action-tone="caution"
+                        {authorization.can('Categories', 'edit') && <TableActionButton action="edit" data-action-tone="caution"
                           className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
                           onClick={() => editCategory(category)}
                           disabled={!authorization.can('Categories', 'edit')}
-                        >Edit</button>}
-                        {authorization.can('Categories', 'delete') && <button data-action-tone="danger"
+                         />}
+                        {authorization.can('Categories', 'delete') && <TableActionButton action="delete" data-action-tone="danger"
                           className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                           onClick={() => deleteCategory(category.id)}
                           disabled={!authorization.can('Categories', 'delete')}
-                        >Delete</button>}
+                         />}
                       </div> : <span className="text-sm text-muted-foreground">No Action</span>}
                     </TableCell>}
                     <TableCell>

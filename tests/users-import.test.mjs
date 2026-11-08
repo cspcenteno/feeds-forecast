@@ -8,11 +8,11 @@ const refs = {
   regions: [{ id: 1, name: 'North' }, { id: 2, name: 'South' }],
   subregions: [{ id: 3, name: 'Area A', region_id: 1 }, { id: 4, name: 'Area B', region_id: 2 }],
 }
-const row = { id: '1', full_name: 'Person A', email: 'person@example.com', role: 'User', position: 'KAM', region_name: 'North', subregion_name: 'Area A', is_active: 'TRUE' }
+const row = { id: '1', full_name: 'Person A', email: 'person@example.com', role: 'User', position: 'KAM', region_name: 'North', subregion_name: 'Area A' }
 const validate = (source = row, references = refs) => validateUserImport([source], references)[0]
 
-test('uses exactly the requested seven file columns', () => {
-  assert.deepEqual([...userImportColumns], ['full_name', 'email', 'role', 'position', 'region_name', 'subregion_name', 'is_active'])
+test('uses exactly the six file columns without account status', () => {
+  assert.deepEqual([...userImportColumns], ['full_name', 'email', 'role', 'position', 'region_name', 'subregion_name'])
 })
 
 test('matches names and normalizes email, role, position and account status', () => {
@@ -21,11 +21,11 @@ test('matches names and normalizes email, role, position and account status', ()
   assert.deepEqual(result.values, { fullName: 'Person A', email: 'person@example.com', role: 'User', position: 'KAM', regionId: 1, subregionId: 3, isActive: true })
 })
 
-test('all supported active and inactive flags preserve the requested account state', () => {
-  for (const value of ['TRUE', 'Yes', '1', 'Active']) assert.equal(validate({ ...row, is_active: value }).values.isActive, true)
-  for (const value of ['FALSE', 'No', '0', 'Inactive']) assert.equal(validate({ ...row, is_active: value }).values.isActive, false)
-  assert.equal(validate({ ...row, is_active: '' }).status, 'Invalid')
-  assert.equal(validate({ ...row, is_active: 'maybe' }).status, 'Invalid')
+test('applies the batch account status instead of a spreadsheet flag', () => {
+  assert.equal(validateUserImport([row], refs, true)[0].values.isActive, true)
+  assert.equal(validateUserImport([row], refs, false)[0].values.isActive, false)
+  const legacy = parseUserImportSheets([{ name: 'Users', rows: [[...userImportColumns, 'is_active'], [...cells.slice(0, 6), 'FALSE']] }])
+  assert.equal(validateUserImport([{ ...legacy[0], id: 'legacy' }], refs, true)[0].values.isActive, true)
 })
 
 test('skips existing accounts and case-insensitive duplicate emails', () => {
@@ -64,7 +64,7 @@ test('finds the header below title rows in a later worksheet', () => {
   ])
   assert.equal(result.length, 1)
   assert.equal(result[0].full_name, 'Person A')
-  assert.equal(result[0].is_active, 'TRUE')
+  assert.equal('is_active' in result[0], false)
 })
 
 test('accepts common header labels, capitalization, newlines and reordered columns', () => {
@@ -74,7 +74,7 @@ test('accepts common header labels, capitalization, newlines and reordered colum
   ] }])
   assert.equal(result[0].full_name, 'Person A')
   assert.equal(result[0].email, 'person@example.com')
-  assert.equal(result[0].is_active, 'true')
+  assert.equal('is_active' in result[0], false)
 })
 
 test('skips blank rows and repeated headers while retaining incomplete user records', () => {

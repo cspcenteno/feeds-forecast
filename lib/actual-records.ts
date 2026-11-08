@@ -18,10 +18,13 @@ export type ActualRecord = ActualRow & ReturnType<typeof getActualPeriod>
 export async function loadActualRecords(
   supabase: ReturnType<typeof createClient>,
   years: number[],
-  scope?: { regionId: number; customerId: number }
+  scope?: { regionId: number; customerId: number } | { regionIds: number[]; customerIds: number[] }
 ) {
   const pageSize = 1000
   const records: ActualRecord[] = []
+  if (scope && 'regionIds' in scope && (!scope.regionIds.length || !scope.customerIds.length)) {
+    return { data: records, error: null }
+  }
 
   for (const year of new Set(years)) {
     for (let from = 0; ; from += pageSize) {
@@ -33,7 +36,9 @@ export async function loadActualRecords(
         .order('id')
         .range(from, from + pageSize - 1)
 
-      if (scope) {
+      if (scope && 'regionIds' in scope) {
+        query = query.in('region_id', scope.regionIds).in('customer_id', scope.customerIds)
+      } else if (scope) {
         query = query.eq('region_id', scope.regionId).eq('customer_id', scope.customerId)
       }
 

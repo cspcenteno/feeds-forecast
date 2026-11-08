@@ -1,16 +1,23 @@
 
 'use client'
 
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ActiveField } from '@/components/ui/active-field'
+
+import { useActionDialogs } from '@/components/action-dialogs'
+import { SelectionField } from '@/components/ui/selection-field'
+import { TableActionButton } from '@/components/ui/table-action-button'
 import { Table } from '@/components/ui/table'
+import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { UsersExcelImport } from '@/components/users-excel-import'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Pencil,
   Trash2,
   RefreshCw,
   Plus,
+  Search,
 } from 'lucide-react'
 
 import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
@@ -120,16 +127,21 @@ function getDefaultPermissions(role: string): ModulePermission[] {
 }
 
 export default function UsersPage() {
+  const { confirmAction, notify } = useActionDialogs()
+
   const router = useRouter()
   const authorization = useAuthorization()
   const [supabase] = useState(() => createClient())
 
   const [users, setUsers] = useState<User[]>([])
+  const [accountSearch, setAccountSearch] = useState('')
   const [regions, setRegions] = useState<Region[]>([])
   const [subregions, setSubregions] = useState<Subregion[]>([])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [resettingPassword, setResettingPassword] = useState(false)
+  const [resetTemporaryPassword, setResetTemporaryPassword] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
@@ -151,7 +163,7 @@ export default function UsersPage() {
   const [creatingUser, setCreatingUser] = useState(false)
   const [newFullName, setNewFullName] = useState('')
   const [newEmail, setNewEmail] = useState('')
-  const [newTemporaryPassword, setNewTemporaryPassword] = useState('#vita2026')
+  const [newTemporaryPassword, setNewTemporaryPassword] = useState('')
   const [newIsActive, setNewIsActive] = useState(true)
   const [newRole, setNewRole] = useState<string>('User')
   const [newRegionId, setNewRegionId] = useState<number | null>(null)
@@ -238,7 +250,7 @@ export default function UsersPage() {
 
       if (error) {
         console.error('Users Select Error:', error)
-        alert(`Unable to load users: ${error.message}`)
+        notify(`Unable to load users: ${error.message}`)
         return
       }
 
@@ -259,7 +271,7 @@ export default function UsersPage() {
 
     if (error) {
       console.error('Regions Select Error:', error)
-      alert(`Unable to load regions: ${error.message}`)
+      notify(`Unable to load regions: ${error.message}`)
       return
     }
 
@@ -275,7 +287,7 @@ export default function UsersPage() {
 
     if (error) {
       console.error('Subregions Select Error:', error)
-      alert(`Unable to load subregions: ${error.message}`)
+      notify(`Unable to load subregions: ${error.message}`)
       return
     }
 
@@ -323,7 +335,7 @@ export default function UsersPage() {
       console.error('User Permissions Select Error:', error)
       setPermissionLoadError(true)
       setLoadingPermissions(false)
-      alert(`Unable to load user permissions: ${error.message}`)
+      notify(`Unable to load user permissions: ${error.message}`)
       return
     }
 
@@ -368,6 +380,7 @@ export default function UsersPage() {
   }
 
   async function selectUser(user: User) {
+    setResetTemporaryPassword('')
     setShowUserPermissions(false)
     setSelectedUser(user)
     setFullName(user.full_name ?? '')
@@ -395,6 +408,7 @@ export default function UsersPage() {
   }
 
   function clearSelection() {
+    setResetTemporaryPassword('')
     setShowUserPermissions(false)
     setSelectedUser(null)
     setFullName('')
@@ -415,7 +429,7 @@ export default function UsersPage() {
     setShowUserPermissions(false)
     setNewFullName('')
     setNewEmail('')
-    setNewTemporaryPassword('#vita2026')
+    setNewTemporaryPassword('')
     setNewIsActive(true)
     setNewRole('User')
     setNewRegionId(null)
@@ -559,27 +573,27 @@ export default function UsersPage() {
 
   async function handleCreateUser() {
     if (!newFullName.trim()) {
-      alert('Please enter the full name.')
+      notify('Please enter the full name.')
       return
     }
 
     if (!newEmail.trim()) {
-      alert('Please enter the email address.')
+      notify('Please enter the email address.')
       return
     }
 
     if (newTemporaryPassword.length < 8 || newTemporaryPassword.length > 128) {
-      alert('The temporary password must be between 8 and 128 characters.')
+      notify('The temporary password must be between 8 and 128 characters.')
       return
     }
 
     if (!roles.includes(newRole as (typeof roles)[number])) {
-      alert('Please select a valid role.')
+      notify('Please select a valid role.')
       return
     }
 
     if (newRole !== 'Admin' && newRegionId === null) {
-      alert('Please select a region.')
+      notify('Please select a region.')
       return
     }
 
@@ -592,7 +606,7 @@ export default function UsersPage() {
           subregion.region_id === newRegionId,
       )
     ) {
-      alert('Please select a subregion belonging to the selected region.')
+      notify('Please select a subregion belonging to the selected region.')
       return
     }
 
@@ -630,19 +644,17 @@ export default function UsersPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        alert(result.error || 'Unable to create the user.')
+        notify(result.error || 'Unable to create the user.')
         return
       }
 
       await loadUsers()
       resetCreateUserForm()
 
-      alert(
-        'User created successfully. Share the temporary password securely. The user must change it after signing in.',
-      )
+      notify('User created successfully. Share the temporary password securely. The user must change it after signing in.')
     } catch (error) {
       console.error('Create User Error:', error)
-      alert('Unable to connect to the server. Please try again.')
+      notify('Unable to connect to the server. Please try again.')
     } finally {
       setCreatingUser(false)
     }
@@ -654,27 +666,27 @@ export default function UsersPage() {
     if (!selectedUser) return
 
     if (!fullName.trim()) {
-      alert('Please enter the full name.')
+      notify('Please enter the full name.')
       return
     }
 
     if (fullName.trim().length > 150) {
-      alert('Full name must not exceed 150 characters.')
+      notify('Full name must not exceed 150 characters.')
       return
     }
 
     if (position.trim().length > 150) {
-      alert('Position must not exceed 150 characters.')
+      notify('Position must not exceed 150 characters.')
       return
     }
 
     if (!roles.includes(role as (typeof roles)[number])) {
-      alert('Please select a valid role.')
+      notify('Please select a valid role.')
       return
     }
 
     if (role !== 'Admin' && regionId === null) {
-      alert('Please select a region.')
+      notify('Please select a region.')
       return
     }
 
@@ -687,14 +699,12 @@ export default function UsersPage() {
           subregion.region_id === regionId,
       )
     ) {
-      alert('Please select a subregion belonging to the selected region.')
+      notify('Please select a subregion belonging to the selected region.')
       return
     }
 
     if (loadingPermissions || permissionLoadError) {
-      alert(
-        'Please ensure user permissions have loaded successfully before saving.',
-      )
+      notify('Please ensure user permissions have loaded successfully before saving.')
       return
     }
 
@@ -753,12 +763,12 @@ export default function UsersPage() {
           setIsActive(updatedUser.is_active)
         }
 
-        alert(result.error || 'Unable to save changes.')
+        notify(result.error || 'Unable to save changes.')
         return
       }
 
       if (!result.user) {
-        alert('The server did not return the updated user record.')
+        notify('The server did not return the updated user record.')
         return
       }
 
@@ -788,15 +798,13 @@ export default function UsersPage() {
       setPermissionsDirty(false)
       setPermissionLoadError(false)
 
-      alert('User details and permissions saved successfully.')
+      notify('User details and permissions saved successfully.')
     } catch (error) {
       console.error('Save User Error:', error)
 
-      alert(
-        error instanceof Error
+      notify(error instanceof Error
           ? `Unable to save changes: ${error.message}`
-          : 'Unable to save changes. Please try again.',
-      )
+          : 'Unable to save changes. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -804,13 +812,13 @@ export default function UsersPage() {
 
 
   async function handleDelete() {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!selectedUser) return
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${
+    const confirmed = (actionConfirmation = await confirmAction({ message: `Are you sure you want to delete ${
         selectedUser.full_name || selectedUser.email
-      }?`,
-    )
+      }?` }))
 
     if (!confirmed) return
 
@@ -824,7 +832,7 @@ export default function UsersPage() {
 
       if (error) {
         console.error('User Delete Error:', error)
-        alert(`Unable to delete user: ${error.message}`)
+        notify(`Unable to delete user: ${error.message}`)
         return
       }
 
@@ -836,6 +844,8 @@ export default function UsersPage() {
     } finally {
       setDeleting(false)
     }
+
+    } finally { actionConfirmation?.finish() }
   }
 
   function getRegionName(id: number | null) {
@@ -863,7 +873,34 @@ export default function UsersPage() {
   const formSubregions = selectedUser ? availableSubregions : availableNewSubregions
   const setFormRegionId = selectedUser ? setRegionId : setNewRegionId
   const setFormSubregionId = selectedUser ? setSubregionId : setNewSubregionId
-  const formBusy = importBusy || (selectedUser ? saving || deleting : creatingUser)
+  async function handleResetPassword() {
+    if (!selectedUser || resettingPassword || !authorization.can('Users', 'edit')) return
+    if (resetTemporaryPassword.length < 8 || resetTemporaryPassword.length > 128) {
+      notify('The temporary password must be between 8 and 128 characters.')
+      return
+    }
+    setResettingPassword(true)
+    let confirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
+      confirmation = await confirmAction({ title: 'Reset this user’s password?', confirmLabel: 'Reset Password', tone: 'caution',
+        message: 'Replace the current password with the temporary password entered. The user must change it after signing in.',
+        details: [{ label: 'User', value: selectedUser.full_name || selectedUser.email }, { label: 'Email', value: selectedUser.email }] })
+      if (!confirmation) return
+      const response = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUser.id, temporaryPassword: resetTemporaryPassword }) })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Unable to reset the password.')
+      setResetTemporaryPassword('')
+      notify('Password reset successfully. Share the temporary password securely. The user must change it after signing in.')
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Unable to reset the password.')
+    } finally {
+      confirmation?.finish()
+      setResettingPassword(false)
+    }
+  }
+
+  const formBusy = loading || importBusy || resettingPassword || (selectedUser ? saving || deleting : creatingUser)
   const permissionsBusy = formBusy || Boolean(selectedUser && (loadingPermissions || permissionLoadError))
   const formPermissions = selectedUser ? permissions : newPermissions
   const allFormPermissionsEnabled = formPermissions.every((permission) =>
@@ -884,25 +921,22 @@ export default function UsersPage() {
     subregion: (row) => getSubregionName(row.subregion_id),
   })
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-muted-foreground">Loading users...</p>
-      </div>
-    )
-  }
+  const accountSearchTerms = accountSearch.trim().toLocaleLowerCase('en-PH').split(/\s+/).filter(Boolean)
+  const visibleUsers = sortedUsers.filter((user) => accountSearchTerms.every((term) =>
+    (user.full_name ?? '').toLocaleLowerCase('en-PH').includes(term)
+  ))
 
-  if (!isAdmin) return null
+  if (!isAdmin && !loading) return null
 
   return (
     <div className="space-y-6">
-      {authorization.can('Users', 'add') && <UsersExcelImport
-        blocked={saving || deleting || creatingUser || refreshing}
+      {isAdmin && authorization.can('Users', 'add') && <UsersExcelImport
+        blocked={loading || saving || deleting || creatingUser || refreshing || resettingPassword}
         onBusyChange={setImportBusy}
         onCreated={loadUsers}
       />}
       {/* User form */}
-      {(selectedUser || authorization.can('Users', 'add')) && (
+      {isAdmin && (selectedUser || authorization.can('Users', 'add')) && (
         <div id="user-editor" className="scroll-mt-4 overflow-hidden rounded-xl border bg-card shadow-sm">
           <div className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -914,8 +948,8 @@ export default function UsersPage() {
 
           </div>
 
-          <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-2">
+          <div className="app-field-row p-6">
+            <div data-field-size="wide" className="space-y-2">
               <label htmlFor="newFullName" className="text-sm font-medium">
                 Full Name <span className="text-destructive">*</span>
               </label>
@@ -933,7 +967,7 @@ export default function UsersPage() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div data-field-size="wide" className="space-y-2">
               <label htmlFor="newEmail" className="text-sm font-medium">
                 Email <span className="text-destructive">*</span>
               </label>
@@ -958,53 +992,51 @@ export default function UsersPage() {
               <input
                 id="newTemporaryPassword"
                 type="password"
-                value={selectedUser ? '' : newTemporaryPassword}
-                onChange={(event) => setNewTemporaryPassword(event.target.value)}
+                value={selectedUser ? resetTemporaryPassword : newTemporaryPassword}
+                onChange={(event) => (selectedUser ? setResetTemporaryPassword : setNewTemporaryPassword)(event.target.value)}
                 autoComplete="new-password"
                 minLength={8}
                 maxLength={128}
                 required={!selectedUser}
-                disabled={formBusy || Boolean(selectedUser)}
+                disabled={formBusy || (Boolean(selectedUser) && !authorization.can('Users', 'edit'))}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                placeholder={selectedUser ? 'Set when creating the account' : 'At least 8 characters'}
+                placeholder={selectedUser ? 'Enter a new temporary password' : 'At least 8 characters'}
               />
             </div>
             <div className="space-y-2">
               <label htmlFor="newRole" className="text-sm font-medium">
                 Role <span className="text-destructive">*</span>
               </label>
-              <select
-                id="newRole"
-                value={formRole}
-                onChange={(e) => (selectedUser ? handleRoleChange : handleNewRoleChange)(e.target.value)}
-                disabled={formBusy}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-              >
+              <SelectionField id="newRole"
+                  value={formRole}
+                  onValueChange={(selectionValue) => (selectedUser ? handleRoleChange : handleNewRoleChange)(selectionValue)}
+                  disabled={formBusy}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  aria-label="Role *">
                 {roles.map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>
                 ))}
-              </select>
+              </SelectionField>
             </div>
 
             <div className="space-y-2">
               <label htmlFor="newPosition" className="text-sm font-medium">
                 Sales Position
               </label>
-              <select
-                id="newPosition"
-                value={selectedUser ? position : newPosition}
-                onChange={(e) => (selectedUser ? setPosition : setNewPosition)(e.target.value)}
-                disabled={formBusy || formRole === 'Admin'}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-              >
+              <SelectionField id="newPosition"
+                  value={selectedUser ? position : newPosition}
+                  onValueChange={(selectionValue) => (selectedUser ? setPosition : setNewPosition)(selectionValue)}
+                  disabled={formBusy || formRole === 'Admin'}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  aria-label="Sales Position">
                 <option value="">Select a sales position</option>
                 <option value="KAM">KAM</option>
                 <option value="RSM">RSM</option>
                 <option value="ASM">ASM</option>
                 <option value="Supervisor">Supervisor</option>
-              </select>
+              </SelectionField>
             </div>
 
             <div className="space-y-2">
@@ -1016,34 +1048,32 @@ export default function UsersPage() {
               </label>
 
               {formRole === 'Admin' ? (
-                <select
-                  id="newRegion"
+                <SelectionField id="newRegion"
                   value=""
                   disabled
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none disabled:opacity-50"
-                >
+                  aria-label="Selection">
                   <option value="">No region selected</option>
-                </select>
+                </SelectionField>
               ) : (
-                <select
-                  id="newRegion"
+                <SelectionField id="newRegion"
                   value={formRegionId ?? ''}
-                  onChange={(e) => {
-                    const value = e.target.value
+                  onValueChange={(selectionValue) => {
+                    const value = selectionValue
                     setFormRegionId(value ? Number(value) : null)
                     setFormSubregionId(null)
                   }}
                   disabled={formBusy}
                   required
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                >
+                  aria-label="Selection">
                   <option value="">Select region</option>
                   {regions.map((region) => (
                     <option key={region.id} value={region.id}>
                       {region.name}
                     </option>
                   ))}
-                </select>
+                </SelectionField>
               )}
             </div>
 
@@ -1052,44 +1082,37 @@ export default function UsersPage() {
                 Subregion (Optional)
               </label>
               {formRole === 'Admin' ? (
-                <select
-                  id="newSubregion"
+                <SelectionField id="newSubregion"
                   value=""
                   disabled
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none disabled:opacity-50"
-                >
+                  aria-label="Selection">
                   <option value="">No subregion selected</option>
-                </select>
+                </SelectionField>
               ) : (
-                <select
-                  id="newSubregion"
+                <SelectionField id="newSubregion"
                   value={(selectedUser ? subregionId : newSubregionId) ?? ''}
-                  onChange={(e) => {
-                    const value = e.target.value
+                  onValueChange={(selectionValue) => {
+                    const value = selectionValue
                     setFormSubregionId(value ? Number(value) : null)
                   }}
                   disabled={formBusy || formRegionId === null}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                  aria-label="Selection">
                   <option value="">No subregion selected</option>
                   {formSubregions.map((subregion) => (
                     <option key={subregion.id} value={subregion.id}>
                       {subregion.name}
                     </option>
                   ))}
-                </select>
+                </SelectionField>
               )}
             </div>
-            <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
-              <input
-                type="checkbox"
+            <ActiveField
                 checked={selectedUser ? isActive : newIsActive}
                 onChange={(event) => (selectedUser ? setIsActive : setNewIsActive)(event.target.checked)}
                 disabled={formBusy}
-                className="size-4"
               />
-              Active
-            </label>
           </div>
 
           {/* Create User Permissions */}
@@ -1103,15 +1126,6 @@ export default function UsersPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <button data-action-tone="neutral"
-                  type="button"
-                  aria-expanded={showUserPermissions}
-                  aria-controls="user-editor-permissions"
-                  onClick={() => setShowUserPermissions((visible) => !visible)}
-                  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
-                >
-                  {showUserPermissions ? 'Hide Permissions' : 'Show Permissions'}
-                </button>
                 {showUserPermissions && (
                   <button
                     type="button"
@@ -1123,6 +1137,15 @@ export default function UsersPage() {
                     {allFormPermissionsEnabled ? 'Disable All' : 'Enable All'}
                   </button>
                 )}
+                <button data-slot="show-hide-button" data-action-tone="neutral"
+                  type="button"
+                  aria-expanded={showUserPermissions}
+                  aria-controls="user-editor-permissions"
+                  onClick={() => setShowUserPermissions((visible) => !visible)}
+                  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+                >
+                  {showUserPermissions ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}{showUserPermissions ? 'Hide' : 'Show'}
+                </button>
               </div>
             </div>
 
@@ -1142,10 +1165,6 @@ export default function UsersPage() {
                   >
                     Retry
                   </button>
-                </div>
-              ) : loadingPermissions ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  Loading user permissions...
                 </div>
               ) : (<>
                 <Table
@@ -1172,7 +1191,7 @@ export default function UsersPage() {
                     </thead>
 
                     <tbody>
-                      {formPermissions.map((permission) => {
+                      {loadingPermissions ? <TableLoadingRow columns={permissionFields.length + 2} label="user permissions" /> : formPermissions.map((permission) => {
                         const availableFields = permissionFields.filter(
                           ({ field }) =>
                             !isPermissionDisabled(permission.module, field),
@@ -1273,12 +1292,20 @@ export default function UsersPage() {
               )}
               {selectedUser ? (saving ? 'Saving...' : 'Save Changes') : (creatingUser ? 'Creating User...' : 'Create User')}
             </button>
+            {selectedUser && authorization.can('Users', 'edit') && (
+              <button type="button" data-action-tone="caution" onClick={handleResetPassword}
+                disabled={formBusy || resetTemporaryPassword.length < 8}
+                className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium">
+                {resettingPassword && <RefreshCw className="size-4 animate-spin" aria-hidden="true" />}
+                {resettingPassword ? 'Resetting…' : 'Reset Password'}
+              </button>
+            )}
             {selectedUser && authorization.can('Users', 'delete') && (
               <button data-action-tone="danger"
                 type="button"
                 onClick={handleDelete}
                 disabled={formBusy}
-                className="inline-flex items-center gap-2 rounded-md border border-destructive px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                className="ml-auto inline-flex items-center gap-2 rounded-md border border-destructive px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
               >
                 <Trash2 className="size-4" />
                 {deleting ? 'Deleting...' : 'Delete'}
@@ -1294,11 +1321,18 @@ export default function UsersPage() {
           <div>
             <h2 className="font-semibold">User Accounts</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {users.length} user{users.length !== 1 ? 's' : ''}
+              {accountSearchTerms.length ? `${visibleUsers.length} of ${users.length} users` : `${users.length} user${users.length !== 1 ? 's' : ''}`}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative w-full sm:w-64">
+              <span className="sr-only">Search user accounts by full name</span>
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <input type="search" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)}
+                placeholder="Search full name…" autoComplete="off"
+                className="h-10 w-full rounded-md border bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+            </label>
             {selectedUser && authorization.can('Users', 'add') && <button data-action-tone="primary" data-action-fill=""
               type="button"
               onClick={openCreateUserForm}
@@ -1312,7 +1346,7 @@ export default function UsersPage() {
             <button data-action-tone="neutral"
               type="button"
               onClick={handleRefresh}
-              disabled={refreshing}
+              disabled={loading || refreshing}
               className="inline-flex items-center justify-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw
@@ -1324,12 +1358,12 @@ export default function UsersPage() {
         </div>
 
         <Table saved
-          containerProps={{ tabIndex: 0, role: "region", "aria-label": "User Accounts table" }}
+          containerProps={{ tabIndex: 0, role: "region", "aria-label": "User Accounts table", 'aria-busy': loading || refreshing }}
         >
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b bg-muted/40">
-                {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <th className="whitespace-nowrap px-4 py-3 text-left font-medium">Action</th>}
-                <th className="px-4 py-3 text-left font-medium">Status</th>
+                {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <th data-action-column="standard" className="whitespace-nowrap px-4 py-3 text-left font-medium">Action</th>}
+                <th data-fixed-column="status" className="px-4 py-3 text-left font-medium">Status</th>
                 <SortableHeader plain className="px-6 py-3 text-left font-medium" {...sortHeader('name')}>Full Name</SortableHeader>
                 <SortableHeader plain className="px-4 py-3 text-left font-medium" {...sortHeader('email')}>Email</SortableHeader>
                 <SortableHeader plain className="px-4 py-3 text-left font-medium" {...sortHeader('role')}>Role</SortableHeader>
@@ -1340,34 +1374,33 @@ export default function UsersPage() {
             </thead>
 
             <tbody>
-              {users.length === 0 ? (
+              {loading ? (
+                <TableLoadingRow columns={authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete') ? 8 : 7} label="user accounts" />
+              ) : visibleUsers.length === 0 ? (
                 <tr>
                   <td
                     colSpan={authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete') ? 8 : 7}
                     className="px-6 py-8 text-center text-muted-foreground"
                   >
-                    No users found.
+                    {accountSearchTerms.length ? 'No accounts match this full name.' : 'No users found.'}
                   </td>
                 </tr>
               ) : (
-                sortedUsers.map((user) => (
+                visibleUsers.map((user) => (
                   <tr
                     key={user.id}
                     className={`border-b last:border-0 ${
                       selectedUser?.id === user.id ? 'bg-muted/40' : ''
                     }`}
                   >
-                    {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <td className="px-4 py-3">
+                    {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <td data-action-column="standard" className="px-4 py-3">
                       {authorization.can('Users', 'edit') ? (
-                      <button data-action-tone="caution"
+                      <TableActionButton action="edit" data-action-tone="caution"
                         type="button"
                         onClick={() => selectUser(user)}
                         disabled={formBusy || loadingPermissions}
                         className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
-                      >
-                        <Pencil className="size-4" />
-                        Edit
-                      </button>
+                       />
                       ) : <span className="text-sm text-muted-foreground">No Action</span>}
                     </td>}
                     <td className="px-4 py-3">{user.is_active ? 'Active' : 'Pending'}</td>

@@ -1,8 +1,10 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useActionDialogs } from '@/components/action-dialogs'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import Image from 'next/image'
 import {
   LayoutDashboard,
   ClipboardPenLine,
@@ -21,11 +23,15 @@ import {
   Moon,
   Sun,
   KeyRound,
+  Eye,
+  EyeOff,
+  LoaderCircle,
   X,
 } from 'lucide-react'
 
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
+import { useForecastAttention } from '@/lib/use-forecast-attention'
 
 import {
   Sidebar,
@@ -115,17 +121,23 @@ const adminItems = [
 ]
 
 export function AppSidebar() {
+  const attention = useForecastAttention()
+  const { notify } = useActionDialogs()
+
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
-  const { state } = useSidebar()
+  const { state, isMobile, setOpenMobile } = useSidebar()
   const authorization = useAuthorization()
 
   const [fullName, setFullName] = useState('User')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('')
+  const [salesPosition, setSalesPosition] = useState('')
 
   const [profileOpen, setProfileOpen] = useState(false)
+  const profileRef = useRef<HTMLDivElement>(null)
+  const profileTriggerRef = useRef<HTMLButtonElement>(null)
   const [darkMode, setDarkMode] = useState(false)
 
   const [changePasswordOpen, setChangePasswordOpen] =
@@ -134,9 +146,36 @@ export function AppSidebar() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] =
     useState('')
+  const [passwordVisibility, setPasswordVisibility] = useState({ newPassword: false, confirmPassword: false })
 
   const [changingPassword, setChangingPassword] =
     useState(false)
+
+  useEffect(() => {
+    if (!profileOpen) return
+
+    function dismissOutside(event: PointerEvent | FocusEvent) {
+      if (event.target instanceof Node && !profileRef.current?.contains(event.target)) {
+        setProfileOpen(false)
+      }
+    }
+
+    function dismissOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setProfileOpen(false)
+        profileTriggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('pointerdown', dismissOutside, true)
+    document.addEventListener('focusin', dismissOutside)
+    document.addEventListener('keydown', dismissOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside, true)
+      document.removeEventListener('focusin', dismissOutside)
+      document.removeEventListener('keydown', dismissOnEscape)
+    }
+  }, [profileOpen])
 
   useEffect(() => {
     let mounted = true
@@ -152,7 +191,7 @@ export function AppSidebar() {
 
       const { data: profile, error } = await supabase
         .from('users')
-        .select('full_name, role, is_active')
+        .select('full_name, role, position, is_active')
         .eq('id', user.id)
         .single()
 
@@ -172,6 +211,7 @@ export function AppSidebar() {
 
       if (profile?.role) {
         setRole(profile.is_active ? profile.role : '')
+        setSalesPosition(profile.is_active ? profile.position ?? '' : '')
       }
     }
 
@@ -228,6 +268,7 @@ export function AppSidebar() {
     setProfileOpen(false)
     setNewPassword('')
     setConfirmPassword('')
+    setPasswordVisibility({ newPassword: false, confirmPassword: false })
     setChangePasswordOpen(true)
   }
 
@@ -241,17 +282,17 @@ export function AppSidebar() {
 
   async function handleChangePassword() {
     if (!newPassword) {
-      alert('Please enter your new password.')
+      notify('Please enter your new password.')
       return
     }
 
-    if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters.')
+    if (newPassword.length < 8) {
+      notify('Password must be at least 8 characters.')
       return
     }
 
     if (newPassword !== confirmPassword) {
-      alert('Passwords do not match.')
+      notify('Passwords do not match.')
       return
     }
 
@@ -263,12 +304,12 @@ export function AppSidebar() {
 
     if (error) {
       console.error('Change Password Error:', error)
-      alert(error.message)
+      notify(error.message)
       setChangingPassword(false)
       return
     }
 
-    alert('Your password has been changed successfully.')
+    notify('Your password has been changed successfully.')
 
     setChangingPassword(false)
     setChangePasswordOpen(false)
@@ -294,22 +335,20 @@ export function AppSidebar() {
 
   function navigateTo(url: string) {
     setProfileOpen(false)
+    if (isMobile) setOpenMobile(false)
     router.push(url)
   }
 
   return (
     <>
-      <Sidebar collapsible="icon">
+      <Sidebar collapsible="icon" className="app-sidebar">
         <SidebarContent>
           {/* Application Header */}
-          <div className="flex items-center px-2 py-4 group-data-[collapsible=icon]:justify-center">
-            <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-base font-semibold tracking-tight">
-                Feed Sales
-              </p>
-
-              <p className="truncate text-xs text-muted-foreground">
-                Forecast
+          <div className="flex h-20 shrink-0 items-center overflow-hidden px-2 group-data-[collapsible=icon]:justify-center">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 group-data-[collapsible=icon]:hidden">
+              <Image src="/vitarich-logo.png" alt="Vitarich Corporation" width={40} height={40} className="size-10 shrink-0 object-contain" />
+              <p className="shrink-0 whitespace-nowrap text-lg leading-tight font-semibold tracking-tight">
+                Feed Sales<br /><span className="font-normal">Forecast</span>
               </p>
             </div>
 
@@ -326,7 +365,7 @@ export function AppSidebar() {
           {/* Main Menu */}
           <SidebarGroup>
             <SidebarGroupLabel>
-              Main Menu
+              <span>Main Menu</span>
             </SidebarGroupLabel>
 
             <SidebarGroupContent>
@@ -335,11 +374,18 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       isActive={isCurrentPage(item.url)}
+                      aria-current={isCurrentPage(item.url) ? 'page' : undefined}
                       onClick={() => navigateTo(item.url)}
                       tooltip={item.title}
                     >
                       <item.icon />
                       <span>{item.title}</span>
+                      {attention && (item.url === '/forecast-input' ? attention.returned.length : item.url === '/approvals' ? attention.pending + attention.endorsed : 0) > 0 && (
+                        <span data-slot="forecast-attention-badge" className="ml-auto flex min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:right-0"
+                          aria-label={item.url === '/forecast-input' ? `${attention.returned.length} returned forecasts` : `${attention.pending + attention.endorsed} forecasts awaiting review`}>
+                          {item.url === '/forecast-input' ? attention.returned.length : attention.pending + attention.endorsed}
+                        </span>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -351,7 +397,7 @@ export function AppSidebar() {
           {canAccessMasterData && (
             <SidebarGroup>
               <SidebarGroupLabel>
-                Master Data
+                <span>Master Data</span>
               </SidebarGroupLabel>
 
               <SidebarGroupContent>
@@ -360,6 +406,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={isCurrentPage(item.url)}
+                        aria-current={isCurrentPage(item.url) ? 'page' : undefined}
                         onClick={() => navigateTo(item.url)}
                         tooltip={item.title}
                       >
@@ -377,7 +424,7 @@ export function AppSidebar() {
           {canAccessAdministration && (
             <SidebarGroup>
               <SidebarGroupLabel>
-                Administration
+                <span>Administration</span>
               </SidebarGroupLabel>
 
               <SidebarGroupContent>
@@ -386,6 +433,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={isCurrentPage(item.url)}
+                        aria-current={isCurrentPage(item.url) ? 'page' : undefined}
                         onClick={() => navigateTo(item.url)}
                         tooltip={item.title}
                       >
@@ -400,17 +448,21 @@ export function AppSidebar() {
           )}
 
           {/* User Profile */}
-          <SidebarGroup className="mt-auto">
+          <SidebarGroup className="mt-auto shrink-0">
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <div className="relative">
+                  <div ref={profileRef} className="relative">
                     <button
+                      ref={profileTriggerRef}
                       type="button"
+                      aria-label="Profile options"
+                      aria-expanded={profileOpen}
+                      aria-controls={profileOpen ? 'profile-options' : undefined}
                       onClick={() => setProfileOpen(!profileOpen)}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center"
+                      className="flex h-14 w-full items-center justify-start gap-2 rounded-md py-2 text-left transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
                         {getInitials(fullName)}
                       </div>
 
@@ -428,6 +480,7 @@ export function AppSidebar() {
                     {/* Profile Menu */}
                     {profileOpen && (
                       <div
+                        id="profile-options"
                         className="
                           absolute bottom-full left-0 z-50 mb-2 w-full min-w-[220px]
                           rounded-lg border bg-popover p-1 text-popover-foreground shadow-md
@@ -439,24 +492,26 @@ export function AppSidebar() {
                           group-data-[collapsible=icon]:mb-0
                         "
                       >
-                        <div className="px-3 py-2">
-                          <p className="truncate text-sm font-medium">
+                        <div className="space-y-1 px-3 py-3">
+                          <p className="text-sm leading-5 font-medium wrap-anywhere">
                             {fullName}
                           </p>
 
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="text-xs leading-4 text-muted-foreground wrap-anywhere">
                             {email}
                           </p>
 
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="text-xs leading-4 text-muted-foreground">
                             {role || 'Inactive account'}
+                            {role && salesPosition && <> · {salesPosition}</>}
                           </p>
                         </div>
 
-                        <div className="my-1 h-px bg-border" />
+                        <div className="mx-2 my-1 h-px bg-border" />
 
                         {/* Change Password */}
                         <button data-action-tone="caution"
+                          data-slot="profile-menu-action"
                           type="button"
                           onClick={openChangePassword}
                           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
@@ -467,6 +522,8 @@ export function AppSidebar() {
 
                         {/* Theme */}
                         <button
+                          data-action-tone="neutral"
+                          data-slot="profile-menu-action"
                           type="button"
                           onClick={toggleDarkMode}
                           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
@@ -483,7 +540,8 @@ export function AppSidebar() {
                         </button>
 
                         {/* Logout */}
-                        <button
+                        <button data-action-tone="danger"
+                          data-slot="profile-menu-action"
                           type="button"
                           onClick={handleLogout}
                           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
@@ -503,91 +561,54 @@ export function AppSidebar() {
 
       {/* Change Password Dialog */}
       {changePasswordOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border bg-background shadow-xl">
-            <div className="flex items-center justify-between border-b px-6 py-4">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  Change Password
-                </h2>
-
-                <p className="text-sm text-muted-foreground">
-                  Enter a new password for your account.
-                </p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="change-password-title" aria-describedby="change-password-description" aria-busy={changingPassword}
+            className="max-h-[90svh] w-full max-w-md overflow-y-auto rounded-2xl border bg-background shadow-xl">
+            <div className="flex items-start justify-between gap-3 px-6 pt-6">
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sidebar-accent text-sidebar-accent-foreground">
+                  <KeyRound className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 id="change-password-title" className="text-lg font-semibold tracking-tight">Change password</h2>
+                  <p id="change-password-description" className="mt-1 text-xs text-muted-foreground">Choose a new password for your account.</p>
+                </div>
               </div>
-
-              <button
-                type="button"
-                onClick={closeChangePassword}
-                disabled={changingPassword}
-                aria-label="Close change password dialog"
-                className="rounded-md p-2 hover:bg-muted disabled:opacity-50"
-              >
-                <X className="size-4" />
+              <button type="button" onClick={closeChangePassword} disabled={changingPassword} aria-label="Close change password dialog"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50">
+                <X className="size-4" aria-hidden="true" />
               </button>
             </div>
 
-            <div className="space-y-4 px-6 py-5">
-              <div className="space-y-2">
-                <label
-                  htmlFor="newPassword"
-                  className="text-sm font-medium"
-                >
-                  New Password
-                </label>
-
-                <input
-                  id="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password"
-                  disabled={changingPassword}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                />
-
-                <p className="text-xs text-muted-foreground">
-                  Password must be at least 6 characters.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="confirmPassword"
-                  className="text-sm font-medium"
-                >
-                  Confirm Password
-                </label>
-
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm new password"
-                  disabled={changingPassword}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                />
-              </div>
+            <div className="space-y-5 px-6 py-6">
+              {[
+                { id: 'newPassword' as const, label: 'New password', value: newPassword, update: setNewPassword, placeholder: 'Enter new password' },
+                { id: 'confirmPassword' as const, label: 'Confirm password', value: confirmPassword, update: setConfirmPassword, placeholder: 'Re-enter new password' },
+              ].map(({ id, label, value, update, placeholder }) => (
+                <div key={id} className="space-y-2">
+                  <label htmlFor={id} className="text-sm font-medium">{label}</label>
+                  <div className="relative">
+                    <input id={id} type={passwordVisibility[id] ? 'text' : 'password'} value={value} onChange={(event) => update(event.target.value)} placeholder={placeholder}
+                      autoComplete="new-password" minLength={8} disabled={changingPassword} aria-describedby={id === 'newPassword' ? 'new-password-hint' : undefined}
+                      className="h-11 w-full rounded-lg border bg-background py-2 pr-12 pl-3 text-base outline-none transition focus:border-emerald-600 focus:ring-3 focus:ring-emerald-600/10 disabled:opacity-50 sm:text-sm dark:focus:border-emerald-400" />
+                    <button type="button" disabled={changingPassword} aria-label={`${passwordVisibility[id] ? 'Hide' : 'Show'} ${label.toLowerCase()}`} aria-pressed={passwordVisibility[id]}
+                      onClick={() => setPasswordVisibility((previous) => ({ ...previous, [id]: !previous[id] }))}
+                      className="absolute top-1/2 right-1 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50 dark:hover:text-emerald-400">
+                      {passwordVisibility[id] ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+                    </button>
+                  </div>
+                  {id === 'newPassword' && <p id="new-password-hint" className="text-xs text-muted-foreground">Use at least 8 characters.</p>}
+                </div>
+              ))}
             </div>
 
-            <div className="flex justify-end gap-2 border-t px-6 py-4">
-              <button
-                type="button"
-                onClick={closeChangePassword}
-                disabled={changingPassword}
-                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button data-action-tone="primary" data-action-fill=""
-                type="button"
-                onClick={handleChangePassword}
-                disabled={changingPassword}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {changingPassword ? 'Changing...' : 'Change Password'}
+            <div className="flex flex-wrap justify-end gap-2 border-t px-6 py-4">
+              <button data-action-tone="neutral" type="button" onClick={closeChangePassword} disabled={changingPassword}
+                className="h-10 rounded-lg border px-4 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50">Cancel</button>
+              <button data-action-tone="primary" data-action-fill="" type="button" onClick={handleChangePassword} disabled={changingPassword}
+                className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[#174c36] px-4 text-sm font-semibold text-white outline-none transition hover:bg-[#103b29] focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 dark:bg-emerald-700 dark:hover:bg-emerald-600">
+                {changingPassword && <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                {changingPassword ? 'Updating…' : 'Update password'}
               </button>
             </div>
           </div>

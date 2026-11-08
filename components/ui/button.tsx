@@ -48,6 +48,8 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
+      data-action-tone={variant === "default" ? "primary" : variant === "destructive" ? "danger" : variant === "outline" || variant === "secondary" ? "neutral" : undefined}
+      data-action-fill={variant === "default" ? "" : undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

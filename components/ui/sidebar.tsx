@@ -21,7 +21,7 @@ import { PanelLeftIcon } from "lucide-react"
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+const SIDEBAR_WIDTH_MOBILE = SIDEBAR_WIDTH
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -265,7 +265,7 @@ function Sidebar({
    *   - 3rem icon rail remains visible.
    *
    * Expanded:
-   *   - 18rem sidebar.
+   *   - Same expanded width as the desktop sidebar.
    *   - Floats over the page.
    *   - Backdrop appears behind it.
    *
@@ -297,7 +297,8 @@ function Sidebar({
         <div
           className={cn(
             "group peer text-sidebar-foreground",
-            "block"
+            "block",
+            className
           )}
           data-state={state}
           data-collapsible={
@@ -331,7 +332,7 @@ function Sidebar({
                 "w-(--sidebar-width-icon)",
 
               /*
-               * Expanded = 18rem
+               * Expanded = desktop width
                */
               state === "expanded" &&
                 "w-(--sidebar-width-mobile)",
@@ -445,7 +446,7 @@ function Sidebar({
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
-          "fixed inset-y-0 z-10 h-svh transition-[left,right,width] duration-200 ease-linear",
+          "fixed inset-y-0 z-20 h-svh transition-[left,right,width] duration-200 ease-linear",
 
           /*
            * Width

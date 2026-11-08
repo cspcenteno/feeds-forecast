@@ -1,5 +1,12 @@
 'use client'
 
+import { ActiveField } from '@/components/ui/active-field'
+
+import { useActionDialogs } from '@/components/action-dialogs'
+import { SelectionField } from '@/components/ui/selection-field'
+import { TableActionButton } from '@/components/ui/table-action-button'
+import { TableLoadingRow } from '@/components/ui/loading-spinner'
+import { GroupedTableRows, TableGroupProvider, TableGroupToggle } from '@/components/ui/grouped-table-rows'
 import { Table } from '@/components/ui/table'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -23,6 +30,8 @@ type Region = {
 }
 
 export default function CustomersPage() {
+  const { confirmAction } = useActionDialogs()
+
   const supabase = useMemo(() => createClient(), [])
   const authorization = useAuthorization()
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -34,24 +43,31 @@ export default function CustomersPage() {
   const [isActive, setIsActive] = useState(true)
   const [segment, setSegment] = useState('')
   const [loading, setLoading] = useState(false)
+  const [tableLoading, setTableLoading] = useState(true)
   const [error, setError] = useState('')
 
   const loadCustomers = useCallback(async () => {
-    const [customersResult, regionsResult] = await Promise.all([
-      supabase
-        .from('customers')
-        .select('id, customer, salesman, region_id, is_active, segment, created_at')
-        .order('customer'),
-      supabase.from('regions').select('id, name').eq('is_active', true).order('name'),
-    ])
+    setTableLoading(true)
+    try {
+      const [customersResult, regionsResult] = await Promise.all([
+        supabase
+          .from('customers')
+          .select('id, customer, salesman, region_id, is_active, segment, created_at')
+          .order('customer'),
+        supabase.from('regions').select('id, name').eq('is_active', true).order('name'),
+      ])
 
-    if (customersResult.error || regionsResult.error) {
-      setError(customersResult.error?.message ?? regionsResult.error?.message ?? 'Unable to load customer data.')
-      return
+      if (customersResult.error || regionsResult.error) {
+        setError(customersResult.error?.message ?? regionsResult.error?.message ?? 'Unable to load customer data.')
+        return
+      }
+
+      setCustomers((customersResult.data ?? []) as Customer[])
+      setRegions((regionsResult.data ?? []) as Region[])
+
+    } finally {
+      setTableLoading(false)
     }
-
-    setCustomers((customersResult.data ?? []) as Customer[])
-    setRegions((regionsResult.data ?? []) as Region[])
   }, [supabase])
 
   useEffect(() => {
@@ -114,8 +130,10 @@ export default function CustomersPage() {
   }
 
   async function deleteCustomer(id: number) {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!authorization.can('Customers', 'delete')) return
-    if (!window.confirm('Delete this customer?')) return
+    if (!(actionConfirmation = await confirmAction({ message: 'Delete this customer?', details: [{ label: 'Customer', value: customers.find((item) => item.id === id)?.customer || '#' + id }] }))) return
 
     setLoading(true)
     setError('')
@@ -135,6 +153,8 @@ export default function CustomersPage() {
     if (editingId === id) resetForm()
     await loadCustomers()
     setLoading(false)
+
+    } finally { actionConfirmation?.finish() }
   }
 
   const { sortedRows: sortedCustomers, sortHeader } = useTableSort(customers, {
@@ -157,31 +177,31 @@ export default function CustomersPage() {
           </div>
 
           <div className="overflow-x-auto pb-1">
-          <div className="grid min-w-[760px] grid-cols-[minmax(180px,2fr)_minmax(150px,1.5fr)_minmax(140px,1fr)_minmax(140px,1fr)_auto] items-end gap-4">
-            <label className="space-y-2 text-sm font-medium">
+          <div className="app-field-row">
+            <label data-field-size="wide" className="space-y-2 text-sm font-medium">
               Customer <span className="text-destructive">*</span>
               <input value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
-            <label className="space-y-2 text-sm font-medium">
+            <label data-field-size="wide" className="space-y-2 text-sm font-medium">
               Salesman
               <input value={salesman} onChange={(e) => setSalesman(e.target.value)} placeholder="Enter salesman name" className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
             <label className="space-y-2 text-sm font-medium">
               Region
-              <select value={regionId} onChange={(e) => setRegionId(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal">
+              <SelectionField value={regionId}
+                  onValueChange={(selectionValue) => setRegionId(selectionValue)}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal"
+                  aria-label="Region">
                 <option value="">Select region</option>
                 {regions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
+              </SelectionField>
             </label>
             <label className="space-y-2 text-sm font-medium">
               Segment
               <input value={segment} onChange={(e) => setSegment(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
-            <div className="flex items-end">
-              <label className="flex h-10 cursor-pointer items-center gap-2 text-sm">
-                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="size-4" />
-                <span className="font-medium">Active</span>
-              </label>
+            <div data-field-size="toggle" className="flex items-end">
+              <ActiveField checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
             </div>
           </div>
 
@@ -200,34 +220,43 @@ export default function CustomersPage() {
         </section>
       ) : null}
 
+      <TableGroupProvider groupKeys={sortedCustomers.map((item) => item.salesman?.trim() || '')}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div className="border-b px-6 py-5">
+        <div className="flex items-start justify-between gap-3 border-b px-6 py-5">
+          <div>
           <h2 className="font-semibold">Customers</h2>
           <p className="mt-1 text-sm text-muted-foreground">{customers.length} customer{customers.length === 1 ? '' : 's'}</p>
+          </div>
+          <TableGroupToggle disabled={tableLoading} />
         </div>
-        <Table
-          className="table-fixed wrap-anywhere"
-          containerProps={{ className: "max-h-[min(32rem,65vh)] overflow-x-hidden overflow-y-auto", tabIndex: 0, role: "region", "aria-label": "Saved Customers table" }}
+        <Table aria-busy={tableLoading}
+          className="min-w-[900px] table-fixed wrap-anywhere"
+          containerProps={{ className: "max-h-[min(32rem,65vh)] overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Customers table" }}
         >
             <thead><tr className="border-b bg-muted/40">
-              {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <th className="px-1.5 py-3 sm:px-3 text-left font-medium">Action</th>}
+              {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <th data-action-column="standard" className="px-1.5 py-3 sm:px-3 text-left font-medium">Action</th>}
               <SortableHeader plain className="w-[24%] px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer</SortableHeader>
-              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>Salesman</SortableHeader>
+              <SortableHeader plain className="w-[144px] min-w-[144px] max-w-[144px] px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>KAM / Salesman</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('segment')}>Segment</SortableHeader>
-              <th className="px-1.5 py-3 sm:px-3 text-left font-medium">Status</th>
+              <th data-fixed-column="status" className="px-1.5 py-3 sm:px-3 text-left font-medium">Status</th>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('created_at')}>Date created</SortableHeader>
             </tr></thead>
             <tbody>
-              {customers.length === 0 ? (
+              {tableLoading ? (
+                <TableLoadingRow columns={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} label="customers" />
+              ) : customers.length === 0 ? (
                 <tr><td colSpan={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">No customers found.</td></tr>
-              ) : sortedCustomers.map((item) => (
+              ) : <GroupedTableRows rows={sortedCustomers}
+                columnCount={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6}
+                getGroup={(item) => ({ key: item.salesman?.trim() || '', label: 'KAM: ' + (item.salesman?.trim() || 'Unassigned') })}>
+                {(item) => (
                 <tr key={item.id} className="border-b last:border-0">
-                  {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <td className="px-1.5 py-3 sm:px-3">
+                  {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <td data-action-column="standard" className="px-1.5 py-3 sm:px-3">
                     {authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? (
-                      <div className="flex flex-wrap gap-1">
-                        {authorization.can('Customers', 'edit') && <button data-action-tone="caution" onClick={() => startEdit(item)} className="rounded-md border px-1 py-1.5 sm:px-2">Edit</button>}
-                        {authorization.can('Customers', 'delete') && <button data-action-tone="danger" onClick={() => void deleteCustomer(item.id)} disabled={loading} className="rounded-md border border-destructive/30 px-1 py-1.5 sm:px-2 text-destructive">Delete</button>}
+                      <div className="flex flex-nowrap gap-1">
+                        {authorization.can('Customers', 'edit') && <TableActionButton action="edit" data-action-tone="caution" onClick={() => startEdit(item)} className="rounded-md border px-1 py-1.5 sm:px-2" />}
+                        {authorization.can('Customers', 'delete') && <TableActionButton action="delete" data-action-tone="danger" onClick={() => void deleteCustomer(item.id)} disabled={loading} className="rounded-md border border-destructive/30 px-1 py-1.5 sm:px-2 text-destructive" />}
                       </div>
                     ) : <span className="text-muted-foreground">No Action</span>}
                   </td>}
@@ -238,11 +267,12 @@ export default function CustomersPage() {
                   <td className="px-1.5 py-3 sm:px-3">{item.is_active ? 'Active' : 'Inactive'}</td>
                   <td className="px-1.5 py-3 sm:px-3">{item.created_at ? new Date(item.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                 </tr>
-              ))}
+              )}</GroupedTableRows>}
             </tbody>
         </Table>
         {error && !authorization.can('Customers', 'add') && <p className="m-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
       </section>
+      </TableGroupProvider>
     </main>
   )
 }

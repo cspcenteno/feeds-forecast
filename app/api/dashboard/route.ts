@@ -3,6 +3,7 @@ import { createClient } from '@/lib/server'
 import { supabaseAdmin } from '@/lib/admin'
 import { actualInDashboardScope, mergeRegionalActuals } from '@/lib/dashboard-comparisons'
 import { buildDashboardPerformance, dashboardLevel } from '@/lib/dashboard-performance'
+import { buildKamVolumeScope } from '@/lib/kam-volume-scope'
 
 type Detail = { region_id: number | null; subregion_id: number | null; customer_id: number | null; product_id: number | null; volume: number }
 type Dashboard = {
@@ -30,31 +31,59 @@ export async function GET(request: Request) {
     if (!profile?.is_active) return NextResponse.json({ error: 'Your account is inactive.' }, { status: 403 })
     const level = dashboardLevel(profile)
     const isSupervisor = profile.role !== 'Admin' && ['SV', 'SUPERVISOR'].includes(String(profile.position ?? '').trim().toUpperCase())
-    if (isSupervisor) dashboard.details = dashboard.details.filter((row) => profile.region_id != null && profile.subregion_id != null && row.region_id === profile.region_id && row.subregion_id === profile.subregion_id)
+    if (isSupervisor) dashboard.details = dashboard.details.filter((row) => profile.region_id != null && row.region_id === profile.region_id)
     const kamKeys = new Set(dashboard.details.map((row) => JSON.stringify([row.region_id, row.customer_id, row.product_id])))
+    let ownsImportedVolume: ReturnType<typeof buildKamVolumeScope> = () => false
+    if (dashboard.scope === 'kam' && profile.region_id !== null) {
+      const kams: { id: string; full_name: string | null; email: string | null }[] = []
+      const customers: { id: number; salesman: string | null }[] = []
+      let userCursor: string | null = null
+      while (true) {
+        const query = supabaseAdmin.from('users').select('id, full_name, email')
+          .eq('region_id', profile.region_id).eq('is_active', true).eq('position', 'KAM').order('id').limit(500)
+        if (userCursor !== null) query.gt('id', userCursor)
+        const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))
+        if (error) throw new Error('Unable to resolve KAM assignments: ' + error.message)
+        kams.push(...(data ?? []))
+        if (!data || data.length < 500) break
+        userCursor = data[data.length - 1].id
+      }
+      let customerCursor: number | null = null
+      while (true) {
+        const query = supabaseAdmin.from('customers').select('id, salesman')
+          .eq('region_id', profile.region_id).order('id').limit(500)
+        if (customerCursor !== null) query.gt('id', customerCursor)
+        const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))
+        if (error) throw new Error('Unable to resolve customer assignments: ' + error.message)
+        customers.push(...(data ?? []))
+        if (!data || data.length < 500) break
+        customerCursor = data[data.length - 1].id
+      }
+      ownsImportedVolume = buildKamVolumeScope(user.id, profile.region_id, kams, customers, kamKeys)
+    }
     const totals = new Map<number | null, number>()
     const actualRows: Parameters<typeof buildDashboardPerformance>[3] = []
     const first = month + '-01'
     const [year, monthNumber] = month.split('-').map(Number)
     const next = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10)
-    if (dashboard.scope !== 'kam' || kamKeys.size > 0) {
+    if (dashboard.scope !== 'kam' || profile.region_id !== null) {
       let lastId: number | null = null
       while (true) {
-        const query = supabaseAdmin.from('actuals').select('id, region_id, subregion_id, customer_id, product_id, volume')
+        const query = supabaseAdmin.from('actuals').select('id, region_id, subregion_id, customer_id, product_id, kam, volume')
           .gte('actual_date', first).lt('actual_date', next).order('id').limit(500)
-        if (dashboard.scope !== 'global' && dashboard.scope !== 'kam') {
+        if (dashboard.scope !== 'global') {
           if (profile.region_id == null) break
           query.eq('region_id', profile.region_id)
         }
         if (isSupervisor) {
-          if (profile.region_id == null || profile.subregion_id == null) break
-          query.eq('region_id', profile.region_id).eq('subregion_id', profile.subregion_id)
+          if (profile.region_id == null) break
+          query.eq('region_id', profile.region_id)
         }
         if (lastId !== null) query.gt('id', lastId)
         const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))
         if (error) throw new Error(`Unable to load monthly Actuals: ${error.message}`)
         for (const row of data ?? []) {
-          if (!actualInDashboardScope(row, { scope: dashboard.scope, regionId: profile.region_id, subregionId: profile.subregion_id, isSupervisor }, kamKeys)) continue
+          if (!(dashboard.scope === 'kam' ? ownsImportedVolume(row) : actualInDashboardScope(row, { scope: dashboard.scope, regionId: profile.region_id, subregionId: profile.subregion_id, isSupervisor }, kamKeys))) continue
           actualRows.push(row)
           totals.set(row.region_id, (totals.get(row.region_id) ?? 0) + Number(row.volume ?? 0))
         }
@@ -62,7 +91,7 @@ export async function GET(request: Request) {
         lastId = data[data.length - 1].id
       }
     }
-    const regionIds = [...totals.keys()].filter((id): id is number => id !== null)
+    const regionIds = [...new Set([...totals.keys(), ...dashboard.details.map((row) => row.region_id), ...(dashboard.scope === 'kam' ? [profile.region_id] : [])])].filter((id): id is number => id !== null)
     const names = new Map<number, string>()
     if (regionIds.length) {
       const { data, error } = await supabaseAdmin.from('regions').select('id, name').in('id', regionIds)
@@ -77,22 +106,22 @@ export async function GET(request: Request) {
     } else {
       const budgets: Parameters<typeof buildDashboardPerformance>[2] = []
       let cursor: number | null = null
-      while (dashboard.scope !== 'kam' || kamKeys.size > 0) {
-        const query = supabaseAdmin.from('budgets').select('id, region_id, subregion_id, customer_id, product_id, month, volume')
+      while (dashboard.scope !== 'kam' || profile.region_id !== null) {
+        const query = supabaseAdmin.from('budgets').select('id, region_id, subregion_id, customer_id, product_id, kam, month, volume')
           .eq('year', year).or('month.eq.' + monthNumber + ',month.is.null').order('id').limit(500)
-        if (dashboard.scope !== 'global' && dashboard.scope !== 'kam') {
+        if (dashboard.scope !== 'global') {
           if (profile.region_id == null) break
           query.eq('region_id', profile.region_id)
         }
         if (isSupervisor) {
-          if (profile.region_id == null || profile.subregion_id == null) break
-          query.eq('region_id', profile.region_id).eq('subregion_id', profile.subregion_id)
+          if (profile.region_id == null) break
+          query.eq('region_id', profile.region_id)
         }
         if (cursor !== null) query.gt('id', cursor)
         const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))
         if (error) throw new Error(`Unable to load performance budgets: ${error.message}`)
         for (const row of data ?? []) {
-          if (actualInDashboardScope(row, { scope: dashboard.scope, regionId: profile.region_id, subregionId: profile.subregion_id, isSupervisor }, kamKeys)) budgets.push(row)
+          if (dashboard.scope === 'kam' ? ownsImportedVolume(row) : actualInDashboardScope(row, { scope: dashboard.scope, regionId: profile.region_id, subregionId: profile.subregion_id, isSupervisor }, kamKeys)) budgets.push(row)
         }
         if (!data || data.length < 500) break
         cursor = data[data.length - 1].id
@@ -118,7 +147,9 @@ export async function GET(request: Request) {
       // Keep the legacy regional field scoped consistently as well.
       regions = buildDashboardPerformance('region', dashboard.details, budgets, actualRows, labelMaps)
     }
-    return NextResponse.json({ ...dashboard, regions, actualRecordCount: actualRows.length, performance: { level, rows: performanceRows } }, { headers: { 'Cache-Control': 'no-store' } })
+    const areaLevel = profile.role !== 'Admin' && String(profile.position ?? '').trim().toUpperCase() === 'KAM' ? 'subregion' : 'region'
+    const details = dashboard.details.map((row) => ({ ...row, region: row.region_id === null ? null : names.get(row.region_id) ?? null }))
+    return NextResponse.json({ ...dashboard, details, areaLevel, regions, actualRecordCount: actualRows.length, performance: { level, rows: performanceRows } }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load dashboard data.' }, { status: 500 })
   }

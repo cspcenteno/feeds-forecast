@@ -9,8 +9,8 @@ test('performance granularity follows the sales position', () => {
     assert.equal(dashboardLevel({ role, position: 'Supervisor' }), 'subregion')
     assert.equal(dashboardLevel({ role, position: ' SV ' }), 'subregion')
   }
-  assert.equal(dashboardLevel({ role: 'User', position: 'KAM' }), 'customer-product')
-  assert.equal(dashboardLevel({ role: 'User', position: null }), 'customer-product')
+  assert.equal(dashboardLevel({ role: 'User', position: 'KAM' }), 'customer')
+  assert.equal(dashboardLevel({ role: 'User', position: null }), 'customer')
   assert.equal(dashboardLevel({ role: 'Admin', position: null }), 'company')
 })
 
@@ -30,13 +30,17 @@ test('subregional performance includes areas with Actuals but no forecasts', () 
   ])
 })
 
-test('customer/product performance separates customers and products', () => {
-  const result = buildDashboardPerformance('customer-product', [
+test('customer performance combines products and keeps customers separate', () => {
+  const result = buildDashboardPerformance('customer', [
     { ...base, volume: 10 }, { ...base, volume: 5 }, { ...base, customer_id: 5, volume: 20 }, { ...base, product_id: 7, volume: 30 },
-  ], [], [], labels)
-  assert.equal(result.length, 3)
-  assert.equal(result.find((row) => row.region === 'Customer A / P001 - Product A').forecast, 15)
-  assert.equal(result.find((row) => row.region === 'Customer B / P001 - Product A').forecast, 20)
+  ], [
+    { ...base, id: 1, month: 11, volume: 40 },
+    { ...base, product_id: 7, id: 2, month: 11, volume: 60 },
+  ], [{ ...base, volume: 20 }, { ...base, product_id: 7, volume: 30 }], labels)
+  assert.equal(result.length, 2)
+  const customer = result.find((row) => row.region === 'Customer A')
+  assert.deepEqual({ budget: customer.budget, forecast: customer.forecast, actual: customer.actual }, { budget: 100, forecast: 45, actual: 50 })
+  assert.equal(result.find((row) => row.region === 'Customer B').forecast, 20)
 })
 
 test('monthly budgets override annual fallback within each exact scope', () => {

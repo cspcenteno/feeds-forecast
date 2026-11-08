@@ -1,5 +1,10 @@
 'use client'
 
+import { ActiveField } from '@/components/ui/active-field'
+
+import { useActionDialogs } from '@/components/action-dialogs'
+import { TableActionButton } from '@/components/ui/table-action-button'
+import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { useEffect, useState } from 'react'
 import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
 import { createClient } from '@/lib/client'
@@ -22,6 +27,8 @@ type Region = {
 }
 
 export default function RegionsPage() {
+  const { confirmAction } = useActionDialogs()
+
   const authorization = useAuthorization()
   const [regions, setRegions] = useState<Region[]>([])
 
@@ -33,21 +40,28 @@ export default function RegionsPage() {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [tableLoading, setTableLoading] = useState(true)
 
   async function getRegions() {
-    const supabase = createClient()
+    setTableLoading(true)
+    try {
+      const supabase = createClient()
 
-    const { data, error } = await supabase
-      .from('regions')
-      .select('id, name, code, is_active')
-      .order('id')
+      const { data, error } = await supabase
+        .from('regions')
+        .select('id, name, code, is_active')
+        .order('id')
 
-    if (error) {
-      setError(error.message)
-      return
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      setRegions(data ?? [])
+
+    } finally {
+      setTableLoading(false)
     }
-
-    setRegions(data ?? [])
   }
 
   async function saveRegion() {
@@ -127,10 +141,10 @@ export default function RegionsPage() {
   }
 
   async function deleteRegion(id: number) {
+    let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
+    try {
     if (!authorization.can('Regions', 'delete')) return
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this region?'
-    )
+    const confirmed = (actionConfirmation = await confirmAction({ message: 'Are you sure you want to delete this region?', details: [{ label: 'Region', value: regions.find((item) => item.id === id)?.name || '#' + id }] }))
 
     if (!confirmed) {
       return
@@ -160,6 +174,8 @@ export default function RegionsPage() {
     await getRegions()
 
     setLoading(false)
+
+    } finally { actionConfirmation?.finish() }
   }
 
   function clearForm() {
@@ -197,7 +213,7 @@ export default function RegionsPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="app-field-row">
           {/* Region Name */}
           <div className="space-y-2">
             <label
@@ -217,7 +233,7 @@ export default function RegionsPage() {
           </div>
 
           {/* Code */}
-          <div className="space-y-2">
+          <div data-field-size="compact" className="space-y-2">
             <label
               htmlFor="code"
               className="text-sm font-medium"
@@ -235,21 +251,13 @@ export default function RegionsPage() {
           </div>
 
           {/* Active */}
-          <div className="flex items-end">
-            <label className="flex h-10 cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+          <div data-field-size="toggle" className="flex items-end">
+            <ActiveField
                 checked={isActive}
                 onChange={(e) =>
                   setIsActive(e.target.checked)
                 }
-                className="size-4"
               />
-
-              <span className="font-medium">
-                Active
-              </span>
-            </label>
           </div>
         </div>
 
@@ -298,11 +306,11 @@ export default function RegionsPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <Table saved>
+          <Table saved aria-busy={tableLoading}>
             <TableHeader>
               <TableRow>
-                {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableHead className="w-[180px] text-left">Action</TableHead>}
-                <TableHead className="w-[120px]">Status</TableHead>
+                {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableHead data-action-column="standard" className="w-[180px] text-left">Action</TableHead>}
+                <TableHead data-fixed-column="status" className="w-[120px]">Status</TableHead>
                 <SortableHeader className="pl-6 w-[150px]" {...sortHeader('code')}>Code</SortableHeader>
 
                 <SortableHeader {...sortHeader('name')}>Region Name</SortableHeader>
@@ -311,21 +319,23 @@ export default function RegionsPage() {
             </TableHeader>
 
             <TableBody>
-              {regions.length > 0 ? (
+              {tableLoading ? (
+                <TableLoadingRow columns={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 4 : 3} label="regions" />
+              ) : regions.length > 0 ? (
                 sortedRegions.map((region) => (
                   <TableRow key={region.id}>
-                    {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableCell>
+                    {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableCell data-action-column="standard">
                       {authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? <div className="flex justify-start gap-2">
-                        {authorization.can('Regions', 'edit') && <button data-action-tone="caution"
+                        {authorization.can('Regions', 'edit') && <TableActionButton action="edit" data-action-tone="caution"
                           className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
                           onClick={() => editRegion(region)}
                           disabled={!authorization.can('Regions', 'edit')}
-                        >Edit</button>}
-                        {authorization.can('Regions', 'delete') && <button data-action-tone="danger"
+                         />}
+                        {authorization.can('Regions', 'delete') && <TableActionButton action="delete" data-action-tone="danger"
                           className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                           onClick={() => deleteRegion(region.id)}
                           disabled={!authorization.can('Regions', 'delete')}
-                        >Delete</button>}
+                         />}
                       </div> : <span className="text-sm text-muted-foreground">No Action</span>}
                     </TableCell>}
                     <TableCell>

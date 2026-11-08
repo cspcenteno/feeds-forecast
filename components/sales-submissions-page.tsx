@@ -1,9 +1,12 @@
 
 'use client'
 
+import { SelectionField } from '@/components/ui/selection-field'
 import { Table } from '@/components/ui/table'
+import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
+import { LoadingSpinner, TableLoadingRow } from '@/components/ui/loading-spinner'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   RefreshCw,
@@ -13,6 +16,8 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
+import { loadSalesReferenceBudgets } from '@/lib/sales-reference-records'
+import { monthlyBudgetReference } from '@/lib/monthly-budget-reference'
 import { loadActualRecords, type ActualRecord } from '@/lib/actual-records'
 import { useAuthorization } from '@/lib/authorization'
 
@@ -146,6 +151,12 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   const [userRole, setUserRole] = useState('')
   const [reviewPosition, setReviewPosition] = useState('')
   const [reviewStage, setReviewStage] = useState<ReviewStage | null>(null)
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('stage')
+    if (requested === 'Pending' || requested === 'Endorsed') {
+      void Promise.resolve().then(() => setReviewStage(requested))
+    }
+  }, [])
 
   // -----------------------------------------
   // FILTERS
@@ -179,6 +190,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   // -----------------------------------------
 
   const [loading, setLoading] = useState(true)
+  const [referencesLoading, setReferencesLoading] = useState(true)
+  const [referencesError, setReferencesError] = useState(false)
+  const referenceRequest = useRef(0)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -201,10 +215,24 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       ? ['approve', 'return']
       : ['endorse', 'return', 'undo']
   const [reviewAssignment, setReviewAssignment] = useState<{ region: number | null; subregion: number | null }>({ region: null, subregion: null })
-  const regionRestricted = customerOnly || (userRole === 'Manager' && reviewPosition !== 'ASM') ||
+  const regionRestricted = customerOnly || userRole === 'Manager' ||
     (userRole === 'Superuser' && reviewPosition === 'Supervisor')
   const canShowActions = availableReviewActions.length > 0
   const requiresReviewReason = actionType === 'return' || actionType === 'reject'
+  const selectedCustomerProducts = useMemo(() => {
+    const groups = new Map<string, { customerId: number | null; productId: number | null; volume: number }>()
+    for (const item of selectedItems) {
+      const key = JSON.stringify([item.customer_id, item.product_id])
+      const group = groups.get(key)
+      if (group) group.volume += Number(item.volume) || 0
+      else groups.set(key, {
+        customerId: item.customer_id,
+        productId: item.product_id,
+        volume: Number(item.volume) || 0,
+      })
+    }
+    return [...groups.entries()]
+  }, [selectedItems])
 
   // -----------------------------------------
   // ISO WEEK HELPERS
@@ -241,7 +269,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     sunday.setUTCDate(sunday.getUTCDate() + 6)
 
     const format = (date: Date) =>
-      date.toLocaleDateString('en-PH', {
+      date.toLocaleDateString('en-US', {
         month: 'short',
         day: '2-digit',
         timeZone: 'UTC',
@@ -266,14 +294,13 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
   function getAreaName(
     regionId: number | null,
-    subregionId: number | null
+    subregionId: number | null,
+    level: 'region' | 'subregion' = 'subregion'
   ) {
     const region = regions.find((item) => item.id === regionId)
-    const regionLabel = region?.code?.trim() || region?.name
-
-    const subregionName = getSubregionName(subregionId)
-
-    return [regionLabel, subregionName].filter(Boolean).join(' - ') || '-'
+    return (level === 'subregion'
+      ? getSubregionName(subregionId)
+      : region?.name) || '—'
   }
 
   function getProductName(id: number | null) {
@@ -313,36 +340,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     if (reviewReferences) return Number(reviewReferences.get(item.id)?.budget_volume ?? 0)
     if (weeklyBudgetVolumes) return weeklyBudgetVolumes.get(item.id) ?? 0
 
-    if (item.product_id == null || item.region_id == null) {
-      return 0
-    }
-
-    const targetMonth = getMonthForWeek(item.year, item.week)
-
-    const matchingBudgets = budgets.filter((budget) => {
-      return (
-        budget.year === item.year &&
-        budget.region_id === item.region_id &&
-        (budget.subregion_id === item.subregion_id || budget.subregion_id === null) &&
-        (budget.customer_id === item.customer_id || budget.customer_id === null) &&
-        budget.product_id === item.product_id
-      )
-    })
-
-    const scopes = [
-      matchingBudgets.filter((budget) => budget.customer_id === item.customer_id && budget.subregion_id === item.subregion_id),
-      matchingBudgets.filter((budget) => budget.customer_id === item.customer_id && budget.subregion_id === null),
-      matchingBudgets.filter((budget) => budget.customer_id === null && budget.subregion_id === item.subregion_id),
-      matchingBudgets.filter((budget) => budget.customer_id === null && budget.subregion_id === null),
-    ]
-    const scoped = scopes.find((rows) =>
-      rows.some((budget) => budget.month === targetMonth || budget.month === null)
-    )
-    const monthlyRecord = scoped?.find((budget) => budget.month === targetMonth)
-    if (monthlyRecord) return Number(monthlyRecord.volume) || 0
-
-    const yearlyRecord = scoped?.find((budget) => budget.month === null)
-    return (Number(yearlyRecord?.volume) || 0) / 12
+    return monthlyBudgetReference(budgets, item.year, getMonthForWeek(item.year, item.week),
+      item.region_id, item.subregion_id, item.customer_id, item.product_id)
   }
 
   function getSavedActualMonthly(
@@ -506,6 +505,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   }
 
   async function fetchSalesData() {
+    const request = ++referenceRequest.current
+    setReferencesLoading(true)
+    setReferencesError(false)
     setError('')
     setMessage('')
     setReviewReferences(null)
@@ -546,7 +548,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     const isAdmin = role === 'Admin'
     const isSuperuser = role === 'Superuser'
     const supervisor = isSuperuser && profile.position === 'Supervisor'
-    const restrictRegion = (role === 'Manager' && profile.position !== 'ASM') || supervisor || (weekly && role === 'User')
+    const restrictSubregion = supervisor || (role === 'Manager' && profile.position === 'RSM')
+    const restrictRegion = role === 'Manager' || supervisor || (weekly && role === 'User')
 
     setUserRole(role)
     setReviewPosition(profile.position ?? '')
@@ -578,8 +581,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       return
     }
 
-    if ((restrictRegion && profileRegionId === null) || (supervisor && profileSubregionId === null)) {
-      setError(supervisor ? 'Your account needs an assigned region and subregion.' : 'Your account does not have an assigned region.')
+    if ((restrictRegion && profileRegionId === null) || (restrictSubregion && profileSubregionId === null)) {
+      setError(restrictSubregion ? 'Your account needs an assigned region and subregion.' : 'Your account does not have an assigned region.')
       setSales([])
       setLookupForecasts([])
       setActualRecords([])
@@ -657,10 +660,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     }
 
     if (restrictRegion) {
-      salesQuery =
-        supervisor && profileSubregionId !== null
-          ? salesQuery.eq('subregion_id', profileSubregionId)
-          : salesQuery.eq('region_id', profileRegionId)
+      salesQuery = salesQuery.eq('region_id', profileRegionId)
+      if (restrictSubregion) salesQuery = salesQuery.eq('subregion_id', profileSubregionId)
     }
 
     if (weekly && role === 'User') salesQuery = salesQuery.eq('user_id', user.id)
@@ -717,6 +718,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     )
 
     setSales(salesData)
+    window.dispatchEvent(new Event('forecast-workflow-changed'))
     setRegions(regionsResult.data ?? [])
     setSubregions((subregionsResult.data ?? []) as Subregion[])
     setProducts(productsResult.data ?? [])
@@ -726,6 +728,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       restrictRegion ? String(profileRegionId) : 'all'
     )
 
+    // Monthly references load independently from the operational rows.
+    async function loadReferences() {
+      try {
     // LOOKUP DATA
 
     const lookupYears = Array.from(
@@ -744,7 +749,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
           p_ids: salesData.map((item) => item.id),
         })
 
+        if (request !== referenceRequest.current) return
         if (error) {
+          setReferencesError(true)
           setError('Unable to load review reference volumes. ' + error.message)
         } else {
           for (const reference of (data ?? []) as ReviewReference[]) {
@@ -755,6 +762,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       setReviewReferences(references)
     } else if (lookupYears.length > 0) {
       const useScopedWeeklyBudgets = weekly && role === 'Manager'
+      const referenceRegionIds = [...new Set(salesData.flatMap((item) => item.region_id == null ? [] : [item.region_id]))]
+      const referenceCustomerIds = [...new Set(salesData.flatMap((item) => item.customer_id == null ? [] : [item.customer_id]))]
       let forecastLookupQuery = supabase
         .from('sales_forecasts')
         .select(`
@@ -774,6 +783,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         `)
         .in('year', lookupYears)
         .eq('status', 'Approved')
+        .in('region_id', referenceRegionIds)
+        .in('customer_id', referenceCustomerIds)
 
       if (restrictRegion) {
         forecastLookupQuery =
@@ -788,50 +799,49 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
               )
       }
 
+      async function loadApprovedForecastReferences() {
+        const records: SalesForecast[] = []
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await forecastLookupQuery.order('id').range(from, from + 999)
+            .abortSignal(AbortSignal.timeout(20000))
+          if (error) return { data: null, error }
+          const page = (data ?? []) as SalesForecast[]
+          records.push(...page)
+          if (page.length < 1000) return { data: records, error: null }
+        }
+      }
+
       const [
         forecastLookupResult,
         actualResult,
         budgetResult,
       ] = await Promise.all([
-        weekly ? Promise.resolve({ data: salesData, error: null }) : forecastLookupQuery,
+        loadApprovedForecastReferences(),
 
         weekly
           ? supabase.rpc('get_weekly_sales_monthly_actuals', { p_ids: salesData.map((item) => item.id) })
               .abortSignal(AbortSignal.timeout(20000))
-          : loadActualRecords(supabase, lookupYears),
+          : loadActualRecords(supabase, lookupYears, {
+              regionIds: referenceRegionIds,
+              customerIds: referenceCustomerIds,
+            }),
 
         useScopedWeeklyBudgets
           ? supabase.rpc('get_weekly_sales_monthly_budgets', { p_ids: salesData.map((item) => item.id) })
               .abortSignal(AbortSignal.timeout(20000))
-          : supabase
-          .from('budgets')
-          .select(`
-            id,
-            year,
-            month,
-            region_id,
-            subregion_id,
-            customer_id,
-            product_id,
-            volume
-          `)
-          .in(
-            'year',
-            Array.from(
-              new Set(salesData.map((item) => item.year))
-            )
-          )
-          .abortSignal(AbortSignal.timeout(20000)),
+          : loadSalesReferenceBudgets(supabase, salesData),
       ])
 
+      if (request !== referenceRequest.current) return
       const lookupError = [
-        forecastLookupResult,
-        actualResult,
-        budgetResult,
+        { source: 'approved forecast', error: forecastLookupResult.error },
+        { source: 'actual sales', error: actualResult.error },
+        { source: 'budget', error: budgetResult.error },
       ].find((result) => result.error)
 
       if (lookupError?.error) {
-        setError('Unable to load some reference volumes. ' + lookupError.error.message)
+        setReferencesError(true)
+        setError('Unable to load ' + lookupError.source + ' reference volumes. ' + lookupError.error.message)
       }
 
       setLookupForecasts(
@@ -853,6 +863,17 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       setActualRecords([])
       setBudgets([])
     }
+
+      } catch (error) {
+        if (request === referenceRequest.current) {
+          setReferencesError(true)
+          setError(error instanceof Error ? error.message : 'Unable to load monthly references.')
+        }
+      } finally {
+        if (request === referenceRequest.current) setReferencesLoading(false)
+      }
+    }
+    void loadReferences()
 
     // SUBMITTED USERS
 
@@ -1240,13 +1261,14 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     )
   }
 
+  function formatReference(value: number) {
+    if (referencesLoading) return <LoadingSpinner label="monthly sales reference" />
+    return referencesError ? '—' : formatNumber(value)
+  }
+
   function renderApprovalSummary(key: string, reviewerId: string | null, items: SalesForecast[]) {
     const isRsmSummary = groupByEndorser
-    const areas = Array.from(new Set(items.map((item) =>
-      isRsmSummary
-        ? regions.find((region) => region.id === item.region_id)?.name ?? '-'
-        : getSubregionName(item.subregion_id) ?? '-'
-    )))
+    const areas = Array.from(new Set(items.map((item) => getAreaName(item.region_id, item.subregion_id, isRsmSummary ? 'region' : 'subregion'))))
     const salesmanCount = new Set(items.map((item) => item.submitted_by).filter(Boolean)).size
     const customerCount = new Set(items.map((item) => item.customer_id).filter((id) => id !== null)).size
     const productCount = new Set(items.map((item) => item.product_id).filter((id) => id !== null)).size
@@ -1281,7 +1303,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         {renderReviewHeading(key, label)}
         <tr className="border-b bg-muted/30 font-semibold">
           {canShowActions && (
-            <td className="px-2 py-2"><ActionButtons items={items} label={label} /></td>
+            <td data-action-column="review" className="px-2 py-2"><ActionButtons items={items} label={label} /></td>
           )}
           <td className="px-2 py-2 text-center">
             <div className="flex flex-wrap justify-center gap-1">
@@ -1290,7 +1312,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
               ))}
             </div>
           </td>
-          <td className="px-2 py-2">{areas.join(', ') || '-'}</td>
+          <td className="px-2 py-2">{areas.join(', ') || '—'}</td>
           {groupByEndorser && (
             <td className="px-2 py-2">
               {formatNumber(salesmanCount)} {salesmanCount === 1 ? 'Salesman' : 'Salesmen'}
@@ -1299,7 +1321,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
           <td className="px-2 py-2">{formatNumber(customerCount)} {customerCount === 1 ? 'Customer' : 'Customers'}</td>
           <td className="px-2 py-2">{formatNumber(productCount)} {productCount === 1 ? 'Product' : 'Products'}</td>
           {totals.map((total, index) => (
-            <td key={index} className="px-2 py-2 text-right tabular-nums">{formatNumber(total)}</td>
+            <td key={index} className="px-2 py-2 text-right tabular-nums">{index >= 2 ? formatReference(total) : formatNumber(total)}</td>
           ))}
         </tr>
       </Fragment>
@@ -1316,7 +1338,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     allowUndo?: boolean
   }) {
     return (
-      <div className="flex flex-wrap items-center justify-center gap-1">
+      <div className="flex flex-nowrap items-center justify-center gap-1">
         {availableReviewActions.map((action) => {
           if (!allowUndo && action === 'undo') return null
           if (!items.some((item) => canReviewItem(item, action))) return null
@@ -1326,12 +1348,14 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
               key={action}
               type="button"
               data-action-tone={tone}
+              data-slot="table-action-button"
               onClick={() => openBulkAction(items, action, label)}
               className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-muted hover:text-foreground"
               title={actionName + ' · ' + label}
               aria-label={actionName + ' · ' + label}
             >
               <Icon className="size-4" aria-hidden="true" />
+              <span data-action-label>{action === 'return' ? 'Return' : actionName}</span>
             </button>
           )
         })}
@@ -1378,6 +1402,15 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     {pageTitle}
                   </h2>
 
+
+                </div>
+
+                <p className="text-sm text-muted-foreground">
+                  {customerOnly ? 'Your approved forecasts by customer and product for each week.' : weekly ? 'Approved sales forecasts grouped by week, RSM, and customer.' : groupByEndorser ? 'Review endorsed forecasts grouped by week, RSM, and customer.' : 'Review sales forecasts grouped by week, KAM, and customer.'}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
                   {!weekly && (userRole === 'Admin' || userRole === 'Superuser') && (
                     <button
                       type="button"
@@ -1386,18 +1419,11 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                         setReviewStage(stage === 'Endorsed' ? 'Pending' : 'Endorsed')
                         setExpandedGroups(new Set())
                       }}
-                      className="inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-medium transition hover:bg-muted"
+                      className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-muted"
                     >
                       Switch to {stage === 'Endorsed' ? 'RSM' : 'ASM'}
                     </button>
                   )}
-                </div>
-
-                <p className="text-sm text-muted-foreground">
-                  {customerOnly ? 'Your approved forecasts by customer and product for each week.' : weekly ? 'Approved sales forecasts grouped by week, RSM, and customer.' : groupByEndorser ? 'Review endorsed forecasts grouped by week, RSM, and customer.' : 'Review sales forecasts grouped by week, KAM, and customer.'}
-                </p>
-              </div>
-
               <button data-action-tone="neutral"
                 type="button"
                 onClick={loadData}
@@ -1411,21 +1437,19 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                 />
                 Refresh
               </button>
+              </div>
             </div>
 
             {/* FILTERS AND BULK ACTIONS */}
 
-            <div className={weekly
-              ? 'flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between'
-              : 'flex items-end gap-3 overflow-x-auto p-1'}
-            >
-              <div className={weekly ? 'flex flex-wrap items-end gap-3' : 'flex shrink-0 items-end gap-3'}>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="min-w-0 max-w-full">
                 {/* MONTH AND REGION */}
 
-                <div className={weekly ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[420px]' : 'flex items-end gap-3'}>
+                <div className="app-field-row">
   
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">
+                  <div data-field-size="compact" className="space-y-1.5">
+                    <label className="block text-xs font-medium text-muted-foreground">
                       Month
                     </label>
 
@@ -1435,23 +1459,20 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                       onChange={(e) =>
                         setSelectedMonth(e.target.value)
                       }
-                      className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">
+                    <label className="block text-xs font-medium text-muted-foreground">
                       Region
                     </label>
 
-                    <select
-                      value={selectedRegion}
-                      onChange={(e) =>
-                        setSelectedRegion(e.target.value)
-                      }
-                      disabled={regionRestricted}
-                      className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted"
-                    >
+                    <SelectionField value={selectedRegion}
+                  onValueChange={(selectionValue) => setSelectedRegion(selectionValue)}
+                  disabled={regionRestricted}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted"
+                  aria-label="Region">
                       {!regionRestricted && (
                         <option value="all">
                           All Regions
@@ -1466,14 +1487,14 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                           {region.name}
                         </option>
                       ))}
-                    </select>
+                    </SelectionField>
                   </div>
                 </div>
               </div>
 
               {/* BULK ACTIONS */}
 
-              <div className={weekly ? 'flex flex-wrap items-center gap-2' : 'ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap'}>
+              <div className="flex flex-wrap items-center gap-2">
 
                 <span className="mr-1 text-sm text-muted-foreground">
                   {submissionCount} {submissionCount === 1 ? 'submission' : 'submissions'}
@@ -1496,7 +1517,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   )
                 })}
 
-                <button data-action-tone="neutral"
+                <button data-slot="expand-collapse-button" data-action-tone="neutral"
                   type="button"
                   onClick={() =>
                     setExpandedGroups(allGroupsExpanded ? new Set() : visibleGroupKeys)
@@ -1513,35 +1534,31 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
         {/* APPROVAL TABLE */}
 
-        <Table
+        <Table data-volume-layout="review"
           className="min-w-[1600px] table-fixed"
           containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": pageTitle + ' table' }}
         >
 
             <colgroup>
               {canShowActions && (
-                <col className="w-[5%]" />
+                <col data-action-column="review" />
               )}
 
-              <col className="w-[6%]" />
-              {showWeekDateColumn && <col className="w-[9%]" />}
-              <col className="w-[10%]" />
-              {groupByEndorser && <col className="w-[10%]" />}
-              <col className="w-[12%]" />
-              <col className="w-[12%]" />
-              <col className="w-[6%]" />
-              <col className="w-[6%]" />
-              <col className="w-[6%]" />
-              <col className="w-[6%]" />
-              <col className="w-[6%]" />
-              <col className="w-[6%]" />
+              <col data-volume-column="status" className="w-[6%]" />
+              {showWeekDateColumn && <col data-volume-column="date" className="w-[9%]" />}
+              <col data-volume-column="area" className="w-[10%]" />
+              {groupByEndorser && <col data-volume-column="person" className="w-[10%]" />}
+              {/* Flexible description columns absorb spare width instead of Action. */}
+              <col data-volume-column="customer" />
+              <col data-volume-column="product" />
+              {Array.from({ length: 6 }, (_, index) => <col key={index} data-volume-column="number" className="w-[6%]" />)}
             </colgroup>
 
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b bg-muted/40">
 
                 {canShowActions && (
-                  <th className="whitespace-nowrap px-2 py-3 text-center font-medium">
+                  <th data-action-column="review" className="whitespace-nowrap px-2 py-3 text-center font-medium">
                     Action
                   </th>
                 )}
@@ -1558,7 +1575,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   Area
                 </th>
 
-                {groupByEndorser && <th className="px-2 py-3 text-left font-medium">KAM / Salesman</th>}
+                {groupByEndorser && <th data-fixed-column="person" className="px-2 py-3 text-left font-medium">KAM / Salesman</th>}
 
                 <th className="px-2 py-3 text-left font-medium">
                   Customer
@@ -1568,42 +1585,13 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   Product
                 </th>
 
-                <th className="px-2 py-3 text-right font-medium">
-                  Forecast<br />(Qty.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Volume<br />(50kg)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Budget<br />(Vol.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Actual<br />(Vol.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Actual (Last<br />Year Vol.)
-                </th>
-
-                <th className="px-2 py-3 text-right font-medium">
-                  Forecast<br />(Vol.)
-                </th>
+                <MonthlySalesHeaders />
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
-                <tr>
-                  <td
-                    colSpan={columnCount}
-                    className="px-4 py-10 text-center text-sm text-muted-foreground"
-                  >
-                    {weekly ? 'Loading weekly sales...' : 'Loading submissions...'}
-                  </td>
-                </tr>
+                <TableLoadingRow columns={columnCount} label={weekly ? 'weekly sales' : 'submissions'} />
               ) : weekGroups.length === 0 ? (
                 <tr>
                   <td
@@ -1657,15 +1645,6 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                       const isExpanded =
                         expandedGroups.has(customerGroup.key)
 
-                      const uniqueAreas = showKamSummary ? [] : Array.from(
-                        new Set(
-                          customerGroup.items.map((item) => groupByEndorser
-                            ? getSubregionName(item.subregion_id) ?? '-'
-                            : getAreaName(item.region_id, item.subregion_id)
-                          )
-                        )
-                      )
-
                       return (
                         <Fragment key={customerGroup.key}>
                           {reviewGroupRow}
@@ -1675,7 +1654,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                           <tr className="border-b bg-background hover:bg-muted/30">
 
                             {canShowActions && (
-                              <td className="px-2 py-2">
+                              <td data-action-column="review" className="px-2 py-2">
                                 {!groupByEndorser && !showKamSummary && <ActionButtons
                                   items={customerGroup.items}
                                   label="Customer"
@@ -1697,11 +1676,10 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                               </td>
                             )}
 
-                            <td
-                              className="px-2 py-3 align-top whitespace-normal break-words [overflow-wrap:anywhere]"
-                              title={showKamSummary ? undefined : uniqueAreas.join(', ')}
-                            >
-                              {uniqueAreas.join(', ')}
+                            <td className="px-2 py-3 align-top">
+                              {groupByEndorser && Array.from(new Set(customerGroup.items.map((record) =>
+                                getAreaName(record.region_id, record.subregion_id)
+                              ))).join(', ')}
                             </td>
 
                             {groupByEndorser && (
@@ -1759,7 +1737,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                             {/* CUSTOMER BUDGET TOTAL */}
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold">
-                              {formatNumber(
+                              {formatReference(
                                 getCustomerLookupTotal(
                                   customerGroup,
                                   getSavedBudgetVolume
@@ -1770,7 +1748,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                             {/* CUSTOMER ACTUAL VOLUME TOTAL */}
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold">
-                              {formatNumber(
+                              {formatReference(
                                 getCustomerLookupTotal(
                                   customerGroup,
                                   (item) =>
@@ -1782,7 +1760,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                             {/* CUSTOMER LAST YEAR ACTUAL TOTAL */}
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold">
-                              {formatNumber(
+                              {formatReference(
                                 getCustomerLookupTotal(
                                   customerGroup,
                                   (item) =>
@@ -1797,7 +1775,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                             {/* CUSTOMER FORECAST VOLUME TOTAL */}
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold">
-                              {formatNumber(
+                              {formatReference(
                                 getCustomerForecastMonthlyTotal(customerGroup.customer_id, customerGroup.items)
                               )}
                             </td>
@@ -1818,7 +1796,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                                   >
 
                                     {canShowActions && (
-                                      <td className="px-2 py-2">
+                                      <td data-action-column="review" className="px-2 py-2">
                                         {!groupByEndorser && <ActionButtons
                                           items={productGroup.items}
                                           label="Product"
@@ -1876,7 +1854,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                                     {/* BUDGET */}
 
                                     <td className="whitespace-nowrap px-2 py-2 text-right">
-                                      {formatNumber(
+                                      {formatReference(
                                         getSavedBudgetVolume(
                                           referenceItem
                                         )
@@ -1886,7 +1864,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                                     {/* ACTUAL VOLUME */}
 
                                     <td className="whitespace-nowrap px-2 py-2 text-right">
-                                      {formatNumber(
+                                      {formatReference(
                                         getSavedActualMonthly(
                                           referenceItem
                                         )
@@ -1896,7 +1874,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                                     {/* ACTUAL LAST YEAR */}
 
                                     <td className="whitespace-nowrap px-2 py-2 text-right">
-                                      {formatNumber(
+                                      {formatReference(
                                         getSavedActualMonthly(
                                           referenceItem,
                                           referenceItem.year - 1
@@ -1907,7 +1885,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                                     {/* FORECAST VOLUME */}
 
                                     <td className="whitespace-nowrap px-2 py-2 text-right">
-                                      {formatNumber(
+                                      {formatReference(
                                         getSavedForecastMonthly(
                                           referenceItem
                                         )
@@ -1931,11 +1909,11 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
       {!weekly && selectedItems.length > 0 && actionType && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl border bg-background shadow-lg">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-xl border bg-background shadow-lg">
 
             {/* MODAL HEADER */}
 
-            <div className="border-b px-6 py-4">
+            <div className="border-b px-4 py-4 wrap-anywhere sm:px-6">
               <h2 className="text-lg font-semibold">{reviewActions[actionType].label} Sales Forecasts</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {selectedItems.length} forecast record(s) for {actionLabel}.
@@ -1944,12 +1922,12 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
             {/* MODAL CONTENT */}
 
-            <div className="space-y-4 p-6">
+            <div className="space-y-4 p-4 sm:p-6">
 
               {/* SUMMARY */}
 
               <div className="rounded-lg border bg-muted/30 p-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 wrap-anywhere [&>div]:min-w-0">
 
                   <div>
                     <p className="text-xs text-muted-foreground">
@@ -1958,16 +1936,6 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
                     <p className="mt-1 text-sm font-medium">
                       {actionLabel}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Selected Submissions
-                    </p>
-
-                    <p className="mt-1 text-sm font-medium">
-                      {selectedItems.length}
                     </p>
                   </div>
 
@@ -1987,18 +1955,11 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
                   <div>
                     <p className="text-xs text-muted-foreground">
-                      Total Forecast
+                      Products
                     </p>
 
                     <p className="mt-1 text-sm font-medium">
-                      {formatNumber(
-                        selectedItems.reduce(
-                          (total, item) =>
-                            total +
-                            (Number(item.forecast) || 0),
-                          0
-                        )
-                      )}
+                      {new Set(selectedItems.map((item) => item.product_id)).size}
                     </p>
                   </div>
 
@@ -2021,25 +1982,19 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                 </div>
 
                 <div className="mt-4 border-t pt-3">
-                  <p className="text-xs text-muted-foreground">
-                    Customer / Product
-                  </p>
+                  <div className="flex justify-between gap-4 text-xs text-muted-foreground">
+                    <span>Customer / Product</span>
+                    <span className="shrink-0">Volume (50kg)</span>
+                  </div>
 
                   <div className="mt-1 max-h-28 space-y-1 overflow-y-auto text-sm font-medium">
-                    {Array.from(
-                      new Set(
-                        selectedItems.map(
-                          (item) =>
-                            `${getCustomerName(item.customer_id)} — ${getProductName(item.product_id)}`
-                        )
-                      )
-                    ).map((label) => (
-                      <p
-                        key={label}
-                        className="whitespace-normal break-words [overflow-wrap:anywhere]"
-                      >
-                        {label}
-                      </p>
+                    {selectedCustomerProducts.map(([key, group]) => (
+                      <div key={key} className="flex justify-between gap-4">
+                        <span className="min-w-0 whitespace-normal break-words text-xs [overflow-wrap:anywhere]">
+                          {getCustomerName(group.customerId)} — {getProductName(group.productId)}
+                        </span>
+                        <span className="shrink-0 text-right tabular-nums">{formatNumber(group.volume)}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -2079,7 +2034,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
               {/* MODAL BUTTONS */}
 
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
                 <button data-action-tone="neutral"
                   type="button"
                   onClick={closeModal}
