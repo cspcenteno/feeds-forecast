@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/admin'
 import { actualInDashboardScope, mergeRegionalActuals } from '@/lib/dashboard-comparisons'
 import { buildDashboardPerformance, dashboardLevel } from '@/lib/dashboard-performance'
 import { buildKamVolumeScope } from '@/lib/kam-volume-scope'
+import { asmForRegion, type AsmUser } from '@/lib/asm-reporting'
 
 type Detail = { region_id: number | null; subregion_id: number | null; customer_id: number | null; product_id: number | null; volume: number }
 type Dashboard = {
@@ -152,8 +153,21 @@ export async function GET(request: Request) {
       regions = buildDashboardPerformance('region', dashboard.details, budgets, actualRows, labelMaps)
     }
     const areaLevel = profile.role !== 'Admin' && String(profile.position ?? '').trim().toUpperCase() === 'KAM' ? 'subregion' : 'region'
-    const details = dashboard.details.map((row) => ({ ...row, region: row.region_id === null ? null : names.get(row.region_id) ?? null }))
-    return NextResponse.json({ ...dashboard, details, areaLevel, regions, actualRecordCount: actualRows.length, performance: { level, rows: performanceRows } }, { headers: { 'Cache-Control': 'no-store' } })
+    const showAsm = profile.role === 'Admin' || profile.position === 'NSM'
+    let asmUsers: AsmUser[] = []
+    if (showAsm) {
+      const { data, error } = await supabaseAdmin.from('users').select('id,full_name,region_id').eq('position','ASM').eq('is_active',true).order('id')
+      if (error) throw new Error('Unable to load ASM assignments.')
+      asmUsers = data ?? []
+    }
+    const details = dashboard.details.map((row) => ({ ...row, ...(showAsm ? asmForRegion(row.region_id,asmUsers) : {}), region: row.region_id === null ? null : names.get(row.region_id) ?? null }))
+    let assignedSubregion: string | null = null
+    if (dashboard.scope === 'kam' && profile.subregion_id !== null) {
+      const { data, error } = await supabaseAdmin.from('subregions').select('name').eq('id',profile.subregion_id).maybeSingle()
+      if (error) throw new Error('Unable to load assigned subregion.')
+      assignedSubregion = data?.name ?? null
+    }
+    return NextResponse.json({ ...dashboard, showAsm, details, assignedSubregion, areaLevel, regions, actualRecordCount: actualRows.length, performance: { level, rows: performanceRows } }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load dashboard data.' }, { status: 500 })
   }

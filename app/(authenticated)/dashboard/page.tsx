@@ -16,6 +16,7 @@ import {
 import { Table } from '@/components/ui/table'
 import { SortableHeader } from '@/components/ui/sortable-header'
 import { BudgetValueIndicator } from '@/components/ui/budget-value-indicator'
+import { weeklyBudget } from '@/lib/weekly-budget'
 import { usePopupError } from '@/components/action-dialogs'
 import { budgetComparison } from '@/lib/budget-comparison'
 import { compareRegionNames } from '@/lib/region-order'
@@ -26,6 +27,8 @@ import type { DashboardLevel } from '@/lib/dashboard-performance'
 type RegionVolume = RegionalVolumes & { key?: string }
 
 type SalesDetail = {
+  asm_id?: string | null
+  asm_name?: string
   region_id: number | null
   subregion_id: number | null
   customer_id: number | null
@@ -47,6 +50,8 @@ type SalesDetail = {
 }
 
 type DashboardData = {
+  assignedSubregion?: string | null
+  showAsm?: boolean
   areaLevel: 'region' | 'subregion'
   scope: 'global' | 'asm' | 'rsm' | 'kam'
   regions: RegionVolume[]
@@ -114,6 +119,7 @@ function volumeTotals(rows: SalesDetail[]) {
 
 function buildSalesGroups(data: DashboardData) {
   const levels: ((row: SalesDetail) => [string | number | null, string])[] = []
+  if (data.showAsm) levels.push((row) => [row.asm_id ?? 'unassigned-asm', 'ASM: ' + (row.asm_name || 'Unassigned')])
   if (data.scope === 'global' || data.scope === 'asm') {
     levels.push((row) => [row.endorsed_by, 'RSM: ' + (row.endorser || (row.endorsed_by ? 'Name unavailable' : 'No endorsement recorded'))])
   }
@@ -137,12 +143,14 @@ function buildSalesGroups(data: DashboardData) {
     return [...byId.entries()].map(([id, entry]) => {
       const key = JSON.stringify([parent, id])
       const hasRsm = data.scope === 'global' || data.scope === 'asm'
-      const isRsm = hasRsm && depth === 0
-      const isKam = data.scope !== 'kam' && depth === (hasRsm ? 1 : 0)
+      const asmDepth = data.showAsm ? 1 : 0
+      const isAsm = !!data.showAsm && depth === 0
+      const isRsm = hasRsm && depth === asmDepth
+      const isScopedTopRow = depth === 0 && (data.scope === 'rsm' || data.scope === 'kam')
       return {
         key,
         label: entry.label,
-        area: isRsm || isKam ? [...new Set(entry.rows.map((row) => (isRsm ? row.region : row.subregion) || '—'))].join(', ') : '',
+        area: isAsm || isRsm || isScopedTopRow ? [...new Set(entry.rows.map((row) => (isAsm ? row.region : row.subregion) || '—'))].join(', ') : '',
         metrics: volumeTotals(entry.rows),
         children: depth + 1 < levels.length ? group(entry.rows, depth + 1, key) : [],
       }
@@ -307,7 +315,15 @@ export default function DashboardPage() {
             ) : <div className="wrap-anywhere text-xs" style={{ paddingInlineStart: depth * 10 + 20 }}>{group.label}</div>}
           </td>
           <td className="px-1.5 py-2 wrap-anywhere sm:px-2">{group.area}</td>
-          {group.metrics.map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{index === 1 ? <BudgetValueIndicator value={value} budget={group.metrics[2]}>{number.format(value)}</BudgetValueIndicator> : number.format(value)}</td>)}
+          {group.metrics.map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{
+            index === 1 || index >= 3
+              ? <BudgetValueIndicator value={value}
+                  budgetLabel={index === 1 ? 'weekly budget' : 'monthly budget'}
+                  budget={index === 1 ? weeklyBudget(group.metrics[2], Number(month.slice(0, 4)), Number(month.slice(5, 7))) : group.metrics[2]}>
+                  {number.format(value)}
+                </BudgetValueIndicator>
+              : number.format(value)
+          }</td>)}
         </tr>
         {isExpanded && group.children.map((child) => renderSalesGroup(child, depth + 1))}
       </Fragment>
@@ -493,12 +509,12 @@ export default function DashboardPage() {
                 {allExpanded ? 'Collapse All' : 'Expand All'}
               </button>
             </div>
-            <Table summary={summaryForLevel(data?.details.length ?? 0, data?.scope === 'kam' ? 'customers' : data?.scope === 'rsm' ? 'kams' : 'rsms', (data?.details ?? []).map((row) => data?.scope === 'kam' ? row.customer_id : data?.scope === 'rsm' ? row.submitted_by : row.endorsed_by))} data-monthly-sales className="min-w-[1000px] table-fixed text-xs" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
+            <Table summary={summaryForLevel(data?.details.length ?? 0, data?.showAsm ? 'asms' : data?.scope === 'kam' ? 'customers' : data?.scope === 'rsm' ? 'kams' : 'rsms', (data?.details ?? []).map((row) => data?.showAsm ? row.asm_id : data?.scope === 'kam' ? row.customer_id : data?.scope === 'rsm' ? row.submitted_by : row.endorsed_by))} data-monthly-sales className="min-w-[1000px] table-fixed text-xs" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
               <colgroup><col /><col data-fixed-column="area" />{Array.from({ length: 6 }, (_, index) => <col key={index} data-volume-column="number" />)}</colgroup>
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b bg-muted/40">
                   <th scope="col" className="px-2 py-3 text-left font-semibold">Sales structure</th>
-                  <th scope="col" className="px-2 py-3 text-left font-semibold">Region</th>
+                  <th scope="col" className="px-2 py-3 text-left font-semibold">Area</th>
                   <MonthlySalesHeaders />
                 </tr>
               </thead>

@@ -2,6 +2,7 @@
 'use client'
 
 import { summaryForLevel } from '@/lib/table-summary-level'
+import { asmForRegion } from '@/lib/asm-reporting'
 
 import { weeklyBudget } from '@/lib/weekly-budget'
 import { referencePeriod } from '@/lib/reference-period'
@@ -63,6 +64,8 @@ type Customer = {
 }
 
 type SalesForecast = {
+  asm_id?: string | null
+  asm_name?: string
   id: number
   year: number
   week: number
@@ -219,7 +222,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   const stage = isAsmReview ? 'Endorsed' : reviewStage ?? 'Pending'
   const customerOnly = weekly && (reviewPosition === 'KAM' || (userRole === 'User' && !['NSM', 'ASM', 'RSM', 'Supervisor', 'SV'].includes(reviewPosition)))
   const weeklyKamLevel = weekly && ['RSM', 'Supervisor', 'SV'].includes(reviewPosition)
-  const nestedKamGroups = !weekly && stage === 'Endorsed'
+  const weeklyAsmLevel = weekly && (userRole === 'Admin' || reviewPosition === 'NSM')
+  const nestedKamGroups = (!weekly && stage === 'Endorsed') || weeklyAsmLevel
   const groupByEndorser = nestedKamGroups || (weekly && !customerOnly && !weeklyKamLevel)
   const showKamSummary = weeklyKamLevel || (!weekly && !nestedKamGroups)
   const showWeekDateColumn = !weekly && !groupByEndorser && !showKamSummary
@@ -338,9 +342,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   }
 
   function getSubmittedByName(id: string | null) {
-    if (!id) return 'Unknown User'
+    if (!id) return 'Unassigned'
 
-    return submittedUsers[id] || 'Unknown User'
+    return submittedUsers[id] || 'Name unavailable'
   }
 
   // Preserve fractional 50kg-equivalent volumes, such as 25kg bags (0.5).
@@ -727,12 +731,18 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       return
     }
 
-    const salesData = ((salesResult.data ?? []) as SalesForecast[]).map((item) =>
+    let salesData = ((salesResult.data ?? []) as SalesForecast[]).map((item) =>
       weekly && !item.submitted_by
         ? { ...item, submitted_by: item.user_id }
         : item
     )
 
+    if (weekly && (role === 'Admin' || profile.position === 'NSM')) {
+      const response = await fetch('/api/reporting-asms', { cache: 'no-store' })
+      const result = await response.json()
+      if (!response.ok) { setError(result.error || 'Unable to load ASM assignments.'); return }
+      salesData = salesData.map((item) => ({ ...item, ...asmForRegion(item.region_id, result.users) }))
+    }
     setSales(salesData)
     window.dispatchEvent(new Event('forecast-workflow-changed'))
     setRegions(sortRegions((regionsResult.data ?? []) as Region[]))
@@ -892,63 +902,16 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
     // SUBMITTED USERS
 
-    const submittedByIds = Array.from(
-      new Set(
-        salesData
-          .flatMap((item) => [item.submitted_by, item.endorsed_by])
-          .filter((id): id is string => !!id)
-      )
-    )
-
     if (weekly && ownWeeklyRecords) {
       setSubmittedUsers({})
-    } else if (weekly && submittedByIds.length > 0) {
-      const { data, error } = await supabase.rpc('get_weekly_sales_reviewer_names', {
-        p_ids: salesData.map((item) => item.id),
-      }).abortSignal(AbortSignal.timeout(20000))
-      setSubmittedUsers(Object.fromEntries((data ?? []).map((person: { user_id: string; full_name: string }) =>
-        [person.user_id, person.full_name]
-      )))
-      if (error) setError('Unable to load Weekly Sales names. ' + error.message)
-    } else if (!weekly && role === 'Manager') {
-      const names = Object.fromEntries(salesData.flatMap((item) =>
-        item.submitted_by && item.submitter_name ? [[item.submitted_by, item.submitter_name]] : []
-      ))
-      if (profile.position === 'ASM' && salesData.some((item) => item.endorsed_by)) {
-        const { data, error } = await supabase.rpc('get_forecast_review_endorser_names', {
-          p_ids: salesData.map((item) => item.id),
-        })
-
-        if (error) {
-          setError('Unable to load RSM names. ' + error.message)
-        } else {
-          for (const endorser of data ?? []) {
-            names[endorser.endorser_id] = endorser.full_name
-          }
-        }
-      }
-      setSubmittedUsers(names)
-    } else if (submittedByIds.length > 0) {
-      const {
-        data: usersData,
-        error: usersError,
-      } = await supabase
-        .from('users')
-        .select('id, full_name')
-        .in('id', submittedByIds)
-
-      if (usersError) {
-        setError(usersError.message)
-        return
-      }
-
-      const userMap: Record<string, string> = {}
-
-      ;(usersData ?? []).forEach((item) => {
-        userMap[item.id] = item.full_name
+    } else if (salesData.length) {
+      const response = await fetch('/api/reporting-names', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: weekly ? 'Weekly Sales' : 'Approvals', ids: salesData.map((item) => item.id) }),
       })
-
-      setSubmittedUsers(userMap)
+      const result = await response.json()
+      if (!response.ok) { setSubmittedUsers({}); setError(result.error || 'Unable to load reporting names.'); return }
+      setSubmittedUsers(result.names)
     } else {
       setSubmittedUsers({})
     }
@@ -1022,7 +985,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         >()
 
         weekItems.forEach((item) => {
-          const customerKey = JSON.stringify([getReviewGroupId(item), customerOnly ? null : item.submitted_by, item.customer_id, isRsmReview ? item.status : null])
+          const customerKey = JSON.stringify([weeklyAsmLevel ? item.asm_id : null, getReviewGroupId(item), customerOnly ? null : item.submitted_by, item.customer_id, isRsmReview ? item.status : null])
 
           if (!customerMap.has(customerKey)) {
             customerMap.set(customerKey, [])
@@ -1102,7 +1065,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
             .sort((a, b) => {
               const first = getReviewGroupId(a.items[0])
               const second = getReviewGroupId(b.items[0])
-              return compareUsers(first, second) ||
+              return (weeklyAsmLevel ? (a.items[0].asm_name ?? '').localeCompare(b.items[0].asm_name ?? '') : 0) || compareUsers(first, second) ||
                 (groupByEndorser ? compareUsers(a.items[0].submitted_by, b.items[0].submitted_by) : 0) ||
                 getCustomerName(a.customer_id).localeCompare(getCustomerName(b.customer_id))
             })
@@ -1132,23 +1095,29 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     isRsmReview,
     customerOnly,
     groupByEndorser,
+    weeklyAsmLevel,
   ])
 
   // -----------------------------------------
   // GROUP EXPANSION
   // -----------------------------------------
 
-  function getReviewGroupKey(weekKey: string, reviewGroupId: string | null) {
-    return JSON.stringify([weekKey, groupByEndorser, reviewGroupId])
+  function getReviewGroupKey(weekKey: string, reviewGroupId: string | null, asmId?: string | null) {
+    return JSON.stringify([weekKey, weeklyAsmLevel ? asmId : null, groupByEndorser, reviewGroupId])
   }
 
   function getKamGroupKey(weekKey: string, item: SalesForecast) {
-    return JSON.stringify([weekKey, 'kam', item.endorsed_by ?? null, item.submitted_by])
+    return JSON.stringify([weekKey, 'kam', weeklyAsmLevel ? item.asm_id : null, item.endorsed_by ?? null, item.submitted_by])
+  }
+
+  function getAsmGroupKey(weekKey: string, item: SalesForecast) {
+    return JSON.stringify([weekKey, 'asm', item.asm_id ?? 'unassigned'])
   }
 
   const visibleGroupKeys = new Set(weekGroups.flatMap((weekGroup) =>
     weekGroup.customers.flatMap((customerGroup) => [
-      ...(customerOnly ? [] : [getReviewGroupKey(weekGroup.key, getReviewGroupId(customerGroup.items[0]))]),
+      ...(customerOnly ? [] : [getReviewGroupKey(weekGroup.key, getReviewGroupId(customerGroup.items[0]), customerGroup.items[0].asm_id)]),
+      ...(weeklyAsmLevel ? [getAsmGroupKey(weekGroup.key, customerGroup.items[0])] : []),
       ...(nestedKamGroups ? [getKamGroupKey(weekGroup.key, customerGroup.items[0])] : []),
       customerGroup.key,
     ])
@@ -1284,10 +1253,10 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       : <BudgetValueIndicator value={value} budget={budget}>{formatNumber(value)}</BudgetValueIndicator>
   }
 
-  function renderApprovalSummary(key: string, reviewerId: string | null, items: SalesForecast[]) {
+  function renderApprovalSummary(key: string, reviewerId: string | null, items: SalesForecast[], asmLabel?: string) {
     if (!items.length) return null
     const isRsmSummary = groupByEndorser
-    const areas = Array.from(new Set(items.map((item) => getAreaName(item.region_id, item.subregion_id, 'subregion'))))
+    const areas = isRsmSummary || asmLabel || showKamSummary ? Array.from(new Set(items.map((item) => getAreaName(item.region_id, item.subregion_id, asmLabel ? 'region' : 'subregion')))) : []
     const salesmanCount = new Set(items.map((item) => item.submitted_by).filter(Boolean)).size
     const customerCount = new Set(items.map((item) => item.customer_id).filter((id) => id !== null)).size
     const productCount = new Set(items.map((item) => item.product_id).filter((id) => id !== null)).size
@@ -1311,9 +1280,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         total + getCustomerForecastMonthlyTotal(item.customer_id, [item]), 0),
     ]
 
-    const label = isRsmSummary && reviewerId === null
+    const label = asmLabel ?? (isRsmSummary && reviewerId === null
       ? 'RSM: No endorsement recorded'
-      : (isRsmSummary ? 'RSM: ' : 'KAM: ') + getSubmittedByName(reviewerId)
+      : (isRsmSummary ? 'RSM: ' : 'KAM: ') + getSubmittedByName(reviewerId))
     const statuses = Array.from(new Set(items.map((item) =>
       item.status === 'Rejected' ? 'Returned' : item.status
     )))
@@ -1331,7 +1300,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
               ))}
             </div>
           </td>
-          <td className="px-2 py-2">{areas.join(', ') || '—'}</td>
+          <td className="px-2 py-2">{areas.join(', ')}</td>
           {groupByEndorser && (
             <td className="px-2 py-2">
               {formatNumber(salesmanCount)} {salesmanCount === 1 ? 'Salesman' : 'Salesmen'}
@@ -1542,7 +1511,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
         {/* APPROVAL TABLE */}
 
-        <Table summary={summaryForLevel(filteredSales.length, nestedKamGroups || (weekly && groupByEndorser) ? 'rsms' : customerOnly ? 'customers' : 'kams', filteredSales.map((row) => nestedKamGroups || (weekly && groupByEndorser) ? row.endorsed_by : customerOnly ? row.customer_id : row.submitted_by ?? row.user_id))} data-volume-layout="review"
+        <Table summary={summaryForLevel(filteredSales.length, weeklyAsmLevel ? 'asms' : nestedKamGroups || (weekly && groupByEndorser) ? 'rsms' : customerOnly ? 'customers' : 'kams', filteredSales.map((row) => weeklyAsmLevel ? row.asm_id : nestedKamGroups || (weekly && groupByEndorser) ? row.endorsed_by : customerOnly ? row.customer_id : row.submitted_by ?? row.user_id))} data-volume-layout="review"
           className="min-w-[1600px] table-fixed"
           containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": pageTitle + ' table' }}
         >
@@ -1631,11 +1600,17 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     {weekGroup.customers.map((customerGroup, index) => {
                       const item = customerGroup.items[0]
                       const previousItem = weekGroup.customers[index - 1]?.items[0]
+                      const asmGroupKey = getAsmGroupKey(weekGroup.key, item)
+                      const startsAsmGroup = weeklyAsmLevel && (!previousItem || previousItem.asm_id !== item.asm_id)
+                      const asmGroupRow = startsAsmGroup ? renderApprovalSummary(asmGroupKey, item.asm_id ?? null,
+                        weekGroup.customers.flatMap((group) => group.items[0].asm_id === item.asm_id ? group.items : []),
+                        'ASM: ' + (item.asm_name || 'Unassigned')) : null
+                      if (weeklyAsmLevel && !expandedGroups.has(asmGroupKey)) return asmGroupRow
                       const reviewGroupId = getReviewGroupId(item)
                       const startsReviewGroup = (
-                        !previousItem || getReviewGroupId(previousItem) !== reviewGroupId
+                        startsAsmGroup || !previousItem || getReviewGroupId(previousItem) !== reviewGroupId
                       )
-                      const reviewGroupKey = getReviewGroupKey(weekGroup.key, reviewGroupId)
+                      const reviewGroupKey = getReviewGroupKey(weekGroup.key, reviewGroupId, item.asm_id)
                       const reviewGroupExpanded = customerOnly || expandedGroups.has(reviewGroupKey)
                       const reviewGroupRow = !customerOnly && startsReviewGroup
                         ? groupByEndorser || showKamSummary
@@ -1643,26 +1618,27 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                               reviewGroupKey,
                               reviewGroupId,
                               weekGroup.customers.flatMap((group) =>
-                                getReviewGroupId(group.items[0]) === reviewGroupId ? group.items : []
+                                getReviewGroupId(group.items[0]) === reviewGroupId && (!weeklyAsmLevel || group.items[0].asm_id === item.asm_id) ? group.items : []
                               )
                             )
                           : renderReviewHeading(reviewGroupKey, 'KAM: ' + getSubmittedByName(reviewGroupId))
                         : null
 
-                      if (!reviewGroupExpanded) return reviewGroupRow
+                      if (!reviewGroupExpanded) return <Fragment key={customerGroup.key}>{asmGroupRow}{reviewGroupRow}</Fragment>
                       const kamGroupKey = getKamGroupKey(weekGroup.key, item)
                       const startsKamGroup = nestedKamGroups && (startsReviewGroup || previousItem?.submitted_by !== item.submitted_by)
                       const kamGroupRow = startsKamGroup
                         ? renderReviewHeading(kamGroupKey, 'KAM: ' + getSubmittedByName(item.submitted_by), true)
                         : null
                       if (nestedKamGroups && !expandedGroups.has(kamGroupKey)) {
-                        return <Fragment key={customerGroup.key}>{reviewGroupRow}{kamGroupRow}</Fragment>
+                        return <Fragment key={customerGroup.key}>{asmGroupRow}{reviewGroupRow}{kamGroupRow}</Fragment>
                       }
                       const isExpanded =
                         expandedGroups.has(customerGroup.key)
 
                       return (
                         <Fragment key={customerGroup.key}>
+                          {asmGroupRow}
                           {reviewGroupRow}
                           {kamGroupRow}
 
@@ -1685,16 +1661,15 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                               </td>
                             )}
 
-                            <td className="px-2 py-3 align-top">
-                            </td>
+                            <td className="px-2 py-3 align-middle">{customerOnly && Array.from(new Set(customerGroup.items.map((record) => getAreaName(record.region_id, record.subregion_id, 'subregion')))).join(', ')}</td>
 
                             {groupByEndorser && (
-                              <td className="px-2 py-3 align-top">{getSubmittedByName(item.submitted_by)}</td>
+                              <td className="px-2 py-3 align-middle">{getSubmittedByName(item.submitted_by)}</td>
                             )}
 
                             {/* FULL CUSTOMER NAME */}
 
-                            <td className="px-2 py-3 align-top">
+                            <td className="px-2 py-3 align-middle">
                               <button
                                 type="button"
                                 aria-expanded={isExpanded}
@@ -1703,7 +1678,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                                     customerGroup.key
                                   )
                                 }
-                                className="flex w-full min-w-0 items-start gap-2 text-left font-semibold hover:text-primary"
+                                className="flex w-full min-w-0 items-center gap-2 text-left font-semibold hover:text-primary"
                                 title={
                                   isExpanded
                                     ? 'Collapse customer'
@@ -1711,9 +1686,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                                 }
                               >
                                 {isExpanded ? (
-                                  <ChevronDown className="mt-0.5 size-4 shrink-0" />
+                                  <ChevronDown className="size-4 shrink-0" />
                                 ) : (
-                                  <ChevronRight className="mt-0.5 size-4 shrink-0" />
+                                  <ChevronRight className="size-4 shrink-0" />
                                 )}
 
                                 <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
