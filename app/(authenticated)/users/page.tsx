@@ -1,6 +1,10 @@
 
 'use client'
 
+import { sortRegions } from '@/lib/region-order'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { UserRoundCog as HeadingUserRoundCog, ShieldCheck as HeadingShieldCheck, Users as HeadingUsers } from 'lucide-react'
 
 import { ListChecks as ActionListChecksIcon, RefreshCw as ActionRefreshCwIcon } from 'lucide-react'
@@ -281,7 +285,7 @@ export default function UsersPage() {
       return
     }
 
-    setRegions((data ?? []) as Region[])
+    setRegions(sortRegions((data ?? []) as Region[]))
   }
 
   async function loadSubregions() {
@@ -833,14 +837,14 @@ export default function UsersPage() {
     setDeleting(true)
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', selectedUser.id)
-
-      if (error) {
-        console.error('User Delete Error:', error)
-        notify(`Unable to delete user: ${error.message}`)
+      const response = await fetch('/api/admin/users', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUser.id }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        notify(result.error || 'Unable to delete the account.')
+        await loadUsers()
         return
       }
 
@@ -937,7 +941,7 @@ export default function UsersPage() {
   if (!isAdmin && !loading) return null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {isAdmin && authorization.can('Users', 'add') && <UsersExcelImport
         blocked={loading || saving || deleting || creatingUser || refreshing || resettingPassword}
         onBusyChange={setImportBusy}
@@ -1042,6 +1046,7 @@ export default function UsersPage() {
                 <option value="KAM">KAM</option>
                 <option value="RSM">RSM</option>
                 <option value="ASM">ASM</option>
+                <option value="NSM">NSM</option>
                 <option value="Supervisor">Supervisor</option>
               </SelectionField>
             </div>
@@ -1123,14 +1128,14 @@ export default function UsersPage() {
           </div>
 
           {/* Create User Permissions */}
-          <div className="flex flex-col gap-3 border-t px-6 pt-4 pb-2">
+          <div className="flex flex-col gap-3 border-t px-4 pt-4 pb-2 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 data-section-title="" className="font-semibold"><HeadingShieldCheck className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />User Permissions</h3>
 
               </div>
 
-              <div data-action-toolbar="" className="flex flex-wrap gap-2">
+              <div data-action-toolbar="" data-permissions-toolbar="" className="flex flex-wrap gap-2">
                 {showUserPermissions && (
                   <button
                     type="button"
@@ -1138,8 +1143,8 @@ export default function UsersPage() {
                     onClick={() => toggleFormPermissions(!allFormPermissionsEnabled)}
                     disabled={permissionsBusy}
                     className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                  ><ActionListChecksIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-                    {allFormPermissionsEnabled ? 'Disable All Permissions' : 'Enable All Permissions'}
+                  ><ActionListChecksIcon className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0">{allFormPermissionsEnabled ? 'Disable All Permissions' : 'Enable All Permissions'}</span>
                   </button>
                 )}
                 <button data-slot="show-hide-button" data-action-tone="neutral"
@@ -1408,7 +1413,7 @@ export default function UsersPage() {
                        />
                       ) : <span className="text-sm text-muted-foreground">No Action</span>}
                     </td>}
-                    <td className="px-4 py-3">{user.is_active ? 'Active' : 'Pending'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={user.is_active ? 'Active' : 'Pending'} /></td>
                     <td className="px-6 py-3">{user.full_name || '—'}</td>
                     <td className="px-4 py-3">{user.email}</td>
                     <td className="px-4 py-3">{user.role}</td>

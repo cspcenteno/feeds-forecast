@@ -4,10 +4,10 @@ import { buildDashboardPerformance, dashboardLevel } from '../lib/dashboard-perf
 
 test('performance granularity follows the sales position', () => {
   for (const role of ['Manager', 'Superuser']) {
-    assert.equal(dashboardLevel({ role, position: 'ASM' }), 'region')
-    assert.equal(dashboardLevel({ role, position: 'RSM' }), 'subregion')
-    assert.equal(dashboardLevel({ role, position: 'Supervisor' }), 'subregion')
-    assert.equal(dashboardLevel({ role, position: ' SV ' }), 'subregion')
+    assert.equal(dashboardLevel({ role, position: 'ASM' }), 'subregion')
+    assert.equal(dashboardLevel({ role, position: 'RSM' }), 'kam')
+    assert.equal(dashboardLevel({ role, position: 'Supervisor' }), 'kam')
+    assert.equal(dashboardLevel({ role, position: ' SV ' }), 'kam')
   }
   assert.equal(dashboardLevel({ role: 'User', position: 'KAM' }), 'customer')
   assert.equal(dashboardLevel({ role: 'User', position: null }), 'customer')
@@ -73,4 +73,26 @@ test('company overview keeps named areas separate instead of an All areas bucket
     { ...base, volume: 10 }, { ...base, region_id: 8, volume: 20 },
   ], [], [], { ...labels, regions: new Map([[1, 'North'], [8, 'South']]) })
   assert.deepEqual(result.map((row) => [row.region, row.forecast]), [['North', 10], ['South', 20]])
+})
+
+test('NSM sees regional performance and admins retain company visibility', () => {
+  assert.equal(dashboardLevel({role:'Manager', position:'NSM'}), 'company')
+  assert.equal(dashboardLevel({role:'Admin', position:'RSM'}), 'company')
+})
+
+test('KAM performance combines customer/product volumes without duplicating totals', () => {
+  const rows = buildDashboardPerformance('kam', [
+    {...base, submitter:'Alex', volume:20},
+    {...base, product_id:7, submitter:'Alex', volume:30},
+    {...base, customer_id:5, submitter:'Bea', volume:10},
+  ], [{...base, id:1, month:11, kam:'Alex', volume:80}], [
+    {...base, kam:'Alex', volume:40},
+    {...base, customer_id:5, volume:15},
+    {...base, customer_id:99, volume:5},
+  ], labels)
+  assert.equal(rows.find(r=>r.region==='Alex').forecast, 50)
+  assert.equal(rows.find(r=>r.region==='Bea').actual, 15)
+  assert.equal(rows.find(r=>r.region==='Unassigned KAM').actual, 5)
+  assert.equal(rows.reduce((sum,r)=>sum+r.actual,0),60)
+  assert.equal(rows.reduce((sum,r)=>sum+r.budget,0),80)
 })

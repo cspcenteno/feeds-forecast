@@ -40,7 +40,7 @@ export default function AuthenticatedLayout({
       <AppSidebar />
       <main className="w-full min-w-0">
         <div className="flex h-14 items-center border-b px-4">
-          <h1 className="text-lg font-semibold">
+          <h1 className="text-lg leading-tight font-semibold">
             {pageTitle}
           </h1>
         </div>

@@ -1,8 +1,20 @@
 'use client'
 
+import { weeklyBudget } from '@/lib/weekly-budget'
+import { referencePeriod } from '@/lib/reference-period'
+import { readForecastWorkspace, writeForecastWorkspace } from '@/lib/forecast-workspace'
+import { saveForecastDrafts } from '@/lib/save-forecast-drafts'
+import { findExistingForecast } from '@/lib/forecast-duplicates'
+import { savedStatusLabels, savedForecastMatchesStatus, canEditSavedForecastStatus } from '@/lib/saved-forecast-status'
+import { uniqueReturnNotices } from '@/lib/return-notices'
+
+import { sortRegions } from '@/lib/region-order'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { ClipboardPlus as HeadingClipboardPlus, Archive as HeadingArchive } from 'lucide-react'
 
-import { useStatusNotification } from '@/components/action-dialogs'
+import { useStatusNotification, usePopupError } from '@/components/action-dialogs'
 
 import { BudgetValueIndicator } from '@/components/ui/budget-value-indicator'
 import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
@@ -26,11 +38,13 @@ import {
   Send,
   ChevronDown,
   ChevronRight,
+  RotateCcw,
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { loadActualRecords, type ActualRecord } from '@/lib/actual-records'
 import { useAuthorization } from '@/lib/authorization'
 import { loadForecastWeekStates } from '@/lib/forecast-week-locks'
+import { currentWeekInput } from '@/lib/forecast-weeks'
 
 type Region = {
   id: number
@@ -113,7 +127,7 @@ type SavedProductGroup = {
   volume: number
   budget: number
   actualMonthly: number
-  actualLastYear: number
+  actualPreviousMonth: number
   forecastMonthly: number
 }
 
@@ -132,15 +146,9 @@ type SavedWeekGroup = {
 }
 
 const PAGE_SIZE = 1000
-const savedStatusLabels = {
-  Draft: 'Draft',
-  Pending: 'Pending',
-  Endorsed: 'Endorsed',
-  Rejected: 'Returned',
-} as const
 
 function isEditableForecast(item: SalesForecast) {
-  return item.status === 'Draft' || item.status === 'Rejected'
+  return canEditSavedForecastStatus(item.status)
 }
 
 export default function SalesInputPage() {
@@ -158,12 +166,14 @@ export default function SalesInputPage() {
   const [customerAssignmentRestricted, setCustomerAssignmentRestricted] = useState(true)
   const [actualRecords, setActualRecords] = useState<ActualRecord[]>([])
   const [selectedActualsLoading, setSelectedActualsLoading] = useState(false)
+  const [selectedActualsError, setSelectedActualsError] = useState(false)
+  const [forecastLoadError, setForecastLoadError] = useState(false)
   const [savedActualRecords, setSavedActualRecords] = useState<ActualRecord[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [products, setProducts] = useState<Product[]>([])
   const [budgets, setBudgets] = useState<BudgetRecord[]>([])
-  const [budgetLoadError, setBudgetLoadError] = useState('')
+  const [budgetLoadError, setBudgetLoadError] = usePopupError()
   const [forecasts, setForecasts] = useState<SalesForecast[]>([])
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(
     new Set()
@@ -199,24 +209,63 @@ export default function SalesInputPage() {
   const [pendingAction, setPendingAction] = useState<'save' | 'submit' | 'submitAll' | null>(null)
   const [importBusy, setImportBusy] = useState(false)
   const loading = pendingAction !== null || importBusy
-  const [error, setError] = useState('')
+  const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
-  const [removedForecastCount, setRemovedForecastCount] = useState(0)
-  const [submittedForecastCount, setSubmittedForecastCount] = useState(0)
   const [savedStatusFilter, setSavedStatusFilter] = useState('')
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('status') === 'Returned') {
       void Promise.resolve().then(() => setSavedStatusFilter('Rejected'))
     }
   }, [])
-  const [savedError, setSavedError] = useState('')
-  const [savedMessage, setSavedMessage] = useState('')
+  const [, setSavedError] = usePopupError()
+  const setSavedMessage = useStatusNotification()
   const [savedTableLoading, setSavedTableLoading] = useState(true)
   const [initializing, setInitializing] = useState(true)
   const [budgetReferencesLoading, setBudgetReferencesLoading] = useState(true)
   const [savedActualsLoading, setSavedActualsLoading] = useState(true)
   const [savedActualsError, setSavedActualsError] = useState(false)
   const savedActualRequest = useRef(0)
+  const [workspaceOwner, setWorkspaceOwner] = useState('')
+  const workspaceStorageFailed = useRef(false)
+
+  useEffect(() => {
+    if (initializing || forecastLoadError || !userId || workspaceOwner === userId) return
+    try {
+      const stored = readForecastWorkspace(window.sessionStorage, userId)
+      // Re-check edited records against current ownership and status. Browser
+      // restoration never replaces the existing server-side save checks.
+      const editsStillValid = stored?.rows.every((row) => row.id === null
+        || forecasts.some((item) => item.id === row.id && item.user_id === userId && isEditableForecast(item)))
+      if (stored && editsStillValid) {
+        setYear(stored.year)
+        setWeek(stored.week)
+        setSelectedWeek(stored.selectedWeek)
+        setSelectedMonth(stored.selectedMonth)
+        setSelectedRegionId(stored.selectedRegionId)
+        setSelectedSubregionId(stored.selectedSubregionId)
+        setSelectedCustomerId(stored.selectedCustomerId)
+        setRows(stored.rows)
+      }
+    } catch {
+      workspaceStorageFailed.current = true
+      setError('Your browser cannot retain unsaved work. Save a draft before leaving this page.')
+    }
+    setWorkspaceOwner(userId)
+  }, [initializing, forecastLoadError, userId, workspaceOwner, forecasts, setError])
+
+  useEffect(() => {
+    if (initializing || !userId || workspaceOwner !== userId || !selectedWeek || workspaceStorageFailed.current) return
+    try {
+      writeForecastWorkspace(window.sessionStorage, {
+        version: 1, ownerId: userId, year, week, selectedWeek, selectedMonth,
+        selectedRegionId, selectedSubregionId, selectedCustomerId, rows,
+      })
+    } catch {
+      workspaceStorageFailed.current = true
+      setError('Your browser could not retain unsaved work. Save a draft before leaving this page.')
+    }
+  }, [initializing, userId, workspaceOwner, year, week, selectedWeek, selectedMonth,
+    selectedRegionId, selectedSubregionId, selectedCustomerId, rows, setError])
 
   useEffect(() => {
     async function initialize() {
@@ -317,6 +366,7 @@ export default function SalesInputPage() {
     let cancelled = false
 
     async function loadActuals() {
+      setSelectedActualsError(false)
       if (!selectedRegionId || !selectedCustomerId) {
         setActualRecords([])
         setSelectedActualsLoading(false)
@@ -328,19 +378,23 @@ export default function SalesInputPage() {
       const { data, error } = await loadActualRecords(supabase, [year, year - 1], {
         regionId: Number(selectedRegionId),
         customerId: Number(selectedCustomerId),
-      })
+      }, 'Forecast Input')
 
       if (cancelled) return
 
       if (error) {
         setActualRecords([])
+        setSelectedActualsError(true)
         setError('Unable to load selected customer actuals. ' + error.message)
         return
       }
 
       setActualRecords(data ?? [])
       } catch (error) {
-        if (!cancelled) setError(error instanceof Error ? error.message : 'Unable to load customer actuals.')
+        if (!cancelled) {
+          setSelectedActualsError(true)
+          setError(error instanceof Error ? error.message : 'Unable to load customer actuals.')
+        }
       } finally { if (!cancelled) setSelectedActualsLoading(false) }
     }
 
@@ -471,7 +525,7 @@ export default function SalesInputPage() {
     ])
     const failed = [regionResult, subregionResult, categoryResult, productResult].find((result) => result.error)
     if (failed?.error) throw new Error('Unable to load forecast lookups. ' + failed.error.message)
-    setRegions(regionResult.data ?? [])
+    setRegions(sortRegions(regionResult.data ?? []))
     setSubregions(subregionResult.data ?? [])
     setCategories(categoryResult.data ?? [])
     setCustomers(customerResult.customers as Customer[])
@@ -486,7 +540,7 @@ export default function SalesInputPage() {
     const loadedBudgets: BudgetRecord[] = []
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error } = await supabase
-        .from('budgets')
+        .rpc('get_monthly_reference_budget_rows', { p_module: 'Forecast Input' })
         .select('id, year, month, region_id, subregion_id, customer_id, product_id, volume')
         .order('id')
         .range(from, from + PAGE_SIZE - 1)
@@ -496,8 +550,9 @@ export default function SalesInputPage() {
         return
       }
 
-      loadedBudgets.push(...page)
-      if (page.length < PAGE_SIZE) break
+      const records = (page ?? []) as BudgetRecord[]
+      loadedBudgets.push(...records)
+      if (records.length < PAGE_SIZE) break
     }
 
     setBudgets(loadedBudgets)
@@ -516,6 +571,7 @@ export default function SalesInputPage() {
 
   async function loadForecasts(ownerId: string) {
     setSavedTableLoading(true)
+    setForecastLoadError(false)
     try {
       setSavedError('')
 
@@ -552,6 +608,7 @@ export default function SalesInputPage() {
         )
 
         if (error) {
+          setForecastLoadError(true)
           setSavedError('Unable to load saved forecasts. ' + error.message)
           return
         }
@@ -568,6 +625,9 @@ export default function SalesInputPage() {
 
       void loadSavedActualReferences(allForecasts)
 
+    } catch (error) {
+      setForecastLoadError(true)
+      setSavedError(error instanceof Error ? error.message : 'Unable to load saved forecasts.')
     } finally { setSavedTableLoading(false) }
   }
 
@@ -592,7 +652,7 @@ export default function SalesInputPage() {
       const { data, error } = await loadActualRecords(supabase, lookupYears, {
         regionIds: [...new Set(allForecasts.flatMap((item) => item.region_id == null ? [] : [item.region_id]))],
         customerIds: [...new Set(allForecasts.flatMap((item) => item.customer_id == null ? [] : [item.customer_id]))],
-      })
+      }, 'Forecast Input')
       if (request !== savedActualRequest.current) return
       if (error) {
         setSavedActualsError(true)
@@ -666,41 +726,6 @@ export default function SalesInputPage() {
     thursday.setUTCDate(weekStart.getUTCDate() + 3)
 
     return thursday.getUTCMonth() + 1
-  }
-
-  function getWeeksInMonth(
-    selectedYear: number,
-    selectedMonth: number
-  ) {
-    const weeks = new Set<number>()
-
-    const daysInMonth = new Date(
-      Date.UTC(selectedYear, selectedMonth, 0)
-    ).getUTCDate()
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(
-        Date.UTC(selectedYear, selectedMonth - 1, day)
-      )
-
-      const weekday = date.getUTCDay() || 7
-      const thursday = new Date(date)
-
-      thursday.setUTCDate(date.getUTCDate() + 4 - weekday)
-
-      const isoYear = thursday.getUTCFullYear()
-      const yearStart = new Date(Date.UTC(isoYear, 0, 1))
-
-      const weekNumber = Math.ceil(
-        ((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
-      )
-
-      if (isoYear === selectedYear) {
-        weeks.add(weekNumber)
-      }
-    }
-
-    return Math.max(weeks.size, 1)
   }
 
   function addRow() {
@@ -833,17 +858,18 @@ export default function SalesInputPage() {
 
   function getActualMonthlyForRow(
     row: SalesRow,
-    targetYear = year
+    previous = false
   ) {
     if (!selectedCustomerId) return 0
+    const period = referencePeriod(year, selectedMonth, previous)
 
     return actualRecords
       .filter(
         (item) =>
           item.customer_id === Number(selectedCustomerId) &&
           item.region_id === Number(selectedRegionId) &&
-          item.year === targetYear &&
-          item.month === selectedMonth &&
+          item.year === period.year &&
+          item.month === period.month &&
           (!row.product_id || item.product_id === Number(row.product_id))
       )
       .reduce((total, item) => total + Number(item.volume || 0), 0)
@@ -905,7 +931,7 @@ export default function SalesInputPage() {
 
   function getSavedActualMonthly(
     item: SalesForecast,
-    targetYear = item.year
+    previous = false
   ) {
     if (
       !item.product_id ||
@@ -915,7 +941,7 @@ export default function SalesInputPage() {
       return 0
     }
 
-    const targetMonth = getMonthForWeek(item.year, item.week)
+    const period = referencePeriod(item.year, getMonthForWeek(item.year, item.week), previous)
 
     return savedActualRecords
       .filter(
@@ -923,8 +949,8 @@ export default function SalesInputPage() {
           actual.customer_id === item.customer_id &&
           actual.region_id === item.region_id &&
           actual.product_id === item.product_id &&
-          actual.year === targetYear &&
-          actual.month === targetMonth
+          actual.year === period.year &&
+          actual.month === period.month
       )
       .reduce(
         (total, actual) => total + (Number(actual.volume) || 0),
@@ -1034,7 +1060,7 @@ export default function SalesInputPage() {
           rows[i].product_id === rows[j].product_id
         ) {
           setError(
-            `Duplicate Category and Product found in rows ${i + 1} and ${j + 1}.`
+            `Duplicate Product found in rows ${i + 1} and ${j + 1}.`
           )
           return false
         }
@@ -1042,6 +1068,25 @@ export default function SalesInputPage() {
     }
 
     return true
+  }
+
+  function handleClear() {
+    if (loading || initializing) return
+    const current = currentWeekInput()
+    const [currentYear, currentWeek] = current.split('-W').map(Number)
+    setYear(currentYear)
+    setWeek(currentWeek)
+    setSelectedWeek(current)
+    setSelectedMonth(getMonthForWeek(currentYear, currentWeek))
+    setSelectedRegionId(canChooseRegion ? '' : String(assignedRegionId ?? ''))
+    setSelectedSubregionId(canChooseRegion ? '' : String(assignedSubregionId ?? ''))
+    setSelectedCustomerId('')
+    setRows([{
+      tempId: crypto.randomUUID(), id: null, category_id: '', product_id: '',
+      product_search: '', forecast: '', status: 'Draft',
+    }])
+    setError('')
+    setSavedError('')
   }
 
   async function handleSave() {
@@ -1108,9 +1153,16 @@ export default function SalesInputPage() {
         user_id: userId,
       }))
 
-    const { error: saveError } = await supabase
-      .from('sales_forecasts')
-      .upsert(payload, { onConflict: 'id' })
+    for (const [index, row] of payload.entries()) {
+      if (!findExistingForecast(row, forecasts)) continue
+      const product = products.find((item) => item.id === row.product_id)
+      const customer = customers.find((item) => item.id === row.customer_id)
+      setPendingAction(null)
+      setError(`Row ${index + 1}: ${product?.code || 'This product'} already has a forecast for ${customer?.customer || 'this customer'} in Week ${week}, ${year}. Open Saved Forecasts and edit the existing record instead of adding it again.`)
+      return
+    }
+
+    const { error: saveError } = await saveForecastDrafts(supabase, payload)
 
     if (saveError) {
       setPendingAction(null)
@@ -1274,7 +1326,6 @@ export default function SalesInputPage() {
       }
     }
     if (!(actionConfirmation = await confirmAction(forecastSubmissionConfirmation(eligibleItems, getCustomerName(eligibleItems[0].customer_id), getCustomerName, getProductName)))) return
-    setSubmittedForecastCount(0)
     setPendingAction('submit')
     setSavedError('')
     setSavedMessage('')
@@ -1287,7 +1338,7 @@ export default function SalesInputPage() {
       setSavedError(error.message)
       return
     }
-    setSubmittedForecastCount(Number(data))
+    setSavedMessage(`${Number(data)} forecast record(s) submitted for RSM review.`)
     await loadForecasts(userId)
 
     } finally { actionConfirmation?.finish() }
@@ -1309,13 +1360,12 @@ export default function SalesInputPage() {
     }
     const confirmed = (actionConfirmation = await confirmAction({ message: `Remove ${items.length} forecast record(s) ${scope === 'customer' ? 'for this customer' : 'for this product'}?`, details: confirmationRecordDetails(items, 'Total volume (50kg)') }))
     if (!confirmed) return
-    setRemovedForecastCount(0)
     const { error } = await supabase.from('sales_forecasts').delete().in('id', items.map((item) => item.id)).eq('user_id', userId)
     if (error) {
       setSavedError(error.message)
       return
     }
-    setRemovedForecastCount(items.length)
+    setSavedMessage(`${items.length} forecast record(s) removed.`)
     await loadForecasts(userId)
 
     } finally { actionConfirmation?.finish() }
@@ -1328,7 +1378,6 @@ export default function SalesInputPage() {
 
     setSavedError('')
     setSavedMessage('')
-    setSubmittedForecastCount(0)
 
     const draftForecasts = forecasts.filter(canSubmitItem)
 
@@ -1395,7 +1444,7 @@ export default function SalesInputPage() {
       return
     }
 
-    setSubmittedForecastCount(Number(data))
+    setSavedMessage(`${Number(data)} forecast record(s) submitted for RSM review.`)
 
     setPendingAction(null)
 
@@ -1406,8 +1455,7 @@ export default function SalesInputPage() {
 
   const visibleSavedForecasts = useMemo(() => forecasts.filter((item) =>
     (!customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
-    Object.hasOwn(savedStatusLabels, item.status) &&
-    (!savedStatusFilter || item.status === savedStatusFilter || (savedStatusFilter === 'Rejected' && item.status === 'Draft' && item.returned_at !== null))
+    savedForecastMatchesStatus(item, savedStatusFilter)
   ), [forecasts, savedStatusFilter, customerAssignmentRestricted, customers])
 
   // Group by week and customer, keeping each review status separate.
@@ -1492,9 +1540,9 @@ export default function SalesInputPage() {
                   // Lookup-only values; do not use saved snapshots.
                   budget: getSavedMonthlyBudget(first),
                   actualMonthly: getSavedActualMonthly(first),
-                  actualLastYear: getSavedActualMonthly(
+                  actualPreviousMonth: getSavedActualMonthly(
                     first,
-                    first.year - 1
+                    true
                   ),
                   forecastMonthly: getSavedForecastMonthly(first),
                 }
@@ -1552,15 +1600,14 @@ export default function SalesInputPage() {
 
   const savedCustomers = savedWeekGroups.flatMap((group) => group.customers)
   const totalSavedCustomers = new Set(savedCustomers.map((customer) => customer.customer_id)).size
-  const totalSavedProducts = new Set(
-    savedCustomers.flatMap((customer) => customer.products.map((product) => product.product_id))
-  ).size
   const allSavedCustomersExpanded = savedCustomers.length > 0 &&
     savedCustomers.every((customer) => expandedCustomers.has(customer.key))
 
   const isLocked = weekStatus === 'Locked'
 
   const isFormDisabled =
+    initializing ||
+    workspaceOwner !== userId ||
     isLocked ||
     checkingWeekLock ||
     loading ||
@@ -1577,14 +1624,18 @@ export default function SalesInputPage() {
     authorization.can('Forecast Input', 'edit') ||
     authorization.can('Forecast Input', 'delete')
   const savedColumnCount = 10 + Number(canShowActions)
+  const returnNotices = uniqueReturnNotices(rows.filter((row) => row.status === 'Rejected').map((row) => {
+    const info = attention?.returned.find((record) => record.id === row.id)
+    const saved = forecasts.find((record) => record.id === row.id)
+    return {
+      reviewer: info?.reviewer || 'Reviewer', returnedBy: info?.returned_by ?? null,
+      returnedAt: info?.returned_at ?? saved?.returned_at ?? null,
+      reason: info?.remarks || saved?.remarks || 'No remarks provided.',
+    }
+  }))
 
   return (
-    <div className="space-y-6">
-      {budgetLoadError && (
-        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          Unable to load budget values. {budgetLoadError}
-        </div>
-      )}
+    <div className="space-y-4">
 
       {/* ADD FORECAST */}
 
@@ -1632,13 +1683,10 @@ export default function SalesInputPage() {
             <div className="mb-6 space-y-4">
               {rows.some((row) => row.status === 'Rejected') && (
                 <div role="status" className="w-full max-w-lg space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                  {rows.filter((row) => row.status === 'Rejected').map((row) => {
-                    const info = attention?.returned.find((record) => record.id === row.id)
-                    return <div key={row.tempId} className="space-y-1 break-words">
-                      <p className="font-medium">Returned by {info?.reviewer || 'Reviewer'}{info?.returned_at ? ` · ${new Date(info.returned_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })}` : ''}</p>
-                      <p><span className="font-medium">Reason:</span> {info?.remarks || forecasts.find((record) => record.id === row.id)?.remarks || 'No remarks provided.'}</p>
-                    </div>
-                  })}
+                  {returnNotices.map((notice, index) => <div key={index}>
+                      <p className="font-medium">Returned by {notice.reviewer}{notice.returnedAt ? ` · ${new Date(notice.returnedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })}` : ''}</p>
+                      <p><span className="font-medium">Reason:</span> {notice.reason}</p>
+                    </div>)}
                 </div>
               )}
               <div className="app-field-row">
@@ -1739,7 +1787,7 @@ export default function SalesInputPage() {
 
         <th
           colSpan={4}
-          className="border-l-2 border-dashed border-muted-foreground/30 bg-muted/70 px-2 py-2 text-left text-sm font-semibold text-muted-foreground"
+          className="border-l border-solid border-border bg-muted/50 px-2 py-2 text-left text-sm font-semibold text-muted-foreground"
         >
           <div className="flex flex-wrap items-center justify-center gap-3">
             <span>Monthly Sales Reference</span>
@@ -1793,7 +1841,7 @@ export default function SalesInputPage() {
         const rowVolume = getRowVolume(row)
         const rowMonthlyBudget = getMonthlyBudgetForRow(row)
         const rowActualMonthly = getActualMonthlyForRow(row)
-        const rowActualLastYear = getActualMonthlyForRow(row, year - 1)
+        const rowActualPreviousMonth = getActualMonthlyForRow(row, true)
         const rowForecastMonthly = getForecastMonthlyForRow(row)
 
         return (
@@ -1839,23 +1887,23 @@ export default function SalesInputPage() {
             </td>
 
             <td className="break-words px-1 py-3 text-right font-medium">
-              {rowVolume === null ? '—' : formatNumber(rowVolume)}
+              {rowVolume === null ? '—' : <BudgetValueIndicator value={rowVolume} budgetLabel="weekly budget" budget={budgetReferencesLoading || budgetLoadError ? null : weeklyBudget(rowMonthlyBudget, year, selectedMonth)}>{formatNumber(rowVolume)}</BudgetValueIndicator>}
             </td>
 
-            <td className="break-words border-l-2 border-dashed border-muted-foreground/30 bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
+            <td className="break-words border-l border-solid border-border bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
               {!referenceReady ? '—' : budgetReferencesLoading ? <LoadingSpinner label="budget reference" /> : budgetLoadError ? '—' : formatNumber(rowMonthlyBudget)}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="actual reference" /> : <BudgetValueIndicator value={rowActualMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowActualMonthly)}</BudgetValueIndicator>}
+              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="actual reference" /> : <BudgetValueIndicator value={selectedActualsError ? null : rowActualMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowActualMonthly)}</BudgetValueIndicator>}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="prior-year actual reference" /> : <BudgetValueIndicator value={rowActualLastYear} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowActualLastYear)}</BudgetValueIndicator>}
+              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="previous-month actual reference" /> : <BudgetValueIndicator value={selectedActualsError ? null : rowActualPreviousMonth} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowActualPreviousMonth)}</BudgetValueIndicator>}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {!referenceReady ? '—' : <BudgetValueIndicator value={rowForecastMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowForecastMonthly)}</BudgetValueIndicator>}
+              {!referenceReady ? '—' : <BudgetValueIndicator value={forecastLoadError ? null : rowForecastMonthly} loading={savedTableLoading || initializing} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowForecastMonthly)}</BudgetValueIndicator>}
             </td>
           </tr>
         )
@@ -1892,7 +1940,7 @@ export default function SalesInputPage() {
           {formatNumber(totalVolume)}
         </td>
 
-        <td className="border-l-2 border-dashed border-muted-foreground/30 bg-muted/30 px-1 py-4" />
+        <td className="border-l border-solid border-border bg-muted/30 px-1 py-4" />
         <td className="bg-muted/30 px-1 py-4" />
         <td className="bg-muted/30 px-1 py-4" />
         <td className="bg-muted/30 px-1 py-4" />
@@ -1900,7 +1948,7 @@ export default function SalesInputPage() {
     </tfoot>
             </Table>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div data-action-toolbar="" className="mt-5 flex flex-wrap items-center gap-2">
               <button data-action-tone="primary" data-action-fill=""
                 type="button"
                 onClick={handleSave}
@@ -1912,7 +1960,13 @@ export default function SalesInputPage() {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Save className="size-4" />
-                {pendingAction === 'save' ? 'Saving...' : rows.some((row) => row.id !== null) ? 'Save Changes' : 'Save Draft'}
+                {pendingAction === 'save' ? 'Saving...' : rows.some((row) => row.status === 'Rejected') ? 'Save Changes' : 'Save as Draft'}
+              </button>
+              <button data-action-tone="neutral" type="button" onClick={handleClear}
+                disabled={loading || initializing || workspaceOwner !== userId}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                <RotateCcw className="size-4" aria-hidden="true" />
+                Clear
               </button>
             </div>
 
@@ -1931,11 +1985,7 @@ export default function SalesInputPage() {
               </div>
             )}
 
-            {error && (
-              <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
+
           </div>
         </div>
       ) : null}
@@ -1960,6 +2010,7 @@ export default function SalesInputPage() {
                   className="h-9 w-44 rounded-md border bg-background px-3 text-sm"
                   aria-label="Status">
                 <option value="">All open statuses</option>
+                <option value="all">All statuses</option>
                 {Object.entries(savedStatusLabels).map(([status, label]) => (
                   <option key={status} value={status}>{label}</option>
                 ))}
@@ -1994,12 +2045,12 @@ export default function SalesInputPage() {
           </div>
         </div>
 
-        {savedError && <div role="alert" className="mx-6 my-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{savedError}</div>}
-      {savedMessage && <div role="status" className="mx-6 my-4 rounded-lg border bg-muted px-4 py-3 text-sm">{savedMessage}</div>}
+
+
 
       {/* SAVED FORECAST TABLE */}
 
-        <Table summary={{ records: savedCustomers.reduce((count, customer) => count + customer.items.length, 0), customers: totalSavedCustomers, products: totalSavedProducts }} data-volume-layout="forecast" saved aria-busy={savedTableLoading || initializing}
+        <Table summary={{ records: savedCustomers.reduce((count, customer) => count + customer.items.length, 0), customers: totalSavedCustomers }} data-volume-layout="forecast" saved aria-busy={savedTableLoading || initializing}
           className="table-fixed"
           containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Forecasts table" }}
         >
@@ -2042,13 +2093,6 @@ export default function SalesInputPage() {
             </thead>
 
             <tbody>
-              {removedForecastCount > 0 && (
-                <tr className="border-b bg-muted/50">
-                  <td colSpan={savedColumnCount} className="px-4 py-3 text-sm">
-                    <span role="status">{removedForecastCount} forecast record(s) removed.</span>
-                  </td>
-                </tr>
-              )}
               {savedTableLoading || initializing ? (
                 <TableLoadingRow columns={savedColumnCount} label="saved forecasts" />
               ) : savedWeekGroups.length === 0 ? (
@@ -2110,9 +2154,9 @@ export default function SalesInputPage() {
                           0
                         )
 
-                      const customerActualLastYear =
+                      const customerActualPreviousMonth =
                         customerGroup.products.reduce(
-                          (total, item) => total + item.actualLastYear,
+                          (total, item) => total + item.actualPreviousMonth,
                           0
                         )
 
@@ -2152,9 +2196,7 @@ export default function SalesInputPage() {
                             )}
 
                             <td className="px-2 py-3 text-center">
-                              <span className="inline-block whitespace-nowrap rounded-full bg-muted px-2 py-1 text-xs font-medium">
-                                {customerStatus}
-                              </span>
+                              <StatusBadge status={customerStatus} />
                             </td>
 
                             <td className="px-2 py-3 text-center">{allItems.every((record) => record.subregion_id === null) ? '—' : null}</td>
@@ -2196,7 +2238,7 @@ export default function SalesInputPage() {
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold">
-                              {formatNumber(customerVolume)}
+                              <BudgetValueIndicator value={customerVolume} budgetLabel="weekly budget" budget={budgetReferencesLoading || budgetLoadError ? null : weeklyBudget(customerBudget, weekGroup.year, getMonthForWeek(weekGroup.year, weekGroup.week))}>{formatNumber(customerVolume)}</BudgetValueIndicator>
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
@@ -2208,11 +2250,11 @@ export default function SalesInputPage() {
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={customerActualLastYear} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerActualLastYear)}</BudgetValueIndicator>}
+                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={customerActualPreviousMonth} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerActualPreviousMonth)}</BudgetValueIndicator>}
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {<BudgetValueIndicator value={customerForecastMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerForecastMonthly)}</BudgetValueIndicator>}
+                              {<BudgetValueIndicator value={forecastLoadError ? null : customerForecastMonthly} loading={savedTableLoading || initializing} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerForecastMonthly)}</BudgetValueIndicator>}
                             </td>
                           </tr>
 
@@ -2306,7 +2348,7 @@ export default function SalesInputPage() {
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right">
-                                    {formatNumber(productGroup.volume)}
+                                    <BudgetValueIndicator value={productGroup.volume} budgetLabel="weekly budget" budget={budgetReferencesLoading || budgetLoadError ? null : weeklyBudget(productGroup.budget, weekGroup.year, getMonthForWeek(weekGroup.year, weekGroup.week))}>{formatNumber(productGroup.volume)}</BudgetValueIndicator>
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
@@ -2318,11 +2360,11 @@ export default function SalesInputPage() {
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={productGroup.actualLastYear} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.actualLastYear)}</BudgetValueIndicator>}
+                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={productGroup.actualPreviousMonth} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.actualPreviousMonth)}</BudgetValueIndicator>}
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {<BudgetValueIndicator value={productGroup.forecastMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.forecastMonthly)}</BudgetValueIndicator>}
+                                    {<BudgetValueIndicator value={forecastLoadError ? null : productGroup.forecastMonthly} loading={savedTableLoading || initializing} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.forecastMonthly)}</BudgetValueIndicator>}
                                   </td>
                                 </tr>
                               )
@@ -2336,11 +2378,6 @@ export default function SalesInputPage() {
             </tbody>
         </Table>
 
-        {submittedForecastCount > 0 && (
-          <div role="status" className="border-t bg-muted/50 px-4 py-3 text-sm">
-            {submittedForecastCount} forecast record(s) submitted for RSM review.
-          </div>
-        )}
       </div>
     </div>
   )

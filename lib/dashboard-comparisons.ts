@@ -1,3 +1,4 @@
+import { compareRegionNames } from '@/lib/region-order'
 export type RegionalVolumes = { region: string; budget: number; forecast: number; actual: number }
 export type VolumeMetric = 'budget' | 'forecast' | 'actual'
 
@@ -15,7 +16,7 @@ export function actualInDashboardScope(
   viewer: { scope: string; regionId: number | null; subregionId: number | null; isSupervisor: boolean },
   kamKeys: Set<string>,
 ) {
-  if (viewer.isSupervisor) return viewer.regionId !== null && row.region_id === viewer.regionId
+  if (viewer.isSupervisor || viewer.scope === 'rsm') return viewer.regionId !== null && viewer.subregionId !== null && row.region_id === viewer.regionId && row.subregion_id === viewer.subregionId
   if (viewer.scope === 'global') return true
   if (viewer.scope === 'kam') return kamKeys.has(JSON.stringify([row.region_id, row.customer_id, row.product_id]))
   return (viewer.scope === 'asm' || viewer.scope === 'rsm') && viewer.regionId !== null && row.region_id === viewer.regionId
@@ -36,5 +37,5 @@ export function mergeRegionalActuals(
     existing.actual += Number(row.actual)
     merged.set(row.region, existing)
   }
-  return [...merged.values()].sort((a, b) => a.region.localeCompare(b.region))
+  return [...merged.values()].sort((a, b) => compareRegionNames(a.region, b.region))
 }

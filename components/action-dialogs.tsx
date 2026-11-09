@@ -51,10 +51,10 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
       }}>
         {view && <AlertDialog.Portal>
           <AlertDialog.Backdrop className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm" />
-          <AlertDialog.Popup initialFocus={cancelRef} finalFocus aria-busy={view.busy}
+          <AlertDialog.Popup data-app-dialog initialFocus={cancelRef} finalFocus aria-busy={view.busy}
             className="fixed top-1/2 left-1/2 z-[201] max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border bg-background shadow-xl">
             <div className="border-b px-4 py-4 sm:px-6">
-              <AlertDialog.Title className="text-lg font-semibold tracking-tight">{view.options.title ?? presentation.title}</AlertDialog.Title>
+              <AlertDialog.Title data-dialog-title className="text-lg font-semibold tracking-tight">{view.options.title ?? presentation.title}</AlertDialog.Title>
               <AlertDialog.Description className="mt-1 text-sm leading-relaxed text-muted-foreground wrap-anywhere">{view.options.message}</AlertDialog.Description>
             </div>
             {(hasSummary || presentation.irreversible) && <div className="p-4 sm:p-6">
@@ -66,9 +66,9 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
                   </div>)}
                 </dl>}
                 {view.options.items && <div className={view.options.details?.length ? 'mt-4 border-t pt-3' : ''}>
-                  <div className="flex justify-between gap-4 text-xs text-muted-foreground"><span>Customer / Product</span><span className="shrink-0">Volume (50kg)</span></div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-x-4 text-xs text-muted-foreground"><span>Customer / Product</span><span className="text-right whitespace-nowrap">Volume (50kg)</span></div>
                   <div className="mt-1 max-h-28 space-y-1 overflow-y-auto">
-                    {view.options.items.map((item, index) => <div key={index} className="flex justify-between gap-4 text-xs font-medium"><span className="min-w-0 break-words">{item.label}</span><span className="shrink-0 text-right tabular-nums">{item.volume}</span></div>)}
+                    {view.options.items.map((item, index) => <div key={index} className="grid grid-cols-[minmax(0,1fr)_7rem] items-start gap-x-4 text-xs font-medium"><span className="min-w-0 wrap-anywhere">{item.label}</span><span className="text-right whitespace-nowrap tabular-nums">{item.volume}</span></div>)}
                   </div>
                 </div>}
               </div>}
@@ -111,4 +111,14 @@ export function useStatusNotification() {
   return useCallback((message: string) => {
     if (message.trim()) notify(message, { success: true })
   }, [notify])
+}
+
+export function usePopupError() {
+  const [message, setMessage] = useState('')
+  const { notify } = useActionDialogs()
+  const report = useCallback((next: string | null) => {
+    setMessage(next ?? '')
+    if (next?.trim()) notify(next, { success: false })
+  }, [notify])
+  return [message, report] as const
 }

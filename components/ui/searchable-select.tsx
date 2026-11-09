@@ -26,7 +26,8 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
 }) {
   const generatedId = useId()
   const id = providedId ?? generatedId
-  const selected = options.find((option) => option.value === value) ?? null
+  const selected = options.find((option) => option.value === value)
+    ?? (freeText && value ? { value, label: value } : null)
   const fieldName = (label ?? ariaLabel ?? name ?? 'option').replace(/[*:]/g, '').trim().toLowerCase()
   // Width follows the field's purpose, never its currently available choices.
   const contentSize = /customer|product|name|email|reason|kam|salesman/.test(fieldName) ? 'long'
@@ -39,7 +40,12 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
       {label && <label htmlFor={id} className="block text-sm font-medium">{label}</label>}
       <Combobox.Root items={options} value={selected} disabled={disabled} name={name} required={required} autoComplete={autoComplete}
         inputValue={freeText ? value : undefined}
-        onInputValueChange={freeText ? (text) => onValueChange(text) : undefined}
+        onInputValueChange={freeText ? (text, details) => {
+          // Closing or blurring the list must not replace custom text with the
+          // last selected option (or an empty label when no option matches).
+          if (details.reason === 'input-change' || details.reason === 'input-clear' || details.reason === 'clear-press') onValueChange(text)
+          else details.cancel()
+        } : undefined}
         isItemEqualToValue={(a, b) => a.value === b.value}
         onValueChange={(option) => { if (option) onValueChange(option.value); else if (!freeText) onValueChange('') }}>
         <Combobox.InputGroup className="relative">
@@ -54,7 +60,7 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
           <Combobox.Positioner sideOffset={4} className="z-[120] w-[var(--anchor-width)] max-w-[calc(100vw-2rem)]">
             <Combobox.Popup className="max-h-[min(18rem,var(--available-height))] overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
               <Combobox.Empty>
-                <div className="px-3 py-4 text-sm text-muted-foreground">No matches found.</div>
+                <div className="px-3 py-4 text-sm text-muted-foreground">{freeText ? 'No matches. You can keep your entered text.' : 'No matches found.'}</div>
               </Combobox.Empty>
               <Combobox.List>
                 {(option: SearchableOption) => <Combobox.Item key={option.value} value={option} disabled={option.disabled}

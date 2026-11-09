@@ -1,5 +1,11 @@
 'use client'
 
+import { summaryForLevel } from '@/lib/table-summary-level'
+
+import { usePopupError } from '@/components/action-dialogs'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { Package as HeadingPackage } from 'lucide-react'
 
 import { RecordDialog } from '@/components/ui/record-dialog'
@@ -75,7 +81,7 @@ export default function ProductsPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [formOpen, setFormOpen] = useState(false)
 
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = usePopupError()
   const [loading, setLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(true)
 
@@ -288,7 +294,7 @@ export default function ProductsPage() {
   return (
     <main className="space-y-4">
 
-      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+
       {/* Form */}
       {authorization.can('Products', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Product' : 'Edit Product'} busy={loading}>
         <div className="mb-5">
@@ -432,11 +438,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Error */}
-        {error && (
-          <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+
       </RecordDialog> : null}
 
       {/* Table */}
@@ -445,7 +447,7 @@ export default function ProductsPage() {
         <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Products', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Product</button>}<TableGroupToggle disabled={tableLoading} /></div>
 
         <div className="overflow-x-auto">
-          <Table summary={{ records: sortedProducts.length }} saved aria-busy={tableLoading} className="table-fixed">
+          <Table summary={summaryForLevel(sortedProducts.length, 'categories', sortedProducts.map((row) => row.category_id))} saved aria-busy={tableLoading} className="table-fixed">
             <TableHeader>
               <TableRow>
                 {canShowActions && <TableHead data-action-column="standard" className="w-[13%] text-left">Action</TableHead>}
@@ -499,7 +501,7 @@ export default function ProductsPage() {
                       ) : <span className="text-sm text-muted-foreground">No Action</span>}
                     </TableCell>
                   )}
-                  <TableCell>{product.is_active ? 'Active' : 'Inactive'}</TableCell>
+                  <TableCell><StatusBadge status={product.is_active ? 'Active' : 'Inactive'} /></TableCell>
                   <TableCell>{categoryLabel(product.category_id)}</TableCell>
                   <TableCell className="font-medium">{product.code}</TableCell>
                   <TableCell>{product.name}</TableCell>

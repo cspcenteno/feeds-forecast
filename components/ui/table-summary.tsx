@@ -1,8 +1,9 @@
-export type TableSummaryCounts = { records: number; customers?: number; products?: number; kams?: number }
+export type TableSummaryCounts = { records: number; customers?: number; products?: number; kams?: number; rsms?: number; regions?: number; subregions?: number; categories?: number }
 
-export function TableSummary({ records, customers, products, kams }: TableSummaryCounts) {
+export function TableSummary({ records, customers, products, kams, rsms, regions, subregions, categories }: TableSummaryCounts) {
   const counts = [
-    [records, 'record', 'records'], [kams, 'KAM', 'KAMs'],
+    [records, 'record', 'records'], [rsms, 'RSM', 'RSMs'], [kams, 'KAM', 'KAMs'],
+    [regions, 'region', 'regions'], [subregions, 'subregion', 'subregions'], [categories, 'category', 'categories'],
     [customers, 'customer', 'customers'], [products, 'product', 'products'],
   ] as const
   return <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-3 text-sm text-muted-foreground" data-slot="table-summary">

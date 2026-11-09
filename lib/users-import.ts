@@ -53,7 +53,7 @@ export function validateUserImport(rows: UserImportRow[], refs: UserImportRefere
     const fullName = source.full_name.trim()
     const email = source.email.trim().toLowerCase()
     const role = roles.find((item) => item.toLowerCase() === normalize(source.role)) ?? null
-    const position = ['KAM', 'RSM', 'ASM', 'Supervisor'].find((item) => item.toLowerCase() === normalize(source.position)) ?? source.position.trim()
+    const position = ['KAM', 'RSM', 'ASM', 'NSM', 'Supervisor'].find((item) => item.toLowerCase() === normalize(source.position)) ?? source.position.trim()
     if (!fullName || fullName.length > 150) issues.push('Full name is required and must be at most 150 characters.')
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) issues.push('Enter a valid email address.')
     if (!role) issues.push('Role must be User, Superuser, Manager, or Admin.')

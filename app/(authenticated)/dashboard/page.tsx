@@ -1,9 +1,10 @@
 'use client'
 
+import { summaryForLevel } from '@/lib/table-summary-level'
+
 import { LayoutDashboard as HeadingLayoutDashboard, ChartNoAxesCombined as HeadingChartNoAxesCombined, ChartColumn as HeadingChartColumn, ChartPie as HeadingChartPie, Lightbulb as HeadingLightbulb, CalendarDays as HeadingCalendarDays } from 'lucide-react'
 
 import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
-import { uniqueCount } from '@/components/ui/table-summary'
 import Link from 'next/link'
 import { useForecastAttention } from '@/lib/use-forecast-attention'
 import { Fragment, useEffect, useMemo, useState } from 'react'
@@ -13,6 +14,11 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { Table } from '@/components/ui/table'
+import { SortableHeader } from '@/components/ui/sortable-header'
+import { BudgetValueIndicator } from '@/components/ui/budget-value-indicator'
+import { usePopupError } from '@/components/action-dialogs'
+import { budgetComparison } from '@/lib/budget-comparison'
+import { compareRegionNames } from '@/lib/region-order'
 import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
 import { compareVolumes, dashboardComparisons, metricColors, metricLabels, type RegionalVolumes } from '@/lib/dashboard-comparisons'
 import type { DashboardLevel } from '@/lib/dashboard-performance'
@@ -57,10 +63,10 @@ type SalesGroup = {
   children: SalesGroup[]
 }
 
-const number = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 })
+const number = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 })
 
 function achievement(forecast: number, budget: number) {
-  return budget > 0 ? forecast / budget * 100 : null
+  return budgetComparison(forecast, budget).ratio
 }
 
 function varianceColor(value: number) {
@@ -171,6 +177,7 @@ const performanceLabels = {
   company: { title: 'Regional Volume Performance', column: 'Region', by: 'Region', plural: 'regions' },
   region: { title: 'Regional Volume performance', column: 'Region', by: 'Region', plural: 'regions' },
   subregion: { title: 'Subregional Volume performance', column: 'Subregion', by: 'Subregion', plural: 'subregions' },
+  kam: { title: 'KAM Volume Performance', column: 'KAM', by: 'KAM', plural: 'KAMs' },
   'customer': { title: 'Customer Volume performance', column: 'Customer', by: 'Customer', plural: 'customers' },
 }
 const shortLabel = (value: string) => value.length > 26 ? value.slice(0, 25) + '…' : value
@@ -185,6 +192,7 @@ function LoadingIndicator({ label }: { label: string }) {
 }
 
 export default function DashboardPage() {
+  const [, reportError] = usePopupError()
   const attention = useForecastAttention()
   const [month, setMonth] = useState(() => new Intl.DateTimeFormat('sv-SE', {
     year: 'numeric', month: '2-digit', timeZone: 'Asia/Manila',
@@ -194,6 +202,8 @@ export default function DashboardPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [comparisonId, setComparisonId] = useState<(typeof dashboardComparisons)[number]['id']>('forecast-budget')
   const comparison = dashboardComparisons.find((item) => item.id === comparisonId)!
+  const contributionMetric = comparisonId === 'budget-actual' ? 'actual' : comparison.baseline
+  const [performanceSort, setPerformanceSort] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null)
   const performanceMetrics = [comparison.baseline, comparison.measured]
   const performanceColumnCount = performanceMetrics.length + 3
 
@@ -206,25 +216,45 @@ export default function DashboardPage() {
         if (!response.ok) throw new Error(body.error ?? 'Unable to load dashboard data.')
         const data = body as DashboardData
         if (controller.signal.aborted) return
+        if (!data) reportError('Dashboard data is unavailable for this account.')
         setResult({
           month, revision, data: data as DashboardData | null,
           error: data ? '' : 'Dashboard data is unavailable for this account.',
         })
       } catch (error) {
         if (controller.signal.aborted) return
+        reportError(error instanceof Error ? error.message : 'Unable to load dashboard data.')
         setResult({ month, revision, data: null, error: error instanceof Error ? error.message : 'Unable to load dashboard data.' })
       }
     }
     void load()
     return () => controller.abort()
-  }, [month, revision])
+  }, [month, revision, reportError])
 
   const current = result?.month === month && result.revision === revision ? result : null
   const loading = current === null
   const data = current?.data
-  const regions = data?.performance.rows ?? []
+  const regions = [...(data?.performance.rows ?? [])].sort((a, b) => compareRegionNames(a.region, b.region))
   const performanceLevel = data?.performance.level ?? 'company'
   const performanceLabel = performanceLabels[performanceLevel]
+  const sortedPerformance = performanceSort ? [...regions].sort((a, b) => {
+    if (performanceSort.key === 'region' && (performanceLevel === 'company' || performanceLevel === 'region')) return compareRegionNames(a.region, b.region)
+    const value = (row: RegionVolume) => {
+      if (performanceSort.key === 'variance') return Number(row[comparison.measured]) - Number(row[comparison.baseline])
+      if (performanceSort.key === 'achievement') return achievement(Number(row[comparison.measured]), Number(row[comparison.baseline]))
+      return Number(row[performanceSort.key as 'budget' | 'forecast' | 'actual'])
+    }
+    const first = value(a)
+    const second = value(b)
+    if (performanceSort.key !== 'region') {
+      if (first === null) return second === null ? 0 : 1
+      if (second === null) return -1
+    }
+    const difference = performanceSort.key === 'region'
+      ? a.region.localeCompare(b.region, undefined, { numeric: true, sensitivity: 'base' })
+      : first! - second!
+    return performanceSort.direction === 'ascending' ? difference : -difference
+  }) : regions
   const totals = regions.reduce((sum, row) => ({
     budget: sum.budget + Number(row.budget),
     forecast: sum.forecast + Number(row.forecast),
@@ -244,9 +274,9 @@ export default function DashboardPage() {
     actual: Number(row.actual),
     variance: Number(row[comparison.measured]) - Number(row[comparison.baseline]),
   }))
-  const baselineContributionRows = chartRows.filter((row) => row[comparison.baseline] > 0)
+  const baselineContributionRows = chartRows.filter((row) => row[contributionMetric] > 0)
     .map((row, index) => ({ ...row, fill: regionColors[index % regionColors.length] }))
-  const baselineContributionTotal = baselineContributionRows.reduce((sum, row) => sum + row[comparison.baseline], 0)
+  const baselineContributionTotal = baselineContributionRows.reduce((sum, row) => sum + row[contributionMetric], 0)
   const salesGroups = useMemo(() => data ? buildSalesGroups(data) : [], [data])
   const keys = groupKeys(salesGroups)
   const allExpanded = keys.length > 0 && keys.every((key) => expanded.has(key))
@@ -277,7 +307,7 @@ export default function DashboardPage() {
             ) : <div className="wrap-anywhere text-xs" style={{ paddingInlineStart: depth * 10 + 20 }}>{group.label}</div>}
           </td>
           <td className="px-1.5 py-2 wrap-anywhere sm:px-2">{group.area}</td>
-          {group.metrics.map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(value)}</td>)}
+          {group.metrics.map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{index === 1 ? <BudgetValueIndicator value={value} budget={group.metrics[2]}>{number.format(value)}</BudgetValueIndicator> : number.format(value)}</td>)}
         </tr>
         {isExpanded && group.children.map((child) => renderSalesGroup(child, depth + 1))}
       </Fragment>
@@ -288,9 +318,9 @@ export default function DashboardPage() {
     <div className="sales-dashboard space-y-4 rounded-xl bg-slate-100/70 p-3 dark:bg-slate-950 dark:text-slate-100">
       {attention && (attention.returned.length > 0 || attention.pending > 0 || attention.endorsed > 0) && (
         <div aria-label="Forecasts needing attention" className="flex flex-wrap gap-3">
-          {attention.returned.length > 0 && <Link href="/forecast-input?status=Returned#saved-forecasts" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 hover:underline">{attention.returned.length} forecast{attention.returned.length === 1 ? '' : 's'} returned for revision →</Link>}
-          {attention.pending > 0 && <Link href="/approvals?stage=Pending" className="rounded-lg border bg-card px-4 py-3 text-sm font-medium hover:underline">{attention.pending} submission{attention.pending === 1 ? '' : 's'} awaiting endorsement →</Link>}
-          {attention.endorsed > 0 && <Link href="/approvals?stage=Endorsed" className="rounded-lg border bg-card px-4 py-3 text-sm font-medium hover:underline">{attention.endorsed} endorsed submission{attention.endorsed === 1 ? '' : 's'} awaiting approval →</Link>}
+          {attention.returned.length > 0 && <Link href="/forecast-input?status=Returned#saved-forecasts" className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200 dark:hover:bg-rose-900/50">{attention.returned.length} forecast{attention.returned.length === 1 ? '' : 's'} returned for revision →</Link>}
+          {attention.pending > 0 && <Link href="/approvals?stage=Pending" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200 dark:hover:bg-amber-900/50">{attention.pending} submission{attention.pending === 1 ? '' : 's'} awaiting endorsement →</Link>}
+          {attention.endorsed > 0 && <Link href="/approvals?stage=Endorsed" className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/50">{attention.endorsed} endorsed submission{attention.endorsed === 1 ? '' : 's'} awaiting approval →</Link>}
         </div>
       )}
       <header className="rounded-lg border border-t-4 border-t-emerald-500 bg-card px-4 py-3 shadow-sm dark:border-slate-600 dark:border-t-emerald-400 dark:bg-slate-900">
@@ -312,9 +342,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {current?.error ? (
-        <p role="alert" className="rounded-sm border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{current.error}</p>
-      ) : (
+      {current?.error ? null : (
         <>
           <div className="grid gap-3 sm:grid-cols-3" role="group" aria-label="Sales volume controls">
             {[
@@ -350,19 +378,23 @@ export default function DashboardPage() {
             <div className="contents">
               <section aria-busy={loading} className={panel + ' order-1 flex flex-col'}>
                 <h3 data-section-title="" className={panelTitle}><HeadingChartNoAxesCombined className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{performanceLabel.title}</h3>
-                <Table summary={{ records: regions.length }} containerProps={{ className: 'max-h-[22rem] overflow-x-hidden overflow-y-auto' }} className="table-fixed text-xs">
+                <Table summary={summaryForLevel(regions.length, performanceLevel === 'kam' ? 'kams' : performanceLevel === 'customer' ? 'customers' : performanceLevel === 'subregion' ? 'subregions' : 'regions', regions.map((row) => row.key ?? row.region))} containerProps={{ className: 'max-h-[22rem] overflow-x-hidden overflow-y-auto' }} className="table-fixed text-xs">
                   <colgroup>
                     <col className="w-[24%]" />
                     {performanceMetrics.map((metric) => <col key={metric} />)}
                     <col /><col />
                   </colgroup>
                   <thead className="sticky top-0 z-10 bg-card text-muted-foreground">
-                    <tr>{[performanceLabel.column, ...performanceMetrics.map((metric) => metricLabels[metric]), 'Variance', 'Ach. %'].map((label, index) =>
-                      <th key={label} scope="col" title={label === 'Ach. %' ? 'Achievement percentage' : undefined} className={'px-1.5 py-3 wrap-anywhere sm:px-2 ' + (index === 0 ? 'text-left' : 'text-right')}>{label}</th>
-                    )}</tr>
+                    <tr>{[performanceLabel.column, ...performanceMetrics.map((metric) => metricLabels[metric]), 'Variance', 'Ach. %'].map((label, index) => {
+                      const key = ['region', ...performanceMetrics, 'variance', 'achievement'][index]
+                      return <SortableHeader plain key={key}
+                        direction={performanceSort?.key === key ? performanceSort.direction : undefined}
+                        onSort={() => setPerformanceSort((current) => ({ key, direction: current?.key === key && current.direction === 'ascending' ? 'descending' : 'ascending' }))}
+                        className={'px-1.5 py-3 wrap-anywhere sm:px-2 ' + (index === 0 ? 'text-left' : 'text-right')}>{label}</SortableHeader>
+                    })}</tr>
                   </thead>
                   <tbody>
-                    {regions.map((row) => {
+                    {sortedPerformance.map((row) => {
                       const difference = Number(row[comparison.measured]) - Number(row[comparison.baseline])
                       return <tr key={row.key ?? row.region} className="border-b even:bg-muted/25">
                         <th scope="row" className="px-1.5 py-2 text-left font-medium wrap-anywhere sm:px-2">{row.region}</th>
@@ -406,13 +438,13 @@ export default function DashboardPage() {
 
             <div className="contents">
               <section aria-busy={loading} className={panel + ' order-2 flex min-h-64 flex-col'}>
-                <h3 data-section-title="" className={panelTitle}><HeadingChartPie className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{metricLabels[comparison.baseline]} Volume Contribution by {performanceLabel.by}</h3>
+                <h3 data-section-title="" className={panelTitle}><HeadingChartPie className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{metricLabels[contributionMetric]} Volume Contribution by {performanceLabel.by}</h3>
                 {loading ? <LoadingIndicator label="volume contribution chart" /> : baselineContributionRows.length ? (
                   <div className="grid min-h-0 flex-1 items-center gap-3 p-3 sm:grid-cols-2">
                     <div className="relative h-32 min-w-0 text-xs sm:h-44">
                       <ResponsiveContainer width="100%" height="100%" className="relative z-10">
                         <PieChart accessibilityLayer>
-                          <Pie data={baselineContributionRows} dataKey={comparison.baseline} nameKey="region" innerRadius="62%" outerRadius="92%" stroke="var(--card)" isAnimationActive={false} />
+                          <Pie data={baselineContributionRows} dataKey={contributionMetric} nameKey="region" innerRadius="62%" outerRadius="92%" stroke="var(--card)" isAnimationActive={false} />
                           <Tooltip wrapperStyle={{ zIndex: 20 }} contentStyle={tooltipStyle} itemStyle={{ color: 'var(--dashboard-tooltip-ink)' }} formatter={(value) => number.format(Number(value)) + ' bags'} />
                         </PieChart>
                       </ResponsiveContainer>
@@ -424,13 +456,13 @@ export default function DashboardPage() {
                       {baselineContributionRows.map((row) => <li key={row.key} className="flex items-center gap-2">
                         <span className="size-2.5 shrink-0" style={{ backgroundColor: row.fill }} aria-hidden="true" />
                         <span className="min-w-0 flex-1 wrap-anywhere">{row.region}</span>
-                        <span className="tabular-nums">{number.format(row[comparison.baseline])}</span>
-                        <span className="w-10 text-right tabular-nums text-muted-foreground">{formatPercent(row[comparison.baseline] / baselineContributionTotal * 100)}</span>
+                        <span className="tabular-nums">{number.format(row[contributionMetric])}</span>
+                        <span className="w-10 text-right tabular-nums text-muted-foreground">{formatPercent(row[contributionMetric] / baselineContributionTotal * 100)}</span>
                       </li>)}
                     </ul>
                   </div>
-                ) : <p className="p-4 text-sm text-muted-foreground">No positive {metricLabels[comparison.baseline].toLowerCase()} volume for this month.</p>}
-                {chartRows.some((row) => row[comparison.baseline] < 0) && <p className="px-3 pb-3 text-xs text-muted-foreground">Shares use positive volumes. Negative volumes remain in totals and comparisons.</p>}
+                ) : <p className="p-4 text-sm text-muted-foreground">No positive {metricLabels[contributionMetric].toLowerCase()} volume for this month.</p>}
+                {chartRows.some((row) => row[contributionMetric] < 0) && <p className="px-3 pb-3 text-xs text-muted-foreground">Shares use positive volumes. Negative volumes remain in totals and comparisons.</p>}
               </section>
 
 
@@ -461,7 +493,7 @@ export default function DashboardPage() {
                 {allExpanded ? 'Collapse All' : 'Expand All'}
               </button>
             </div>
-            <Table summary={{ records: data?.details.length ?? 0, customers: uniqueCount((data?.details ?? []).map((row) => row.customer_id)), products: uniqueCount((data?.details ?? []).map((row) => row.product_id)) }} data-monthly-sales className="min-w-[1000px] table-fixed text-xs" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
+            <Table summary={summaryForLevel(data?.details.length ?? 0, data?.scope === 'kam' ? 'customers' : data?.scope === 'rsm' ? 'kams' : 'rsms', (data?.details ?? []).map((row) => data?.scope === 'kam' ? row.customer_id : data?.scope === 'rsm' ? row.submitted_by : row.endorsed_by))} data-monthly-sales className="min-w-[1000px] table-fixed text-xs" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
               <colgroup><col /><col data-fixed-column="area" />{Array.from({ length: 6 }, (_, index) => <col key={index} data-volume-column="number" />)}</colgroup>
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b bg-muted/40">

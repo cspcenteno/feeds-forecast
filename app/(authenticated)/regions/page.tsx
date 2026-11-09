@@ -1,5 +1,11 @@
 'use client'
 
+import { usePopupError } from '@/components/action-dialogs'
+
+import { sortRegions } from '@/lib/region-order'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { MapPin as HeadingMapPin } from 'lucide-react'
 
 import { formatCreatedDate } from '@/lib/format-created-date'
@@ -46,7 +52,7 @@ export default function RegionsPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [formOpen, setFormOpen] = useState(false)
 
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = usePopupError()
   const [loading, setLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(true)
 
@@ -65,7 +71,7 @@ export default function RegionsPage() {
         return
       }
 
-      setRegions(data ?? [])
+      setRegions(sortRegions(data ?? []))
 
     } finally {
       setTableLoading(false)
@@ -204,12 +210,12 @@ export default function RegionsPage() {
     created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
-  })
+  }, ['name'])
 
   return (
     <main className="space-y-4">
 
-      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+
       {/* Form */}
       {authorization.can('Regions', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Region' : 'Edit Region'} busy={loading}>
         <div className="mb-5">
@@ -294,11 +300,7 @@ export default function RegionsPage() {
             </button>
         </div>
         {/* Error */}
-        {error && (
-          <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+
       </RecordDialog> : null}
 
       {/* Table */}
@@ -339,7 +341,7 @@ export default function RegionsPage() {
                       </div> : <span className="text-sm text-muted-foreground">No Action</span>}
                     </TableCell>}
                     <TableCell>
-                      {region.is_active ? 'Active' : 'Inactive'}
+                      <StatusBadge status={region.is_active ? 'Active' : 'Inactive'} />
                     </TableCell>
                     <TableCell className="pl-6 font-medium">
                       {region.code || '—'}

@@ -48,6 +48,30 @@ export async function PUT(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  const auth = await getActiveAdmin()
+  if (auth.error || !auth.user) return auth.error
+  try {
+    if (!(await canManageModule(auth.user.id, 'can_delete'))) {
+      return NextResponse.json({ error: 'You do not have Users delete permission.' }, { status: 403 })
+    }
+    const { userId } = await request.json()
+    if (typeof userId !== 'string' || !userId.trim()) return NextResponse.json({ error: 'Select a user to delete.' }, { status: 400 })
+    if (userId === auth.user.id) return NextResponse.json({ error: 'You cannot delete your own signed-in account.' }, { status: 400 })
+    // Delete the sign-in account as well as the application profile. The browser
+    // client cannot administer Auth users, and profile-only deletion leaves login intact.
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    if (authError && authError.code !== 'user_not_found') {
+      return NextResponse.json({ error: `Unable to delete the sign-in account: ${authError.message}` }, { status: 400 })
+    }
+    const { error: profileError } = await supabaseAdmin.from('users').delete().eq('id', userId)
+    if (profileError) return NextResponse.json({ error: `The sign-in account was removed, but its profile could not be removed: ${profileError.message}` }, { status: 409 })
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Unable to delete the account. Refresh and try again.' }, { status: 500 })
+  }
+}
+
 const permissionFields = [
   'can_view',
   'can_add',
@@ -167,11 +191,11 @@ async function getActiveAdmin() {
 
 async function canManageModule(
   userId: string,
-  action: 'can_add' | 'can_edit',
+  action: 'can_add' | 'can_edit' | 'can_delete',
 ) {
   const { data, error } = await supabaseAdmin
     .from('user_permissions')
-    .select('can_add, can_edit, is_default')
+    .select('can_add, can_edit, can_delete, is_default')
     .eq('user_id', userId)
     .eq('module', 'Users')
 
@@ -183,12 +207,12 @@ async function canManageModule(
   if (!data || data.length === 0 || data.every((item) => item.is_default)) {
     const defaults = defaultPermissions('Admin') as Record<
       string,
-      { add: boolean; edit: boolean }
+      { add: boolean; edit: boolean; delete: boolean }
     >
 
     return action === 'can_add'
       ? Boolean(defaults.Users?.add)
-      : Boolean(defaults.Users?.edit)
+      : action === 'can_edit' ? Boolean(defaults.Users?.edit) : Boolean(defaults.Users?.delete)
   }
 
   return data.some((item) => Boolean(item[action]))

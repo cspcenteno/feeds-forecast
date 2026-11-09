@@ -1,5 +1,7 @@
 'use client'
 
+import { usePopupError } from '@/components/action-dialogs'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, ScrollText } from 'lucide-react'
 import { createClient } from '@/lib/client'
@@ -19,7 +21,7 @@ export default function AuditLogsPage() {
   const client = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = usePopupError()
   const [module, setModule] = useState('')
   const [action, setAction] = useState('')
   const [from, setFrom] = useState('')
@@ -76,16 +78,24 @@ export default function AuditLogsPage() {
       <label className="space-y-1 text-xs text-muted-foreground">To date<input type="date" className={field} value={to} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></label>
       <label className="space-y-1 text-xs text-muted-foreground">Record ID<div className="flex gap-2"><input className={field} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Exact ID" /><button type="submit" className="rounded-md border px-2 text-sm">Search</button></div></label>
     </form>
-    {error && <p role="alert" className="p-4 text-sm text-destructive">{error}</p>}
-    <Table className="min-w-[1000px] text-sm" containerProps={{ className: 'max-h-[65vh] overflow-auto', 'aria-label': 'Audit activity', tabIndex: 0 }}>
-      <thead className="sticky top-0 bg-card"><tr>{['Time', 'User', 'Module / Table', 'Action', 'Record ID', 'Details'].map((title) => <th key={title} className="px-3 py-3 text-left font-semibold">{title}</th>)}</tr></thead>
+
+    <Table className="min-w-[1200px] table-fixed text-sm" containerProps={{ className: 'max-h-[65vh] overflow-auto', 'aria-label': 'Audit activity', tabIndex: 0 }}>
+      <colgroup>
+        <col className="w-[200px]" />
+        <col className="w-[180px]" />
+        <col className="w-[220px]" />
+        <col className="w-[100px]" />
+        <col className="w-[180px]" />
+        <col />
+      </colgroup>
+      <thead className="sticky top-0 bg-card"><tr>{['Time', 'User', 'Module / Table', 'Action', 'Record ID', 'Details'].map((title) => <th key={title} className="whitespace-nowrap px-3 py-3 text-left font-semibold">{title}</th>)}</tr></thead>
       <tbody>{loading ? <TableLoadingRow columns={6} label="audit logs" /> : rows.length === 0 ? <tr><td colSpan={6} className="px-3 py-10 text-center text-muted-foreground">{error ? 'Audit logs could not be loaded.' : 'No audit activity found. Logging starts when the audit migration is applied.'}</td></tr> : rows.map((row) => <tr key={row.id} className="border-t align-top">
         <td className="whitespace-nowrap px-3 py-3">{new Date(row.created_at).toLocaleString()}</td>
-        <td className="px-3 py-3">{row.actor_name}</td>
-        <td className="px-3 py-3">{row.module}<span className="block text-xs text-muted-foreground">{row.table_name}</span></td>
-        <td className={'px-3 py-3 font-medium ' + (row.action === 'DELETE' ? 'text-red-600 dark:text-red-400' : row.action === 'INSERT' ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>{row.action === 'INSERT' ? 'Created' : row.action === 'UPDATE' ? 'Updated' : 'Deleted'}</td>
-        <td className="px-3 py-3">{row.record_id ?? '—'}</td>
-        <td className="max-w-sm px-3 py-3 wrap-anywhere">{row.summary}{row.changed_fields.length > 0 && <span className="mt-1 block text-xs text-muted-foreground">Fields: {row.changed_fields.join(', ')}</span>}</td>
+        <td className="px-3 py-3 wrap-anywhere">{row.actor_name}</td>
+        <td className="px-3 py-3 wrap-anywhere">{row.module}<span className="block text-xs text-muted-foreground">{row.table_name}</span></td>
+        <td className={'whitespace-nowrap px-3 py-3 font-medium ' + (row.action === 'DELETE' ? 'text-red-600 dark:text-red-400' : row.action === 'INSERT' ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>{row.action === 'INSERT' ? 'Created' : row.action === 'UPDATE' ? 'Updated' : 'Deleted'}</td>
+        <td className="px-3 py-3 wrap-anywhere">{row.record_id ?? '—'}</td>
+        <td className="px-3 py-3 wrap-anywhere">{row.summary}{row.changed_fields.length > 0 && <span className="mt-1 block text-xs text-muted-foreground">Fields: {row.changed_fields.join(', ')}</span>}</td>
       </tr>)}</tbody>
     </Table>
     <footer className="flex items-center justify-between gap-2 border-t p-4 text-sm"><span>Page {page + 1} · {rows.length} records</span><div className="flex gap-2"><button className="rounded-md border px-3 py-2 disabled:opacity-50" disabled={loading || page === 0} onClick={() => setPage((current) => current - 1)}>Previous</button><button className="rounded-md border px-3 py-2 disabled:opacity-50" disabled={loading || !hasMore} onClick={() => setPage((current) => current + 1)}>Next</button></div></footer>

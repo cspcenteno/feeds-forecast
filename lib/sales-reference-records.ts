@@ -11,7 +11,9 @@ export async function loadSalesReferenceBudgets(client: ReturnType<typeof create
   const records: Budget[] = []
   if (!years.length || !regions.length || !products.length) return { data: records, error: null }
   for (let from = 0; ; from += 1000) {
-    let query = client.from('budgets').select('id, year, month, region_id, subregion_id, customer_id, product_id, volume')
+    let query = client.rpc('get_monthly_reference_budget_rows', {
+      p_module: 'Approvals', p_years: years, p_region_ids: regions, p_customer_ids: customers,
+    }).select('id, year, month, region_id, subregion_id, customer_id, product_id, volume')
       .in('year', years).in('region_id', regions).in('product_id', products).order('id').range(from, from + 999)
     query = customers.length ? query.or('customer_id.is.null,customer_id.in.(' + customers.join(',') + ')') : query.is('customer_id', null)
     const { data, error } = await query.abortSignal(AbortSignal.timeout(20000))

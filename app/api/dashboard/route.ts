@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     if (!profile?.is_active) return NextResponse.json({ error: 'Your account is inactive.' }, { status: 403 })
     const level = dashboardLevel(profile)
     const isSupervisor = profile.role !== 'Admin' && ['SV', 'SUPERVISOR'].includes(String(profile.position ?? '').trim().toUpperCase())
-    if (isSupervisor) dashboard.details = dashboard.details.filter((row) => profile.region_id != null && row.region_id === profile.region_id)
+    if (isSupervisor || dashboard.scope === 'rsm') dashboard.details = dashboard.details.filter((row) => profile.region_id != null && profile.subregion_id != null && row.region_id === profile.region_id && row.subregion_id === profile.subregion_id)
     const kamKeys = new Set(dashboard.details.map((row) => JSON.stringify([row.region_id, row.customer_id, row.product_id])))
     let ownsImportedVolume: ReturnType<typeof buildKamVolumeScope> = () => false
     if (dashboard.scope === 'kam' && profile.region_id !== null) {
@@ -75,9 +75,11 @@ export async function GET(request: Request) {
           if (profile.region_id == null) break
           query.eq('region_id', profile.region_id)
         }
-        if (isSupervisor) {
+        if (isSupervisor || dashboard.scope === 'rsm') {
           if (profile.region_id == null) break
           query.eq('region_id', profile.region_id)
+          if (profile.subregion_id == null) break
+          query.eq('subregion_id', profile.subregion_id)
         }
         if (lastId !== null) query.gt('id', lastId)
         const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))
@@ -113,9 +115,11 @@ export async function GET(request: Request) {
           if (profile.region_id == null) break
           query.eq('region_id', profile.region_id)
         }
-        if (isSupervisor) {
+        if (isSupervisor || dashboard.scope === 'rsm') {
           if (profile.region_id == null) break
           query.eq('region_id', profile.region_id)
+          if (profile.subregion_id == null) break
+          query.eq('subregion_id', profile.subregion_id)
         }
         if (cursor !== null) query.gt('id', cursor)
         const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))

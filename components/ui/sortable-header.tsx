@@ -3,17 +3,22 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
 import { TableHead } from '@/components/ui/table'
+import { compareRegionNames } from '@/lib/region-order'
 
 type Direction = 'ascending' | 'descending'
 
 export function useTableSort<Row, Key extends string>(
   rows: Row[],
   values: Record<Key, (row: Row) => string | null>,
+  regionKeys: readonly NoInfer<Key>[] = [],
 ) {
   const [sort, setSort] = useState<{ key: Key; direction: Direction } | null>(null)
 
   const sortedRows = sort ? [...rows].sort((first, second) => {
     const getValue = values[sort.key]
+    if (sort.key === 'region' || regionKeys.includes(sort.key)) {
+      return compareRegionNames(getValue(first) ?? '', getValue(second) ?? '')
+    }
     const comparison = (getValue(first) ?? '').localeCompare(
       getValue(second) ?? '',
       undefined,

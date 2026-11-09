@@ -52,8 +52,8 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
 }
 
 @theme inline {
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-inter);
+  --font-sans: var(--font-geist), Arial, Helvetica, sans-serif;
+  --font-heading: var(--font-sans);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --color-background: var(--background);
@@ -88,20 +88,20 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.5);
+  --radius-4xl: calc(var(--radius) * 1.5);
 }
 
 /* Light theme */
 :root {
   /* Typography */
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-inter);
+  --font-sans: var(--font-geist), Arial, Helvetica, sans-serif;
+  --font-heading: var(--font-sans);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Base colors */
@@ -158,15 +158,15 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* Radius */
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.5);
+  --radius-4xl: calc(var(--radius) * 1.5);
 
-  --background: oklch(1 0 0);
+  --background: #fafafa;
   --foreground: oklch(0.145 0 0);
 
   --card: oklch(1 0 0);
@@ -189,8 +189,8 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
 
   --destructive: oklch(0.577 0.245 27.325);
 
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: #e5e5e5;
+  --input: #e5e5e5;
   --ring: oklch(0.708 0 0);
 
   /* Charts */
@@ -214,7 +214,19 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
   --sidebar-ring: #527362;
 
   /* Global radius */
-  --radius: 0.625rem;
+  --radius: 0.5rem;
+}
+
+/* Flat surfaces and quiet borders follow the reference's simple field styling. */
+.bg-card.border:not([data-record-dialog]) {
+  box-shadow: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-foreground);
+  font-weight: 400;
+  opacity: 1;
 }
 
 /* Dark theme */
@@ -274,6 +286,7 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
 }
 
 .app-sidebar [data-slot="sidebar-menu-button"] {
+  font-weight: 500;
   position: relative;
   height: 2rem;
   min-height: 2rem;
@@ -325,7 +338,7 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
   white-space: nowrap;
   opacity: 1;
   transition: none;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -342,12 +355,11 @@ input:is([type="date"], [type="month"], [type="week"], [type="time"], [type="dat
 .app-sidebar[data-state="collapsed"] [data-slot="sidebar-group-label"]::after {
   content: '';
   position: absolute;
-  left: 50%;
+  left: calc(50% - 10px);
   width: 1.25rem;
-  transform: translateX(-50%);
-  top: 50%;
-  height: 1px;
-  background-color: var(--sidebar-foreground);
+  top: 11px;
+  height: 0;
+  border-top: 2px solid var(--sidebar-foreground);
   opacity: 0.25;
   animation: sidebar-divider-in 100ms 200ms both;
 }
@@ -507,7 +519,7 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
 [data-section-title] {
   margin: 0;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.5rem;
 }
 
@@ -530,8 +542,8 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
 [data-section-header] {
   display: flex;
   box-sizing: border-box;
-  min-height: 4.5rem;
-  padding: 1rem 1.5rem;
+  min-height: 4rem;
+  padding: 0.75rem 1rem;
   align-items: center;
 }
 
@@ -632,7 +644,7 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
 
 .app-field-row > :is(div, label) { margin-block: 0; }
 .app-field-row > div:not([data-field-size="toggle"]) > label { margin-bottom: 0.375rem; }
-.app-field-row > label > :is(input, div) { margin-top: 0.375rem; }
+.app-field-row > label > :is(input, select, div) { margin-top: 0.375rem; }
 
 @media (max-width: 639px) {
   [data-action-toolbar] {
@@ -763,11 +775,19 @@ table:is([data-volume-layout="forecast-import"], [data-volume-layout="import"]) 
 }
 
 /* Base styles */
-[data-login-form] input,
-[data-login-form] input:focus,
-[data-login-form] input:autofill {
-  font-family: var(--font-inter), sans-serif;
-  font-size: 16px;
+[data-auth-form] {
+  --auth-input-size: 1rem;
+}
+
+@media (min-width: 640px) {
+  [data-auth-form] { --auth-input-size: 0.875rem; }
+}
+
+[data-auth-form] input,
+[data-auth-form] input:focus,
+[data-auth-form] input:autofill {
+  font-family: var(--font-sans);
+  font-size: var(--auth-input-size);
   font-weight: 400;
   line-height: 24px;
   letter-spacing: normal;
@@ -789,11 +809,13 @@ table:is([data-volume-layout="forecast-import"], [data-volume-layout="import"]) 
   caret-color: #f1f5f9;
 }
 
-[data-login-form] input:-webkit-autofill::first-line {
-  font-family: var(--font-inter), sans-serif;
-  font-size: 16px;
+[data-auth-form] input::first-line,
+[data-auth-form] input:-webkit-autofill::first-line {
+  font-family: var(--font-sans);
+  font-size: var(--auth-input-size);
   font-weight: 400;
   line-height: 24px;
+  letter-spacing: normal;
 }
 
 @layer base {
@@ -810,7 +832,9 @@ table:is([data-volume-layout="forecast-import"], [data-volume-layout="import"]) 
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: var(--font-inter), sans-serif;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.5;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
   }
@@ -825,6 +849,64 @@ table:is([data-volume-layout="forecast-import"], [data-volume-layout="import"]) 
   ::selection {
     background: var(--foreground);
     color: var(--background);
+  }
+}
+
+/* Shared type hierarchy for page content and portaled record forms. */
+.app-tables,
+[data-record-dialog] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.app-tables label,
+[data-record-dialog] label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+[data-record-dialog] [data-section-title] {
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .app-tables :is(input, select, textarea),
+  [data-record-dialog] :is(input, select, textarea) {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+
+/* Use the same readable type scale on phones and narrow tablets. */
+@media (max-width: 767px) {
+  .app-tables,
+  [data-record-dialog],
+  [data-auth-form] {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .app-tables button,
+  [data-record-dialog] button,
+  [data-auth-form] button {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  :root body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="color"]):not([type="image"]),
+  :root body select,
+  :root body textarea {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  [data-auth-form] { --auth-input-size: 1rem; }
+
+  .app-tables [data-section-title],
+  [data-record-dialog] [data-section-title] {
+    font-size: 1rem;
+    line-height: 1.5rem;
   }
 }
 
@@ -921,6 +1003,7 @@ button[data-action-tone]:not(:disabled) {
 }
 
 button[data-slot="profile-menu-action"] {
+  font-weight: 500;
   justify-content: flex-start;
   border-color: transparent;
 }
@@ -943,6 +1026,20 @@ button[data-slot="show-hide-button"] {
 
 button[data-slot="profile-menu-action"]:not(:hover) {
   background-color: transparent;
+}
+
+@media (max-width: 639px) {
+  [data-action-toolbar][data-permissions-toolbar] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-permissions-toolbar] > button {
+    width: 100%;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -970,6 +1067,8 @@ button[data-slot="profile-menu-action"]:not(:hover) {
 
 .app-tables table > thead > tr > th {
   padding-block: 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
   font-weight: 600;
   text-align: left;
   vertical-align: middle;
@@ -1012,5 +1111,151 @@ button[data-slot="expand-collapse-button"] {
 @media (hover: hover) {
   .app-tables table > tbody > tr:hover > td:not([colspan]) {
     box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--muted) 35%, transparent);
+  }
+}
+
+/* One type and control scale for all portaled forms and confirmations. */
+[data-app-dialog] {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  border-color: var(--border);
+  border-radius: var(--radius-xl);
+  background-color: var(--card);
+  color: var(--card-foreground);
+}
+
+[data-app-dialog] :is(h2, [data-dialog-title], [data-section-title]) {
+  min-width: 0;
+  margin: 0;
+  padding-right: 2rem;
+  font-size: 1rem;
+  line-height: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+[data-app-dialog] :is(h2, [data-dialog-title], [data-section-title]) > svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+}
+
+[data-app-dialog] fieldset {
+  min-inline-size: 0;
+  max-width: 100%;
+}
+
+[data-app-dialog] fieldset > :is(label, div),
+[data-app-dialog] :is(input, select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-app-dialog] label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+[data-app-dialog] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea) {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+[data-app-dialog] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select) {
+  height: 2.5rem;
+}
+
+[data-app-dialog] :is(input, select, textarea):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sidebar-ring) 45%, transparent);
+  outline-offset: -2px;
+  border-color: var(--sidebar-ring);
+  box-shadow: none;
+}
+
+[data-app-dialog] :is(button[data-action-tone], button[type="submit"], button:not([aria-label]):not([role="checkbox"])) {
+  min-height: 2.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+}
+
+[data-app-dialog] table {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+[data-app-dialog] table th { font-weight: 500; }
+
+[data-app-dialog] textarea { min-height: 6rem; }
+
+/* The shared dialog already supplies the outer padding for the Users form. */
+[data-compact-editor] {
+  padding: 1.25rem;
+}
+
+[data-compact-editor] form,
+[data-compact-editor] form > div:first-of-type,
+[data-compact-editor] fieldset {
+  gap: 0.75rem;
+}
+
+[data-compact-editor] fieldset > * {
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+[data-compact-editor] fieldset > label {
+  display: block;
+}
+
+[data-compact-editor] fieldset > label > :is(input, div) {
+  display: block;
+  margin-top: 0.375rem;
+}
+
+[data-compact-editor] .app-tables table > :is(thead, tbody) > tr > :is(th, td) {
+  padding-block: 0.375rem;
+}
+
+[data-compact-editor] [data-action-toolbar] {
+  padding-top: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  [data-compact-editor] :is(input:not([type="checkbox"]):not([type="radio"]), select) {
+    height: 2.25rem;
+  }
+}
+
+[data-record-dialog] #user-editor > [data-section-header] {
+  min-height: auto;
+  padding: 0 2rem 1rem 0;
+}
+[data-record-dialog] #user-editor > .app-field-row {
+  padding: 1rem 0;
+}
+[data-record-dialog] #user-editor > .border-t {
+  padding-inline: 0;
+}
+
+@media (max-width: 767px) {
+  [data-app-dialog] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea) {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  [data-app-dialog] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select) {
+    height: 2.75rem;
   }
 }

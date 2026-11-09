@@ -1,10 +1,13 @@
 'use client'
 
+import { usePopupError } from '@/components/action-dialogs'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { FileSpreadsheet as HeadingFileSpreadsheet, Pencil as HeadingPencil } from 'lucide-react'
 
 import { useStatusNotification } from '@/components/action-dialogs'
 
-import { uniqueCount } from '@/components/ui/table-summary'
 import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
 import { Save as ActionSaveIcon, X as ActionXIcon, UserPlus as ActionUserPlusIcon } from 'lucide-react'
 import { useActionDialogs } from '@/components/action-dialogs'
@@ -49,7 +52,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
   const [show, setShow] = useState(false)
   const [expanded, setExpanded] = useState({ Valid: true, Invalid: true })
   const [expandedValidationGroups, setExpandedValidationGroups] = useState<Set<string>>(new Set())
-  const [error, setError] = useState('')
+  const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
   const [editing, setEditing] = useState<ForecastImportRow | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -307,8 +310,8 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
           }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
         </div>
       </div>
-      {error && <p role="alert" className="m-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-      {show && <div className="space-y-4 p-6">
+
+      {show && <div className="space-y-4 p-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[['Total Records', rows.length], ['Ready to Import', ready.length], ['Invalid', invalidCount], ['Already Imported / Duplicate', preview.length - invalidCount - ready.length]].map(([label, value]) => <div key={label} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{rows.length > 0 ? value : busy ? <LoadingSpinner label={String(label).toLowerCase()} /> : referencesReady && stagingReady ? value : '—'}</p></div>)}
           </div>
@@ -336,7 +339,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             <div data-action-toolbar="" className="flex gap-2"><button data-action-tone="primary" data-action-fill="" disabled={disabled} type="submit" className="rounded-md border px-3 py-2 text-sm"><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Save Changes</button><button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => setEditing(null)} className="rounded-md border px-3 py-2 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button></div>
           </form>}
 
-          <Table summary={{ records: preview.length, customers: uniqueCount(preview.map((row) => row.customer?.id)), products: uniqueCount(preview.map((row) => row.source.product_code)) }} data-volume-layout="forecast-import" id="forecast-import-records" className="min-w-[1200px] table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Forecast import preview' }}>
+          <Table summary={{ records: preview.length }} data-volume-layout="forecast-import" id="forecast-import-records" className="min-w-[1200px] table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Forecast import preview' }}>
             <colgroup>
               <col data-action-column="standard" />
               {[280, 160, 96, 160, 224, 256, 160, 288, 144].map((width, index) => <col key={index} style={{ width }} />)}
@@ -349,8 +352,8 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
                     {authorization.can('Forecast Input', 'edit') && <TableActionButton action="edit" type="button" disabled={disabled} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs" />}
                     {authorization.can('Forecast Input', 'delete') && <TableActionButton action="discard" type="button" disabled={disabled} onClick={() => void discardUploadedRows([row.source.id])} className="rounded-md border px-2 py-1 text-xs" />}
                   </div></td>
-                  <td className={`px-3 py-3 align-top text-xs leading-5 wrap-anywhere ${row.issues.length ? 'text-destructive' : ''}`}>
-                    <p className="font-medium">{row.status}</p>
+                  <td className={`px-3 py-3 align-top text-sm leading-5 wrap-anywhere ${row.issues.length ? 'text-destructive' : ''}`}>
+                    <StatusBadge status={row.status} />
                     {row.issues.length > 0 && <p className="mt-1">{row.issues.join(' ')}</p>}
                     {!row.customer && row.region && row.source.customer.trim() && authorization.can('Customers', 'add') && (scope.allRegions || row.region.id === scope.regionId) && (
                       <button data-action-tone="primary" type="button" disabled={disabled} onClick={() => void addCustomer(row)} className="mt-2 block rounded-md border px-2 py-1 text-foreground disabled:opacity-50"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Add to Customers</button>

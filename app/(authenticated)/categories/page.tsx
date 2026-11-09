@@ -1,5 +1,9 @@
 'use client'
 
+import { usePopupError } from '@/components/action-dialogs'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { Tags as HeadingTags } from 'lucide-react'
 
 import { formatCreatedDate } from '@/lib/format-created-date'
@@ -48,7 +52,7 @@ export default function CategoriesPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [formOpen, setFormOpen] = useState(false)
 
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = usePopupError()
   const [loading, setLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(true)
 
@@ -216,7 +220,7 @@ export default function CategoriesPage() {
   return (
     <main className="space-y-4">
 
-      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+
       {/* Form */}
       {authorization.can('Categories', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Category' : 'Edit Category'} busy={loading}>
         <div className="mb-5">
@@ -319,11 +323,7 @@ export default function CategoriesPage() {
             </button>
         </div>
         {/* Error */}
-        {error && (
-          <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+
       </RecordDialog> : null}
 
       {/* Table */}
@@ -375,7 +375,7 @@ export default function CategoriesPage() {
                       </div> : <span className="text-sm text-muted-foreground">No Action</span>}
                     </TableCell>}
                     <TableCell>
-                      {category.is_active ? 'Active' : 'Inactive'}
+                      <StatusBadge status={category.is_active ? 'Active' : 'Inactive'} />
                     </TableCell>
                     <TableCell className="pl-6 font-medium">
                       {category.code || '—'}

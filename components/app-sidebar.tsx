@@ -1,8 +1,6 @@
 
 'use client'
 
-import { KeyRound as HeadingKeyRound } from 'lucide-react'
-
 import { X as ActionXIcon } from 'lucide-react'
 import { useActionDialogs } from '@/components/action-dialogs'
 import { useEffect, useRef, useState } from 'react'
@@ -353,8 +351,8 @@ export function AppSidebar() {
           <div className="flex h-20 shrink-0 items-center overflow-hidden px-2 group-data-[collapsible=icon]:justify-center">
             <div className="flex min-w-0 flex-1 items-center gap-2.5 group-data-[collapsible=icon]:hidden">
               <Image src="/vitarich-logo.png" alt="Vitarich Corporation" width={40} height={40} className="size-10 shrink-0 object-contain" />
-              <p className="shrink-0 whitespace-nowrap text-lg leading-tight font-semibold tracking-tight">
-                Feed Sales<br /><span className="font-normal">Forecast</span>
+              <p className="shrink-0 whitespace-nowrap text-lg leading-tight font-bold tracking-tight">
+                Feed Sales<br /><span className="font-semibold">Forecast</span>
               </p>
             </div>
 
@@ -387,7 +385,11 @@ export function AppSidebar() {
                       <item.icon />
                       <span>{item.title}</span>
                       {attention && (item.url === '/forecast-input' ? attention.returned.length : item.url === '/approvals' ? attention.pending + attention.endorsed : 0) > 0 && (
-                        <span data-slot="forecast-attention-badge" className="ml-auto flex min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:right-0"
+                        <span data-slot="forecast-attention-badge" className={'ml-auto flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:right-0 ' + (item.url === '/forecast-input'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200'
+                          : attention.pending > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200')}
+                          title={item.url === '/forecast-input' ? `${attention.returned.length} returned for revision` : `${attention.pending} awaiting endorsement · ${attention.endorsed} awaiting approval`}
                           aria-label={item.url === '/forecast-input' ? `${attention.returned.length} returned forecasts` : `${attention.pending + attention.endorsed} forecasts awaiting review`}>
                           {item.url === '/forecast-input' ? attention.returned.length : attention.pending + attention.endorsed}
                         </span>
@@ -579,15 +581,15 @@ export function AppSidebar() {
       {/* Change Password Dialog */}
       {changePasswordOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div role="dialog" aria-modal="true" aria-labelledby="change-password-title" aria-describedby="change-password-description" aria-busy={changingPassword}
-            className="max-h-[90svh] w-full max-w-md overflow-y-auto rounded-2xl border bg-background shadow-xl">
+          <div data-app-dialog role="dialog" aria-modal="true" aria-labelledby="change-password-title" aria-describedby="change-password-description" aria-busy={changingPassword}
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border bg-card shadow-xl">
             <div className="flex items-start justify-between gap-3 px-6 pt-6">
               <div className="flex items-center gap-3">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sidebar-accent text-sidebar-accent-foreground">
                   <KeyRound className="size-5" aria-hidden="true" />
                 </div>
                 <div>
-                  <h2 data-section-title="" id="change-password-title" className="text-lg font-semibold tracking-tight"><HeadingKeyRound className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Change password</h2>
+                  <h2 data-section-title="" id="change-password-title" className="text-lg font-semibold tracking-tight">Change password</h2>
                   <p id="change-password-description" className="mt-1 text-xs text-muted-foreground">Choose a new password for your account.</p>
                 </div>
               </div>

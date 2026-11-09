@@ -1,8 +1,18 @@
 'use client'
 
+import { summaryForLevel } from '@/lib/table-summary-level'
+
+import { usePopupError } from '@/components/action-dialogs'
+
+import { sortRegions } from '@/lib/region-order'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { Users as HeadingUsers } from 'lucide-react'
 
 import { RecordDialog } from '@/components/ui/record-dialog'
+import { SalespersonInput } from '@/components/ui/salesperson-input'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Plus as AddRecordIcon } from 'lucide-react'
 import { UserPlus as ActionUserPlusIcon, X as ActionXIcon } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
@@ -48,9 +58,17 @@ export default function CustomersPage() {
   const [regionId, setRegionId] = useState('')
   const [isActive, setIsActive] = useState(true)
   const [segment, setSegment] = useState('')
+  const segmentOptions = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const item of customers) {
+      const name = item.segment?.trim()
+      if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name)
+    }
+    return [...names.values()].sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, label: name }))
+  }, [customers])
   const [loading, setLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [, setError] = usePopupError()
 
   const loadCustomers = useCallback(async () => {
     setTableLoading(true)
@@ -69,7 +87,7 @@ export default function CustomersPage() {
       }
 
       setCustomers((customersResult.data ?? []) as Customer[])
-      setRegions((regionsResult.data ?? []) as Region[])
+      setRegions(sortRegions((regionsResult.data ?? []) as Region[]))
 
     } finally {
       setTableLoading(false)
@@ -170,13 +188,14 @@ export default function CustomersPage() {
     salesman: (row) => row.salesman,
     region: (row) => regions.find((region) => String(region.id) === String(row.region_id))?.name ?? null,
     segment: (row) => row.segment,
+    status: (row) => row.is_active ? 'Active' : 'Inactive',
     created_at: (row) => row.created_at ? new Date(row.created_at).toISOString() : null,
   })
 
   return (
     <main className="space-y-4">
 
-      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+
       {authorization.can('Customers', 'add') || editingId !== null ? (
         <RecordDialog open={formOpen} onClose={resetForm} title={editingId === null ? 'Add Customer' : 'Edit Customer'} busy={loading}>
           <div className="mb-5">
@@ -192,7 +211,7 @@ export default function CustomersPage() {
             </label>
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
               Salesman
-              <input value={salesman} onChange={(e) => setSalesman(e.target.value)} placeholder="Enter salesman name" className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
+              <SalespersonInput value={salesman} onValueChange={setSalesman} placeholder="Select or enter salesman name" />
             </label>
             <label className="space-y-2 text-sm font-medium">
               Region
@@ -206,7 +225,8 @@ export default function CustomersPage() {
             </label>
             <label className="space-y-2 text-sm font-medium">
               Segment
-              <input value={segment} onChange={(e) => setSegment(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
+              <SearchableSelect aria-label="Segment" freeText value={segment} onValueChange={setSegment}
+                options={segmentOptions} placeholder="Select or enter segment" />
             </label>
             <div data-field-size="toggle" className="flex items-end">
               <ActiveField checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
@@ -215,7 +235,7 @@ export default function CustomersPage() {
 
           </div>
 
-          {error && <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+
 
           <div data-action-toolbar="" className="mt-5 flex gap-2">
             {authorization.can('Customers', editingId === null ? 'add' : 'edit') && (
@@ -231,17 +251,26 @@ export default function CustomersPage() {
       <TableGroupProvider groupKeys={sortedCustomers.map((item) => item.salesman?.trim() || '')}>
       <section className="rounded-xl border bg-card shadow-sm">
         <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Customers', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Customer</button>}<TableGroupToggle disabled={tableLoading} /></div>
-        <Table summary={{ records: sortedCustomers.length }} aria-busy={tableLoading}
-          className="min-w-[900px] table-fixed wrap-anywhere"
+        <Table summary={summaryForLevel(sortedCustomers.length, 'kams', sortedCustomers.map((row) => row.salesman?.trim()))} aria-busy={tableLoading}
+          className="min-w-[1200px] table-fixed wrap-anywhere"
           containerProps={{ className: "max-h-[min(32rem,65vh)] overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Customers table" }}
         >
+            <colgroup>
+              {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <col data-action-column="standard" />}
+              <col />
+              <col />
+              <col className="w-32" />
+              <col className="w-32" />
+              <col data-fixed-column="status" />
+              <col className="w-[180px]" />
+            </colgroup>
             <thead><tr className="border-b bg-muted/40">
               {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <th data-action-column="standard" className="px-1.5 py-3 sm:px-3 text-left font-medium">Action</th>}
-              <SortableHeader plain className="w-[24%] px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer</SortableHeader>
-              <SortableHeader plain className="w-[144px] min-w-[144px] max-w-[144px] px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>KAM / Salesman</SortableHeader>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer</SortableHeader>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>KAM / Salesman</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('segment')}>Segment</SortableHeader>
-              <th data-fixed-column="status" className="px-1.5 py-3 sm:px-3 text-left font-medium">Status</th>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('status')}>Status</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('created_at')}>Date Created</SortableHeader>
             </tr></thead>
             <tbody>
@@ -266,13 +295,13 @@ export default function CustomersPage() {
                   <td className="px-1.5 py-3 sm:px-3">{item.salesman || '—'}</td>
                   <td className="px-1.5 py-3 sm:px-3">{regions.find((region) => String(region.id) === String(item.region_id))?.name || '—'}</td>
                   <td className="px-1.5 py-3 sm:px-3">{item.segment || '—'}</td>
-                  <td className="px-1.5 py-3 sm:px-3">{item.is_active ? 'Active' : 'Inactive'}</td>
+                  <td className="px-1.5 py-3 sm:px-3"><StatusBadge status={item.is_active ? 'Active' : 'Inactive'} /></td>
                   <td className="px-1.5 py-3 sm:px-3">{item.created_at ? new Date(item.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                 </tr>
               )}</GroupedTableRows>}
             </tbody>
         </Table>
-        {error && !authorization.can('Customers', 'add') && <p className="m-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+
       </section>
       </TableGroupProvider>
     </main>

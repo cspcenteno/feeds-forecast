@@ -1,5 +1,7 @@
 'use client'
 
+import { compareRegionNames } from '@/lib/region-order'
+
 import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
 import { cloneElement, createContext, Fragment, isValidElement, useContext, useId, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
@@ -42,7 +44,7 @@ export function GroupedTableRows<Row>({ rows, getGroup, columnCount, children }:
     if (group) group.rows.push(row)
     else groups.set(key, { label, rows: [row] })
   }
-  const ordered = [...groups].sort((a, b) => a[1].label.localeCompare(b[1].label))
+  const ordered = [...groups].sort((a, b) => compareRegionNames(a[1].label, b[1].label))
 
   return <>
     {ordered.map(([key, group], index) => {

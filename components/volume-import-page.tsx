@@ -1,13 +1,20 @@
 
 'use client'
 
+import { summaryForLevel } from '@/lib/table-summary-level'
+
+import { usePopupError } from '@/components/action-dialogs'
+
+import { sortRegions } from '@/lib/region-order'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { Pencil as HeadingPencil, Database as HeadingDatabase } from 'lucide-react'
 
 import { useStatusNotification } from '@/components/action-dialogs'
 
 import { ImportProductDialog } from '@/components/import-product-dialog'
 
-import { uniqueCount } from '@/components/ui/table-summary'
 import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
 import { UserPlus as ActionUserPlusIcon, Save as ActionSaveIcon, X as ActionXIcon } from 'lucide-react'
 import { useActionDialogs } from '@/components/action-dialogs'
@@ -17,6 +24,8 @@ import { TableActionButton } from '@/components/ui/table-action-button'
 import { Table } from '@/components/ui/table'
 import { LoadingSpinner, TableLoadingRow } from '@/components/ui/loading-spinner'
 import { SearchableSelect } from '@/components/ui/searchable-select'
+import { RecordDialog } from '@/components/ui/record-dialog'
+import { SalespersonInput } from '@/components/ui/salesperson-input'
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
@@ -26,8 +35,6 @@ import {
   ChevronDown,
   ChevronRight,
   Upload,
-  AlertCircle,
-  CheckCircle2,
   FileSpreadsheet,
   Download,
 } from 'lucide-react'
@@ -35,7 +42,7 @@ import { createClient } from '@/lib/client'
 import { getActualPeriod } from '@/lib/actual-records'
 import { getBudgetImportKey } from '@/lib/budget-import-key'
 import { groupedTableKeys } from '@/lib/grouped-table-keys'
-import { persistSavedVolumeUpdate, validateSavedVolumePeriod } from '@/lib/saved-volume-records'
+import { persistCustomerVolumeUpdates, validateSavedVolumePeriod, orderVolumeEditorRows } from '@/lib/saved-volume-records'
 import { useAuthorization } from '@/lib/authorization'
 import { downloadImportTemplate } from '@/lib/download-import-template'
 
@@ -92,15 +99,7 @@ type BudgetImportRecord = {
 }
 
 type SavedRecordDraft = {
-  original: BudgetRecord
-  regionId: string
-  year: string
-  month: string
-  actualDate: string
-  customerId: string
-  productId: string
-  volume: string
-  kam: string
+  original: BudgetRecord; year: string; month: string; actualDate: string; volume: string; productId: string
 }
 
 type ImportPreview = {
@@ -237,31 +236,6 @@ function getImportStatusLabel(status: ImportPreview['status']) {
   }
 }
 
-function getImportStatusIcon(status: ImportPreview['status']) {
-  switch (status) {
-    case 'Ready':
-      return <CheckCircle2 className="size-4" />
-    case 'Invalid':
-      return <AlertCircle className="size-4" />
-    case 'Already imported':
-      return <CheckCircle2 className="size-4" />
-    case 'Duplicate in staging':
-      return <AlertCircle className="size-4" />
-  }
-}
-
-function getImportStatusClass(status: ImportPreview['status']) {
-  if (status === 'Ready') {
-    return 'text-foreground'
-  }
-
-  if (status === 'Invalid') {
-    return 'text-destructive'
-  }
-
-  return 'text-muted-foreground'
-}
-
 export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actual' }) {
   const { confirmAction } = useActionDialogs()
 
@@ -323,13 +297,12 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   const [initializing, setInitializing] = useState(true)
   const [loadingStaging, setLoadingStaging] = useState(false)
   const [stagingLoaded, setStagingLoaded] = useState(false)
-  const [stagingError, setStagingError] = useState('')
+  const [stagingError, setStagingError] = usePopupError()
   const [uploadingExcel, setUploadingExcel] = useState(false)
   const [importing, setImporting] = useState(false)
   const [editingImport, setEditingImport] = useState<BudgetImportRecord | null>(null)
-  const [editingSaved, setEditingSaved] = useState<SavedRecordDraft | null>(null)
-  const [savedEditError, setSavedEditError] = useState('')
-  const savedEditorRef = useRef<HTMLFormElement>(null)
+  const [editingSavedCustomer, setEditingSavedCustomer] = useState<{ customer: string; customerId: string; kam: string; year: string; rows: SavedRecordDraft[] } | null>(null)
+  const [, setSavedEditError] = usePopupError()
   const stagingEditorRef = useRef<HTMLInputElement>(null)
   const [savingImport, setSavingImport] = useState(false)
   const [addingCustomer, setAddingCustomer] = useState(false)
@@ -337,7 +310,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   const importBusy = initializing || savingImport || addingCustomer || uploadingExcel || importing || loadingStaging
   const [showImportPreview, setShowImportPreview] = useState(false)
 
-  const [error, setError] = useState('')
+  const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
 
   useEffect(() => {
@@ -451,7 +424,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       return
     }
 
-    setRegions((regionsResult.data ?? []) as Region[])
+    setRegions(sortRegions((regionsResult.data ?? []) as Region[]))
     setCustomers((customersResult.data ?? []) as Customer[])
     setProducts((productsResult.data ?? []) as Product[])
     setSubregions(subregionsResult.data ?? [])
@@ -538,9 +511,10 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }
 
   function compareSavedRecords(a: BudgetRecord, b: BudgetRecord) {
-    return (isActual ? (b.actual_date ?? '').localeCompare(a.actual_date ?? '') :
+    return (isActual ? (b.year ?? -Infinity) - (a.year ?? -Infinity) ||
+      (a.actual_date ?? '').localeCompare(b.actual_date ?? '') :
       (b.year ?? -Infinity) - (a.year ?? -Infinity) ||
-      (b.month ?? 13) - (a.month ?? 13)) || b.id - a.id
+      (a.month ?? 0) - (b.month ?? 0)) || b.id - a.id
   }
 
   async function loadStagingRecords() {
@@ -1415,9 +1389,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
           )}
         </td>
         <td className="whitespace-nowrap px-3 py-3">
-          <span className={`inline-flex items-center gap-1 text-xs font-medium ${getImportStatusClass(item.status)}`}>
-            {getImportStatusIcon(item.status)}{getImportStatusLabel(item.status)}
-          </span>
+          <StatusBadge status={getImportStatusLabel(item.status)} />
         </td>
         {!isActual && <td className="px-3 py-3">{item.year ?? (item.source.year || '-')}</td>}
         <td className="px-3 py-3">{isActual ? item.actualDate ?? (item.source.actual_date || '-') : item.source.month || '-'}</td>
@@ -1556,107 +1528,78 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     } finally { actionConfirmation?.finish() }
   }
 
-  function editSavedRecord(item: BudgetRecord) {
-    if (loading || loadingSavedRecords || !authorization.can(moduleName, 'edit')) return
-    if (!canWriteAllRegions && item.region_id !== assignedRegionId) {
-      setError('You can only edit records from your assigned region.')
-      return
-    }
-    setSavedEditError('')
-    setEditingSaved({
-      original: item, regionId: item.region_id == null ? '' : String(item.region_id), year: String(item.year), month: item.month == null ? '' : String(item.month),
-      actualDate: item.actual_date ?? '', customerId: item.customer_id == null ? '' : String(item.customer_id),
-      productId: item.product_id == null ? '' : String(item.product_id), volume: String(item.volume),
-      kam: item.kam?.trim() ?? '',
-    })
-  }
-
-  const kamGroupingLabels = useMemo(() => {
-    const names = new Map<string, string>()
-    for (const name of [...budgets.map((item) => item.kam), ...stagingRecords.map((item) => item.kam), 'Vacant']) {
-      const label = name?.trim()
-      if (label && !names.has(normalizeText(label))) names.set(normalizeText(label), label)
-    }
-    return [...names.values()].sort((a, b) => a.localeCompare(b))
-  }, [budgets, stagingRecords])
-
-  const editingSavedId = editingSaved?.original.id
-  useEffect(() => {
-    if (editingSavedId === undefined) return
-    savedEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    savedEditorRef.current?.querySelector<HTMLInputElement>('[name="saved-volume"]')?.focus({ preventScroll: true })
-  }, [editingSavedId])
-
-  async function saveSavedRecord(event: React.FormEvent) {
-    event.preventDefault()
-    if (!editingSaved || loading || loadingSavedRecords || !authorization.can(moduleName, 'edit')) return
-    const draft = editingSaved
-    const original = draft.original
-    setSavedEditError('')
-    try {
-      validateSavedVolumePeriod(draft.volume, isActual, draft.year, draft.month, draft.actualDate)
-    } catch (error) {
-      setSavedEditError(error instanceof Error ? error.message : 'Enter valid record details.')
-      return
-    }
-    const volume = Number(draft.volume)
-    const year = Number(draft.year)
-    const month = draft.month === '' ? null : Number(draft.month)
-    if (!canWriteAllRegions && original.region_id !== assignedRegionId) {
+  function editSavedCustomer(customer: string, items: BudgetRecord[]) {
+    if (loading || loadingSavedRecords || !authorization.can(moduleName, 'edit') || !items.length) return
+    if (!canWriteAllRegions && items.some((item) => item.region_id !== assignedRegionId)) {
       setSavedEditError('You can only edit records from your assigned region.')
       return
     }
-    const customerId = draft.customerId === '' ? null : Number(draft.customerId)
-    const regionId = Number(draft.regionId)
-    if (!draft.regionId || !regions.some((region) => region.id === regionId) || (!canWriteAllRegions && regionId !== assignedRegionId)) {
-      setSavedEditError('Choose a valid region you have permission to edit.')
+    setEditingSavedCustomer({ customer, customerId: String(items[0].customer_id ?? ''), kam: items[0].kam ?? '',
+      year: items.every((item) => item.year === items[0].year) ? String(items[0].year) : '',
+      rows: orderVolumeEditorRows(items, isActual).map((original) => ({
+      original, year: String(original.year), month: original.month == null ? '' : String(original.month),
+      actualDate: original.actual_date ?? '', volume: String(original.volume), productId: String(original.product_id ?? ''),
+    })) })
+  }
+
+  async function saveSavedCustomer(event: React.FormEvent) {
+    event.preventDefault()
+    if (!editingSavedCustomer || loading || loadingSavedRecords || !authorization.can(moduleName, 'edit')) return
+    if (!canWriteAllRegions && editingSavedCustomer.rows.some((row) => row.original.region_id !== assignedRegionId)) {
+      setSavedEditError('You can only edit records from your assigned region.')
       return
     }
-    const productId = draft.productId === '' ? null : Number(draft.productId)
-    const product = products.find((item) => item.id === productId)
-    if (((customerId !== original.customer_id || regionId !== original.region_id) && !customers.some((item) => item.id === customerId && item.region_id === regionId)) ||
-      (productId !== original.product_id && !product)) {
-      setSavedEditError('Choose a valid customer in this region and a valid product.')
-      return
-    }
-    setLoading(true)
     try {
-      const payload = {
-        ...(isActual ? { actual_date: draft.actualDate } : { year, month }),
-        volume, customer_id: customerId, product_id: productId,
-        region_id: regionId,
-        ...(regionId !== original.region_id ? { subregion_id: null } : {}),
-        category_id: productId === original.product_id ? original.category_id : product?.category_id ?? null,
-        kam: draft.kam.trim() || null,
+      for (const row of editingSavedCustomer.rows) validateSavedVolumePeriod(row.volume, isActual, row.year, row.month, row.actualDate)
+      setLoading(true)
+      const customerName = editingSavedCustomer.customer.trim()
+      let customer = customers.find((item) => item.customer.trim().toLowerCase() === customerName.toLowerCase())
+      if (customerName && !customer) {
+        if (!authorization.can('Customers', 'add')) throw new Error('You need permission to add customers before saving a new customer name.')
+        const regionId = editingSavedCustomer.rows[0].original.region_id
+        const { data, error } = await supabase.from('customers').insert({ customer: customerName, salesman: editingSavedCustomer.kam.trim() || null, region_id: regionId, is_active: true }).select('id, customer, region_id').single()
+        if (error) throw error
+        customer = data as Customer
+        setCustomers((current) => [...current, data as Customer])
       }
-      await persistSavedVolumeUpdate(supabase, savedTable, original, payload)
-      setEditingSaved(null)
-      await loadBudgets()
-      setMessage(`${moduleName} record updated successfully.`)
-    } catch (error) {
-      setSavedEditError(error instanceof Error ? error.message : 'Unable to update this record.')
-    } finally { setLoading(false) }
+      const customerId = customer?.id ?? (editingSavedCustomer.customerId === '' ? null : Number(editingSavedCustomer.customerId))
+      if (editingSavedCustomer.rows.some((row) => row.original.customer_id !== customerId) && !customer) throw new Error('Choose a valid customer.')
+      const changes = editingSavedCustomer.rows.map((row) => {
+        const regionId = customer?.region_id ?? row.original.region_id
+        if (!canWriteAllRegions && regionId !== assignedRegionId) throw new Error('Choose a customer in your assigned region.')
+        const productId = row.productId === '' ? null : Number(row.productId)
+        const product = products.find((item) => item.id === productId)
+        if (productId !== row.original.product_id && !product) throw new Error('Choose a valid product for each row.')
+        return { ...row, customerId, regionId, productId,
+          categoryId: productId === row.original.product_id ? row.original.category_id : product?.category_id ?? null,
+          kam: editingSavedCustomer.kam.trim() || null }
+      })
+      const count = await persistCustomerVolumeUpdates(supabase, moduleName, changes)
+      setEditingSavedCustomer(null)
+      if (count) {
+        await loadBudgets()
+        setMessage(`${count} customer ${label} record(s) updated successfully.`)
+      }
+    } catch (error) { setSavedEditError(error instanceof Error ? error.message : 'Unable to update customer records.') }
+    finally { setLoading(false) }
   }
 
   const canShowActions = authorization.can(moduleName, 'edit') || authorization.can(moduleName, 'delete')
+  const canManageImport = authorization.can(moduleName, 'add') || canShowActions
   const savedActionColumn = authorization.can(moduleName, 'edit') && authorization.can(moduleName, 'delete') ? 'standard' : 'single'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {addingProduct && <ImportProductDialog code={addingProduct.code} name={addingProduct.name} onClose={() => setAddingProduct(null)} onAdded={(product) => {
         setProducts((current) => [...current.filter((item) => item.id !== product.id), product])
         setAddingProduct(null)
         setMessage(`Product "${product.code}" added. Import validation updated.`)
       }} />}
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+
 
       {/* BUDGET EXCEL IMPORT */}
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      {canManageImport && <div className="rounded-xl border bg-card shadow-sm">
         <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -1741,7 +1684,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
         </div>
 
         {showImportPreview && (
-          <div className="space-y-4 p-6">
+          <div className="space-y-4 p-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">
@@ -1843,7 +1786,10 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                   ] as const).map(([field, label]) => (
                     <label key={field} className="space-y-1 text-sm">
                       <span>{label}</span>
-                      <input
+                      {field === 'kam' ? <SalespersonInput
+                        value={editingImport.kam ?? ''} disabled={importBusy}
+                        onValueChange={(kam) => setEditingImport({ ...editingImport, kam: kam || null })}
+                      /> : <input
                         className="w-full rounded-md border bg-background px-3 py-2"
                         ref={field === 'year' ? stagingEditorRef : undefined}
                         value={editingImport[field] ?? ''}
@@ -1852,7 +1798,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                           ...editingImport,
                           [field]: event.target.value || null,
                         })}
-                      />
+                      />}
                     </label>
                   ))}
                 </div>
@@ -1868,7 +1814,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
             )}
 
 
-            <Table summary={{ records: visibleImportPreview.length, customers: uniqueCount(visibleImportPreview.map((row) => row.customer?.id)), products: uniqueCount(visibleImportPreview.map((row) => row.product?.id)) }} data-volume-layout="import" id={moduleName.toLowerCase() + '-import-records'}
+            <Table summary={{ records: visibleImportPreview.length }} data-volume-layout="import" id={moduleName.toLowerCase() + '-import-records'}
               className="min-w-[1600px]"
               containerProps={{ className: "max-h-[min(22rem,50vh)] w-full overflow-auto rounded-lg border", tabIndex: 0, role: "region", "aria-label": moduleName + ' upload preview', 'aria-busy': loadingStaging }}
             >
@@ -1915,10 +1861,10 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                 </tbody>
             </Table>
 
-            {stagingError && <p role="alert" className="text-sm text-destructive">{stagingError}</p>}
+
           </div>
         )}
-      </div>
+      </div>}
 
       {/* SAVED BUDGETS */}
 
@@ -1949,72 +1895,58 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
           </div>
         </div>
 
-        {editingSaved && (
-          <form data-section-header="" ref={savedEditorRef} onSubmit={saveSavedRecord} className="scroll-mt-4 space-y-4 border-b bg-muted/20 p-4 sm:p-6">
-            <div>
-              <h3 data-section-title="" className="text-sm font-semibold"><HeadingPencil className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Edit saved {label} record</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Record #{editingSaved.original.id} · {getRegionName(editingSaved.original.region_id)}</p>
+        {editingSavedCustomer && <RecordDialog open onClose={() => setEditingSavedCustomer(null)} title={`Edit Customer ${moduleName}`} busy={loading} wide contained>
+          <form onSubmit={saveSavedCustomer} className="app-tables flex min-h-0 flex-1 flex-col gap-4 text-sm">
+            <h2 data-section-title="" className="shrink-0 font-semibold"><HeadingPencil className="size-5" aria-hidden="true" />Edit Customer {moduleName}</h2>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto sm:overflow-hidden">
+              <fieldset disabled={loading} className="grid min-w-0 shrink-0 grid-cols-1 gap-4 border-0 p-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_6rem]">
+                <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">KAM
+                  <SalespersonInput value={editingSavedCustomer.kam} disabled={loading} onValueChange={(kam) => setEditingSavedCustomer((current) => current && ({ ...current, kam }))} />
+                </label>
+                <label className="min-w-0 text-sm font-medium">Customer Name
+                  <SearchableSelect aria-label="Customer Name" freeText required value={editingSavedCustomer.customer} disabled={loading} placeholder="Select or enter customer name"
+                    onValueChange={(customer) => setEditingSavedCustomer((current) => current && ({ ...current, customer }))}
+                    options={customers.filter((customer) => canWriteAllRegions || customer.region_id === assignedRegionId).map((customer) => ({ value: customer.customer, label: customer.customer }))} />
+                </label>
+                <label data-field-size="compact" className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">Year
+                  <input type="number" min={2020} max={2100} step={1} value={editingSavedCustomer.year} placeholder="Keep existing years"
+                    onChange={(event) => {
+                      const year = event.target.value
+                      setEditingSavedCustomer((current) => current && ({ ...current, year, rows: current.rows.map((row) => ({...row,year:year || String(row.original.year),actualDate:year && year.length === 4 && row.actualDate ? year + row.actualDate.slice(4) : row.actualDate})) }))
+                    }} className="h-10 w-full rounded-md border bg-background px-3 text-sm" />
+                </label>
+              </fieldset>
+              <Table className="min-w-[680px] table-fixed" containerProps={{ className: 'min-h-0 shrink-0 rounded-lg border sm:flex-1', style: { maxHeight: 'none' }, 'aria-label': 'Customer record editor', tabIndex: 0, role: 'region' }}>
+                <colgroup><col className="w-12" /><col className="w-[168px]" /><col /><col className="w-[144px]" /></colgroup>
+                <thead className="sticky top-0 z-10 border-b bg-muted text-sm"><tr><th className="px-3 py-2 text-left font-medium">#</th><th className="px-3 py-2 text-left font-medium">{isActual ? 'Date' : 'Month'}</th><th className="px-3 py-2 text-left font-medium">Product</th><th className="px-3 py-2 text-right font-medium whitespace-nowrap">Volume (50kg)</th></tr></thead>
+                <tbody>{editingSavedCustomer.rows.map((draft, index) => {
+                  const update = (change: Partial<SavedRecordDraft>) => setEditingSavedCustomer((current) => current && ({ ...current, rows: current.rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...change } : row) }))
+                  return <tr key={draft.original.id} className="border-b last:border-0">
+                    <td className="px-3 py-2 text-muted-foreground">{index + 1}</td>
+                    <td className="px-3 py-2 text-left">{isActual
+                      ? <input aria-label={`Date for row ${index+1}`} type="date" disabled={loading} required min={editingSavedCustomer.year ? editingSavedCustomer.year+'-01-01' : undefined} max={editingSavedCustomer.year ? editingSavedCustomer.year+'-12-31' : undefined} value={draft.actualDate} onChange={(event) => update({actualDate:event.target.value})} className="h-10 w-full rounded-md border bg-background px-3 text-sm" />
+                      : <SelectionField aria-label={`Month for row ${index+1}`} value={draft.month} disabled={loading} onValueChange={(month) => update({month})}>
+                          <option value="">Annual</option>
+                          {Array.from({length:12},(_,month)=><option key={month+1} value={month+1}>{getMonthName(month+1,Number(draft.year)||currentYear)}</option>)}
+                        </SelectionField>}
+                    </td>
+                    <td className="px-3 py-2 text-left"><SearchableSelect aria-label={`Product for row ${index+1}`} value={draft.productId} placeholder="Select product…" disabled={loading}
+                      options={[
+                        ...(draft.original.product_id === null ? [{value:'',label:'Unassigned'}] : []),
+                        ...(!products.some((product) => String(product.id) === draft.productId) && draft.productId ? [{value:draft.productId,label:getProductName(draft.original.product_id),disabled:true}] : []),
+                        ...products.map((product) => ({value:String(product.id),label:product.code+' — '+product.name})),
+                      ]} onValueChange={(productId) => update({productId})} /></td>
+                    <td className="px-3 py-2 text-left"><input aria-label={`Volume for row ${index+1}`} disabled={loading} type="number" min={0} step="any" required value={draft.volume} onChange={(event)=>update({volume:event.target.value})} className="h-10 w-full rounded-md border bg-background px-3 text-right text-sm" /></td>
+                  </tr>
+                })}</tbody>
+              </Table>
             </div>
-            <fieldset disabled={loading || loadingSavedRecords} className="app-field-row min-w-0 disabled:opacity-60">
-              <SearchableSelect label="Region" value={editingSaved.regionId} placeholder="Select region…" disabled={loading || loadingSavedRecords}
-                options={regions.filter((region) => canWriteAllRegions || region.id === assignedRegionId).map((region) => ({ value: String(region.id), label: region.name }))}
-                onValueChange={(regionId) => setEditingSaved((draft) => draft && ({ ...draft, regionId, customerId: regionId === draft.regionId ? draft.customerId : '' }))} />
-              {isActual ? <label className="min-w-0 space-y-1.5 text-sm font-medium">Date
-                <input type="date" required value={editingSaved.actualDate} onChange={(event) => setEditingSaved((draft) => draft && ({ ...draft, actualDate: event.target.value }))} className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm" />
-              </label> : <>
-                <label className="space-y-1.5 text-sm font-medium">Year
-                  <input type="number" required min={2020} max={2100} step={1} value={editingSaved.year} onChange={(event) => setEditingSaved((draft) => draft && ({ ...draft, year: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3 text-sm" />
-                </label>
-                <label className="space-y-1.5 text-sm font-medium">Month
-                  <SelectionField disabled={loading || loadingSavedRecords} value={editingSaved.month}
-                  onValueChange={(selectionValue) => setEditingSaved((draft) => draft && ({ ...draft, month: selectionValue }))}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  aria-label="Month">
-                    <option value="">Annual</option>
-                    {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{getMonthName(index + 1, Number(editingSaved.year) || currentYear)}</option>)}
-                  </SelectionField>
-                </label>
-              </>}
-              <SearchableSelect label="Customer" value={editingSaved.customerId} placeholder="Select customer…" disabled={loading || loadingSavedRecords}
-                options={[
-                  ...(editingSaved.original.customer_id === null ? [{ value: '', label: 'Unassigned' }] : []),
-                  ...(Number(editingSaved.regionId) === editingSaved.original.region_id && editingSaved.original.customer_id !== null && !customers.some((item) => item.id === editingSaved.original.customer_id && item.region_id === Number(editingSaved.regionId))
-                    ? [{ value: String(editingSaved.original.customer_id), label: 'Existing customer #' + editingSaved.original.customer_id, disabled: true }] : []),
-                  ...customers.filter((item) => item.region_id === Number(editingSaved.regionId)).map((item) => ({ value: String(item.id), label: item.customer })),
-                ]}
-                onValueChange={(customerId) => setEditingSaved((draft) => draft && ({ ...draft, customerId }))} />
-              <SearchableSelect label="Product" value={editingSaved.productId} placeholder="Select product…" disabled={loading || loadingSavedRecords}
-                options={[
-                  ...(editingSaved.original.product_id === null ? [{ value: '', label: 'Unassigned' }] : []),
-                  ...(editingSaved.original.product_id !== null && !products.some((item) => item.id === editingSaved.original.product_id)
-                    ? [{ value: String(editingSaved.original.product_id), label: 'Existing product #' + editingSaved.original.product_id, disabled: true }] : []),
-                  ...products.map((item) => ({ value: String(item.id), label: item.code + ' — ' + item.name })),
-                ]}
-                onValueChange={(productId) => setEditingSaved((draft) => draft && ({ ...draft, productId }))} />
-              <label className="space-y-1.5 text-sm font-medium">Volume
-                <input name="saved-volume" type="number" min={0} step="any" required value={editingSaved.volume} onChange={(event) => setEditingSaved((draft) => draft && ({ ...draft, volume: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3 text-sm" />
-              </label>
-              <div className="min-w-0 space-y-1.5">
-                <label htmlFor="saved-kam-label" className="text-sm font-medium">KAM</label>
-                <SelectionField id="saved-kam-label" disabled={loading || loadingSavedRecords}
-                  autoComplete="off"
-                  value={editingSaved.kam}
-                  onValueChange={(selectionValue) => setEditingSaved((draft) => draft && ({ ...draft, kam: selectionValue }))}
-                  placeholder="Enter KAM name"
-                  className="h-10 w-full rounded-md border bg-background px-3 text-base outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 sm:text-sm"
-                  aria-label="KAM"
-                  freeText>{kamGroupingLabels.map((name) => <option key={name} value={name} />)}</SelectionField>
-
-
-              </div>
-            </fieldset>
-            {savedEditError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{savedEditError}</p>}
-            <div data-action-toolbar="" className="flex flex-wrap gap-2">
-              <button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || loadingSavedRecords} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />{loading ? 'Saving…' : 'Save Changes'}</button>
-              <button data-action-tone="neutral" type="button" disabled={loading} onClick={() => { setEditingSaved(null); setSavedEditError('') }} className="h-10 rounded-md border px-4 text-sm disabled:opacity-50"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button>
+            <div data-action-toolbar="" className="relative z-20 flex shrink-0 flex-wrap justify-end gap-2 border-t bg-card pt-4">
+              <button data-action-tone="neutral" type="button" disabled={loading} onClick={() => setEditingSavedCustomer(null)} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium disabled:opacity-50"><ActionXIcon className="size-4" aria-hidden="true" />Cancel</button>
+              <button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium disabled:opacity-50"><ActionSaveIcon className="size-4" aria-hidden="true" />{loading ? 'Saving…' : 'Save Changes'}</button>
             </div>
           </form>
-        )}
+        </RecordDialog>}
 
         <div className="app-field-row saved-volume-filters border-b p-6">
           <div data-field-size="compact" className="space-y-1.5">
@@ -2116,7 +2048,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
           </div>
         </div>
 
-        <Table summary={{ records: filteredBudgets.length, kams: uniqueCount(filteredBudgets.map((row) => row.kam?.trim())), customers: uniqueCount(filteredBudgets.map((row) => row.customer_id)), products: uniqueCount(filteredBudgets.map((row) => row.product_id)) }} id={moduleName.toLowerCase() + '-saved-records'}
+        <Table summary={summaryForLevel(filteredBudgets.length, 'kams', filteredBudgets.map((row) => normalizeText(row.kam ?? '')))} id={moduleName.toLowerCase() + '-saved-records'}
           className="min-w-[760px] table-fixed text-xs wrap-anywhere md:min-w-0"
           containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": savedTitle + ' table', 'aria-busy': initializing || loadingSavedRecords }}
         >
@@ -2200,6 +2132,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                               {canShowActions && (
                                 <td data-action-column={savedActionColumn} className="px-2 py-2 text-center">
                                   <div className="flex items-center justify-center gap-1">
+                                    {authorization.can(moduleName, 'edit') && <TableActionButton action="edit" type="button" onClick={() => editSavedCustomer(customerGroup.customer, customerGroup.items)} disabled={loading || loadingSavedRecords} title={'Edit customer ' + label + ' records'} className="rounded-md border hover:bg-muted disabled:opacity-40" />}
                                     {authorization.can(moduleName, 'delete') && (
                                       <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany(customerGroup.items)} disabled={loading || loadingSavedRecords} className="inline-flex size-8 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title={'Delete customer ' + label + ' records'} />
                                     )}
@@ -2222,16 +2155,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
 
                             {customerExpanded && customerGroup.items.map((item) => (
                               <tr key={item.id} className="border-b bg-muted/20 last:border-0 hover:bg-muted/40">
-                                {canShowActions && (
-                                  <td data-action-column={savedActionColumn} className="px-2 py-2 text-center">
-                                    <div className="flex items-center justify-center gap-1">
-                                      {authorization.can(moduleName, 'edit') && <TableActionButton action="edit" type="button" onClick={() => editSavedRecord(item)} disabled={loading || loadingSavedRecords} title={'Edit ' + label + ' record'} className="rounded-md border hover:bg-muted disabled:opacity-40" />}
-                                      {authorization.can(moduleName, 'delete') && (
-                                        <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany([item])} disabled={loading || loadingSavedRecords} className="inline-flex size-8 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title={'Delete ' + label + ' record'} />
-                                      )}
-                                    </div>
-                                  </td>
-                                )}
+                                {canShowActions && <td data-action-column={savedActionColumn} />}
                                 <td className="px-3 py-2" title={getProductName(item.product_id)}>
                                   <div className="flex min-w-0 items-center gap-2 pl-2 lg:pl-8">
                                     <span className="text-muted-foreground">↳</span>

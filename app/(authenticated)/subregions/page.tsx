@@ -1,6 +1,14 @@
 
 'use client'
 
+import { summaryForLevel } from '@/lib/table-summary-level'
+
+import { usePopupError } from '@/components/action-dialogs'
+
+import { sortRegions } from '@/lib/region-order'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { MapPinned as HeadingMapPinned } from 'lucide-react'
 
 import { formatCreatedDate } from '@/lib/format-created-date'
@@ -58,7 +66,7 @@ export default function SubregionsPage() {
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [formOpen, setFormOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = usePopupError()
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
@@ -93,7 +101,7 @@ export default function SubregionsPage() {
       return
     }
 
-    setRegions(regionsResult.data ?? [])
+    setRegions(sortRegions(regionsResult.data ?? []))
     setSubregions(subregionsResult.data ?? [])
     setInitialLoading(false)
   }
@@ -255,7 +263,7 @@ export default function SubregionsPage() {
   return (
     <main className="space-y-4">
 
-      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+
       {/* Subregion Form */}
       {authorization.can('Subregions', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Subregion' : 'Edit Subregion'} busy={loading}>
         <div className="mb-5">
@@ -371,14 +379,7 @@ export default function SubregionsPage() {
             </button>
         </div>
         {/* Error */}
-        {error && (
-          <div
-            role="alert"
-            className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        )}
+
       </RecordDialog> : null}
 
       {/* Subregions Table */}
@@ -387,7 +388,7 @@ export default function SubregionsPage() {
         <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Subregions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Subregion</button>}<TableGroupToggle disabled={initialLoading} /></div>
 
         <div className="overflow-x-auto">
-          <Table summary={{ records: sortedSubregions.length }} className="min-w-[640px] table-fixed wrap-anywhere">
+          <Table summary={summaryForLevel(sortedSubregions.length, 'regions', sortedSubregions.map((row) => row.region_id))} className="min-w-[640px] table-fixed wrap-anywhere">
             <colgroup>
               {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <col data-action-column="standard" className="w-[20%]" />}
               <col className="w-[12%]" />
@@ -432,7 +433,7 @@ export default function SubregionsPage() {
                         </div> : <span className="text-sm text-muted-foreground">No Action</span>}
                     </TableCell>}
                     <TableCell className="px-3">
-                      {subregion.is_active ? 'Active' : 'Inactive'}
+                      <StatusBadge status={subregion.is_active ? 'Active' : 'Inactive'} />
                     </TableCell>
                       <TableCell className="px-3 font-medium">
                         {subregion.code || '—'}

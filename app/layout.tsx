@@ -1,11 +1,12 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Geist } from "next/font/google"
 import "./globals.css"
 import { ActionDialogsProvider } from '@/components/action-dialogs'
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
+const geist = Geist({
+  variable: '--font-geist',
+  subsets: ['latin'],
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
@@ -19,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} antialiased`}>
+    <html lang="en" className={geist.variable}>
+      <body className="antialiased">
         <ActionDialogsProvider>{children}</ActionDialogsProvider>
       </body>
     </html>

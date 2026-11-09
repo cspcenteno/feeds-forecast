@@ -1,5 +1,9 @@
 'use client'
 
+import { usePopupError } from '@/components/action-dialogs'
+
+import { StatusBadge } from '@/components/ui/status-badge'
+
 import { FileSpreadsheet as HeadingFileSpreadsheet, Settings as HeadingSettings, UserPen as HeadingUserPen } from 'lucide-react'
 
 import { useStatusNotification } from '@/components/action-dialogs'
@@ -46,7 +50,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
   const [busy, setBusy] = useState(false)
   const [show, setShow] = useState(false)
   const [editing, setEditing] = useState<UserImportRow | null>(null)
-  const [error, setError] = useState('')
+  const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
   const [progress, setProgress] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
@@ -172,8 +176,8 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
         <button data-slot="show-hide-button" data-action-tone="neutral" type="button" disabled={disabled} aria-expanded={show} onClick={() => setShow(!show)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
       </div>
     </div>
-    {error && <p role="alert" className="m-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-    {show && <div className="space-y-4 p-6">
+
+    {show && <div className="space-y-4 p-4">
       {busy && progress && <p role="status" className="text-sm">{progress}</p>}
       <section aria-labelledby="import-account-settings" className="overflow-hidden rounded-lg border bg-card"><header data-section-header="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
@@ -190,7 +194,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
         <thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Action', 'Status / Validation', ...userImportColumns.map((column) => userFieldLabels[column])].map((label) => <th data-action-column={label === "Action" ? "single" : undefined} key={label} className="px-3 py-3 text-left font-medium">{label}</th>)}</tr></thead>
         <tbody>{busy && !progress ? <TableLoadingRow columns={8} label="user import preview" /> : !rows.length ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">No uploaded users to display.</td></tr> : preview.map((row) => { const outcome = outcomes[row.source.id]; return <tr key={row.source.id} className="border-b align-top">
           <td data-action-column="single" className="px-3 py-3"><TableActionButton action="edit" type="button" disabled={disabled || outcome?.status === 'Created'} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs disabled:opacity-50" /></td>
-          <td className={`px-3 py-3 text-xs leading-5 wrap-anywhere ${row.status === 'Invalid' || outcome?.status === 'Failed' ? 'text-destructive' : ''}`}><p className="font-medium">{outcome?.status ?? row.status}</p>{outcome?.message ?? row.issues.join(' ')}</td>
+          <td className={`px-3 py-3 text-sm leading-5 wrap-anywhere ${row.status === 'Invalid' || outcome?.status === 'Failed' ? 'text-destructive' : ''}`}><div><StatusBadge status={outcome?.status ?? row.status} /></div>{outcome?.message ?? row.issues.join(' ')}</td>
           {userImportColumns.map((column) => <td key={column} className="px-3 py-3 wrap-anywhere">{row.source[column] || '—'}</td>)}
         </tr> })}</tbody>
       </Table>

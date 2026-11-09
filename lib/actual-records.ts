@@ -18,7 +18,8 @@ export type ActualRecord = ActualRow & ReturnType<typeof getActualPeriod>
 export async function loadActualRecords(
   supabase: ReturnType<typeof createClient>,
   years: number[],
-  scope?: { regionId: number; customerId: number } | { regionIds: number[]; customerIds: number[] }
+  scope?: { regionId: number; customerId: number } | { regionIds: number[]; customerIds: number[] },
+  referenceModule?: 'Forecast Input' | 'Approvals',
 ) {
   const pageSize = 1000
   const records: ActualRecord[] = []
@@ -28,8 +29,14 @@ export async function loadActualRecords(
 
   for (const year of new Set(years)) {
     for (let from = 0; ; from += pageSize) {
-      let query = supabase.from('actuals')
-        .select('actual_date, region_id, category_id, product_id, customer_id, volume')
+      let query = (referenceModule
+        ? supabase.rpc('get_monthly_reference_actual_rows', {
+          p_module: referenceModule, p_year: year,
+          p_region_ids: scope ? ('regionIds' in scope ? scope.regionIds : [scope.regionId]) : null,
+          p_customer_ids: scope ? ('customerIds' in scope ? scope.customerIds : [scope.customerId]) : null,
+        })
+        : supabase.from('actuals'))
+        .select('id, actual_date, region_id, category_id, product_id, customer_id, volume')
         .gte('actual_date', year + '-01-01')
         .lt('actual_date', (year + 1) + '-01-01')
         .order('actual_date')
@@ -45,8 +52,9 @@ export async function loadActualRecords(
       const { data, error } = await query
       if (error) return { data: null, error }
 
-      records.push(...data.map((row: ActualRow) => ({ ...row, ...getActualPeriod(row.actual_date) })))
-      if (data.length < pageSize) break
+      const page = (data ?? []) as ActualRow[]
+      records.push(...page.map((row) => ({ ...row, ...getActualPeriod(row.actual_date) })))
+      if (page.length < pageSize) break
     }
   }
 

@@ -7,8 +7,9 @@ test('approval Budget lookup reads later pages and finds the November value of 4
   const records = Array.from({ length: 1001 }, (_,index) => ({ id: index+1, year: 2026, month: index===1000 ? 11 : 1,
     region_id: 1, subregion_id: 2, customer_id: 3, product_id: 4, volume: index===1000 ? 40 : 5 }))
   const pages = []
-  const client = { from: (table) => {
-    assert.equal(table,'budgets')
+  const client = { rpc: (method, args) => {
+    assert.equal(method,'get_monthly_reference_budget_rows')
+    assert.deepEqual(args, {p_module:'Approvals',p_years:[2026],p_region_ids:[1],p_customer_ids:[3]})
     let rows = records, from = 0, to = 999
     const q = { select: () => q, in: (field, values) => { rows = rows.filter((row) => values.includes(row[field])); return q },
       order: () => q, range: (a,b) => { from=a; to=b; pages.push(a); return q }, or: () => q, is: () => q,

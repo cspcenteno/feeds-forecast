@@ -30,6 +30,12 @@ export function validateSavedVolumePeriod(volume: string, isActual: boolean, yea
   }
 }
 
+export function orderVolumeEditorRows<T extends { id: number; year: number; month: number | null; actual_date?: string }>(rows: T[], isActual: boolean): T[] {
+  return [...rows].sort((a, b) => (isActual
+    ? (a.actual_date ?? '').localeCompare(b.actual_date ?? '')
+    : a.year - b.year || (a.month ?? 0) - (b.month ?? 0)) || a.id - b.id)
+}
+
 export async function persistSavedVolumeUpdate(
   client: Pick<ReturnType<typeof createClient>, 'from'>,
   table: 'budgets' | 'actuals',
@@ -49,4 +55,41 @@ export async function persistSavedVolumeUpdate(
   const { data, error } = await query.select('id').maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) throw new Error('This record changed or you no longer have permission. Refresh the records and try again.')
+}
+
+export async function persistCustomerVolumeUpdates(
+  client: Pick<ReturnType<typeof createClient>, 'rpc'>,
+  module: 'Budget' | 'Actual',
+  rows: { original: Snapshot; volume: string; year: string; month: string; actualDate: string;
+    kam?: string | null; customerId?: number | null; regionId?: number | null;
+    productId?: number | null; categoryId?: number | null }[],
+) {
+  const changes = rows.filter((row) => Number(row.volume) !== Number(row.original.volume)
+    || (row.kam !== undefined && row.kam !== row.original.kam)
+    || (row.customerId !== undefined && row.customerId !== row.original.customer_id)
+    || (row.regionId !== undefined && row.regionId !== row.original.region_id)
+    || (row.productId !== undefined && row.productId !== row.original.product_id)
+    || (row.categoryId !== undefined && row.categoryId !== row.original.category_id)
+    || (module === 'Actual' ? row.actualDate !== row.original.actual_date
+      : Number(row.year) !== row.original.year || (row.month === '' ? null : Number(row.month)) !== row.original.month))
+  if (!changes.length) return 0
+  const records = changes.map((row) => {
+    validateSavedVolumePeriod(row.volume, module === 'Actual', row.year, row.month, row.actualDate)
+    const { id, volume, region_id, subregion_id, customer_id, product_id, category_id, asm, rsm, kam } = row.original
+    return {
+      id,
+      original: { volume, region_id, subregion_id, customer_id, product_id, category_id, asm, rsm, kam,
+        ...(module === 'Actual' ? { actual_date: row.original.actual_date } : { year: row.original.year, month: row.original.month }) },
+      volume: Number(row.volume),
+      ...(row.kam !== undefined ? { kam: row.kam } : {}),
+      ...(row.customerId !== undefined ? { customer_id: row.customerId } : {}),
+      ...(row.regionId !== undefined ? { region_id: row.regionId } : {}),
+      ...(row.productId !== undefined ? { product_id: row.productId } : {}),
+      ...(row.categoryId !== undefined ? { category_id: row.categoryId } : {}),
+      ...(module === 'Actual' ? { actual_date: row.actualDate } : { year: Number(row.year), month: row.month === '' ? null : Number(row.month) }),
+    }
+  })
+  const { data, error } = await client.rpc('update_customer_volume_records', { p_module: module, p_records: records })
+  if (error) throw new Error(error.message)
+  return Number(data)
 }

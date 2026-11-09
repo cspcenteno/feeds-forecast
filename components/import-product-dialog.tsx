@@ -1,5 +1,7 @@
 'use client'
 
+import { usePopupError } from '@/components/action-dialogs'
+
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
@@ -23,7 +25,7 @@ export function ImportProductDialog({ code: initialCode, name: initialName, onCl
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [, setError] = usePopupError()
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -41,7 +43,7 @@ export function ImportProductDialog({ code: initialCode, name: initialName, onCl
     }
     void load()
     return () => { cancelled = true }
-  }, [client])
+  }, [client, setError])
   return <RecordDialog open onClose={onClose} title="Add to Products" busy={saving}>
     <form className="space-y-4" onSubmit={async (event) => {
       event.preventDefault()
@@ -60,15 +62,15 @@ export function ImportProductDialog({ code: initialCode, name: initialName, onCl
       } catch (err) { setError(err instanceof Error ? err.message : 'Unable to add product. Check whether the code already exists.') }
       finally { setSaving(false) }
     }}>
-      <h3 className="pr-8 text-base font-semibold">Add to Products</h3>
+      <h3 data-dialog-title className="pr-8 text-lg font-semibold">Add to Products</h3>
       <div className="app-field-row">
         <label className="space-y-1 text-sm">Product code<input required value={code} onChange={(event) => setCode(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
         <label className="space-y-1 text-sm">Product name<input required value={name} onChange={(event) => setName(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
         <label className="space-y-1 text-sm">Category<SelectionField aria-label="Category" value={category} onValueChange={setCategory} disabled={loading} required placeholder={loading ? 'Loading categories…' : 'Select category…'}><option value="">Select category</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectionField></label>
         <label className="space-y-1 text-sm">Weight (kg)<input required type="number" min="0" step="any" value={weight} onChange={(event) => setWeight(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
       </div>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <div className="flex gap-2"><button type="submit" disabled={loading || saving || !authorization.can('Products', 'add')} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50">{saving ? 'Saving…' : 'Add Product'}</button><button type="button" onClick={onClose} disabled={saving} className="rounded-md border px-3 py-2 text-sm">Cancel</button></div>
+
+      <div data-action-toolbar="" className="flex flex-wrap justify-end gap-2 border-t pt-4"><button data-action-tone="neutral" type="button" onClick={onClose} disabled={saving} className="h-10 rounded-md border px-4 text-sm">Cancel</button><button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || saving || !authorization.can('Products', 'add')} className="h-10 rounded-md border px-4 text-sm font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Add Product'}</button></div>
     </form>
   </RecordDialog>
 }

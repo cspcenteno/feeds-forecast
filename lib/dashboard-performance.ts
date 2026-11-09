@@ -1,13 +1,15 @@
-export type DashboardLevel = 'company' | 'region' | 'subregion' | 'customer'
-type Dimension = { region_id: number | null; subregion_id: number | null; customer_id: number | null; product_id: number | null }
+import { compareRegionNames } from '@/lib/region-order'
+export type DashboardLevel = 'company' | 'region' | 'subregion' | 'kam' | 'customer'
+type Dimension = { region_id: number | null; subregion_id: number | null; customer_id: number | null; product_id: number | null; submitter?: string | null; kam?: string | null }
 type Volume = Dimension & { volume: number }
 type Budget = Volume & { id: number; month: number | null }
 type Labels = { regions: Map<number, string>; subregions: Map<number, string>; customers: Map<number, string>; products: Map<number, string> }
 
 export function dashboardLevel(profile: { role: string; position: string | null }): DashboardLevel {
   const position = (profile.position ?? '').trim().toUpperCase()
-  if (position === 'ASM') return 'region'
-  if (['RSM', 'SV', 'SUPERVISOR'].includes(position)) return 'subregion'
+  if (profile.role === 'Admin' || position === 'NSM') return 'company'
+  if (position === 'ASM') return 'subregion'
+  if (['RSM', 'SV', 'SUPERVISOR'].includes(position)) return 'kam'
   if (position === 'KAM' || profile.role === 'User') return 'customer'
   return 'company'
 }
@@ -16,14 +18,29 @@ export function buildDashboardPerformance(
   level: DashboardLevel, forecasts: Volume[], budgets: Budget[], actuals: Volume[], labels: Labels,
 ) {
   const groups = new Map<string, { key: string; region: string; budget: number; forecast: number; actual: number }>()
+  const ownerKey = (row: Dimension) => JSON.stringify([row.region_id, row.subregion_id, row.customer_id])
+  const owners = new Map<string, Set<string>>()
+  for (const row of forecasts) {
+    if (!row.submitter?.trim()) continue
+    const names = owners.get(ownerKey(row)) ?? new Set<string>()
+    names.add(row.submitter.trim())
+    owners.set(ownerKey(row), names)
+  }
+  const kamName = (row: Dimension) => {
+    const assigned = row.submitter?.trim() || row.kam?.trim()
+    if (assigned) return assigned
+    const names = owners.get(ownerKey(row))
+    return names?.size === 1 ? [...names][0] : 'Unassigned KAM'
+  }
   function group(row: Dimension) {
     const key = JSON.stringify(level === 'company' || level === 'region' ? [row.region_id]
-      : level === 'subregion' ? [row.region_id, row.subregion_id] : [row.region_id, row.customer_id])
+      : level === 'subregion' ? [row.region_id, row.subregion_id]
+        : level === 'kam' ? [row.region_id, row.subregion_id, kamName(row).toUpperCase()] : [row.region_id, row.customer_id])
     let entry = groups.get(key)
     if (!entry) {
       const name = level === 'company' || level === 'region' ? labels.regions.get(row.region_id!) ?? 'Unassigned region'
         : level === 'subregion' ? labels.subregions.get(row.subregion_id!) ?? 'Unassigned subregion'
-          : labels.customers.get(row.customer_id!) ?? 'Unassigned customer'
+          : level === 'kam' ? kamName(row) : labels.customers.get(row.customer_id!) ?? 'Unassigned customer'
       entry = { key, region: name, budget: 0, forecast: 0, actual: 0 }
       groups.set(key, entry)
     }
@@ -51,5 +68,5 @@ export function buildDashboardPerformance(
       : rows.reduce((sum, row) => sum + Number(row.volume ?? 0), 0) / 12
     group(first).budget += value
   }
-  return [...groups.values()].sort((a, b) => a.region.localeCompare(b.region))
+  return [...groups.values()].sort((a, b) => compareRegionNames(a.region, b.region))
 }

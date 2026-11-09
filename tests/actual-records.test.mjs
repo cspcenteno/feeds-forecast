@@ -8,10 +8,13 @@ function clientFor(results) {
     const call = { table, filters: [] }
     calls.push(call)
     const query = {
-      select() { return query },
+      select(fields) { call.selected = fields.split(',').map((field) => field.trim()); return query },
       gte(...args) { call.filters.push(['gte', ...args]); return query },
       lt(...args) { call.filters.push(['lt', ...args]); return query },
-      order() { return query },
+      order(field) {
+        if (call.table === 'reference') assert.ok(call.selected.includes(field), `RPC sort column ${field} must be selected`)
+        return query
+      },
       range() { return query },
       eq(...args) { call.filters.push(['eq', ...args]); return query },
       in(...args) { call.filters.push(['in', ...args]); return query },
@@ -48,4 +51,21 @@ test('selected-customer scope and database errors remain intact', async () => {
   const { client, calls } = clientFor([{ data: null, error }])
   assert.deepEqual(await loadActualRecords(client, [2026], { regionId: 1, customerId: 2 }), { data: null, error })
   assert.ok(calls[0].filters.some(([op, field, value]) => op === 'eq' && field === 'customer_id' && value === 2))
+})
+
+test('reference Actuals use the consuming page permission and retain customer filters', async () => {
+  for (const module of ['Forecast Input', 'Approvals']) {
+    const { client, calls } = clientFor([{ data: [{ actual_date: '2026-11-01', volume: 25 }], error: null }])
+    const referenceClient = {
+      from() { throw new Error('Reference reads must not require Actual module access') },
+      rpc(method, args) {
+        assert.equal(method, 'get_monthly_reference_actual_rows')
+        assert.deepEqual(args, { p_module: module, p_year: 2026, p_region_ids: [1], p_customer_ids: [2] })
+        return client.from('reference')
+      },
+    }
+    const result = await loadActualRecords(referenceClient, [2026], { regionId: 1, customerId: 2 }, module)
+    assert.equal(result.data[0].volume, 25)
+    assert.ok(calls[0].filters.some(([op, field, value]) => op === 'eq' && field === 'customer_id' && value === 2))
+  }
 })
