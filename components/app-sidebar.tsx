@@ -1,11 +1,16 @@
 
 'use client'
 
+import { KeyRound as HeadingKeyRound } from 'lucide-react'
+
+import { X as ActionXIcon } from 'lucide-react'
 import { useActionDialogs } from '@/components/action-dialogs'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Image from 'next/image'
 import {
+  ScrollText,
+  RefreshCw,
   LayoutDashboard,
   ClipboardPenLine,
   CalendarDays,
@@ -108,6 +113,7 @@ const masterDataItems = [
 ]
 
 const adminItems = [
+  { title: 'Audit Logs', url: '/audit-logs', icon: ScrollText },
   {
     title: 'Users',
     url: '/users',
@@ -325,7 +331,7 @@ export function AppSidebar() {
 
   const visibleMenuItems = menuItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
   const visibleMasterDataItems = masterDataItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
-  const visibleAdminItems = adminItems.filter((item) => authorization.can(item.title === 'Week Locks' ? 'Week Locks' : 'Users', 'view'))
+  const visibleAdminItems = adminItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
   const canAccessMasterData = visibleMasterDataItems.length > 0
   const canAccessAdministration = visibleAdminItems.length > 0
 
@@ -509,6 +515,17 @@ export function AppSidebar() {
 
                         <div className="mx-2 my-1 h-px bg-border" />
 
+                        <button data-action-tone="neutral"
+                          data-slot="profile-menu-action"
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                          title="Reload the page to fetch current data and settings. Unsaved changes will be lost."
+                        >
+                          <RefreshCw className="size-4" aria-hidden="true" />
+                          <span>Refresh App</span>
+                        </button>
+
                         {/* Change Password */}
                         <button data-action-tone="caution"
                           data-slot="profile-menu-action"
@@ -570,7 +587,7 @@ export function AppSidebar() {
                   <KeyRound className="size-5" aria-hidden="true" />
                 </div>
                 <div>
-                  <h2 id="change-password-title" className="text-lg font-semibold tracking-tight">Change password</h2>
+                  <h2 data-section-title="" id="change-password-title" className="text-lg font-semibold tracking-tight"><HeadingKeyRound className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Change password</h2>
                   <p id="change-password-description" className="mt-1 text-xs text-muted-foreground">Choose a new password for your account.</p>
                 </div>
               </div>
@@ -602,9 +619,9 @@ export function AppSidebar() {
               ))}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t px-6 py-4">
+            <div data-action-toolbar="" className="flex flex-wrap justify-end gap-2 border-t px-6 py-4">
               <button data-action-tone="neutral" type="button" onClick={closeChangePassword} disabled={changingPassword}
-                className="h-10 rounded-lg border px-4 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50">Cancel</button>
+                className="h-10 rounded-lg border px-4 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button>
               <button data-action-tone="primary" data-action-fill="" type="button" onClick={handleChangePassword} disabled={changingPassword}
                 className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[#174c36] px-4 text-sm font-semibold text-white outline-none transition hover:bg-[#103b29] focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 dark:bg-emerald-700 dark:hover:bg-emerald-600">
                 {changingPassword && <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}

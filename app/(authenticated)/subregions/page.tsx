@@ -1,6 +1,12 @@
 
 'use client'
 
+import { MapPinned as HeadingMapPinned } from 'lucide-react'
+
+import { formatCreatedDate } from '@/lib/format-created-date'
+import { RecordDialog } from '@/components/ui/record-dialog'
+import { Plus as AddRecordIcon } from 'lucide-react'
+import { Save as ActionSaveIcon, X as ActionXIcon } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
 
 import { useActionDialogs } from '@/components/action-dialogs'
@@ -51,6 +57,7 @@ export default function SubregionsPage() {
   const [isActive, setIsActive] = useState(true)
 
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
@@ -173,6 +180,7 @@ export default function SubregionsPage() {
 
   function editSubregion(subregion: Subregion) {
     setEditingId(subregion.id)
+    setFormOpen(true)
     setName(subregion.name)
     setCode(subregion.code ?? '')
     setRegionId(String(subregion.region_id))
@@ -224,6 +232,7 @@ export default function SubregionsPage() {
   }
 
   function clearForm() {
+    setFormOpen(false)
     setEditingId(null)
     setName('')
     setCode('')
@@ -237,27 +246,26 @@ export default function SubregionsPage() {
   }, [])
 
   const { sortedRows: sortedSubregions, sortHeader } = useTableSort(subregions, {
+    created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
     region: (row) => regions.find((region) => region.id === row.region_id)?.name ?? null,
   })
 
   return (
-    <main className="space-y-8">
+    <main className="space-y-4">
+
+      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {/* Subregion Form */}
-      {authorization.can('Subregions', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Subregions', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Subregion' : 'Edit Subregion'} busy={loading}>
         <div className="mb-5">
-          <h2 className="font-semibold">
+          <h2 data-section-title="" className="font-semibold"><HeadingMapPinned className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
             {editingId !== null
               ? 'Edit Subregion'
               : 'Add Subregion'}
           </h2>
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            {editingId !== null
-              ? 'Update the selected subregion.'
-              : 'Create a subregion and assign it to a region.'}
-          </p>
+
         </div>
 
         <div className="app-field-row">
@@ -273,7 +281,7 @@ export default function SubregionsPage() {
             <input
               id="subregion-name"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. Central Luzon"
+              placeholder="Enter subregion name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={loading}
@@ -292,7 +300,7 @@ export default function SubregionsPage() {
             <input
               id="subregion-code"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. CL"
+              placeholder="Enter subregion code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               disabled={loading}
@@ -340,28 +348,27 @@ export default function SubregionsPage() {
         </div>
 
         {/* Buttons */}
-        <div className="mt-5 flex gap-2">
+        <div data-action-toolbar="" className="mt-5 flex gap-2">
           <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveSubregion}
             disabled={loading || initialLoading || !authorization.can('Subregions', editingId === null ? 'add' : 'edit')}
-          >
+          ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
             {loading
               ? 'Saving...'
               : editingId !== null
-                ? 'Update Subregion'
+                ? 'Save Changes'
                 : 'Add Subregion'}
           </button>
 
-          {editingId !== null && (
+
             <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
               onClick={clearForm}
               disabled={loading}
-            >
+            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
               Cancel
             </button>
-          )}
         </div>
         {/* Error */}
         {error && (
@@ -372,31 +379,21 @@ export default function SubregionsPage() {
             {error}
           </div>
         )}
-      </section> : null}
+      </RecordDialog> : null}
 
       {/* Subregions Table */}
       <TableGroupProvider groupKeys={sortedSubregions.map((subregion) => String(subregion.region_id))}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div className="flex items-start justify-between gap-3 border-b px-6 py-5">
-          <div>
-          <h2 className="font-semibold">Saved Subregions</h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage subregions and their parent regions.
-          </p>
-          </div>
-          <TableGroupToggle disabled={initialLoading} />
-        </div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Subregions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Subregion</button>}<TableGroupToggle disabled={initialLoading} /></div>
 
         <div className="overflow-x-auto">
-          <Table className="min-w-[640px] table-fixed wrap-anywhere">
+          <Table summary={{ records: sortedSubregions.length }} className="min-w-[640px] table-fixed wrap-anywhere">
             <colgroup>
               {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <col data-action-column="standard" className="w-[20%]" />}
               <col className="w-[12%]" />
               <col className="w-[14%]" />
               <col />
-              <col className="w-[24%]" />
-            </colgroup>
+            <col style={{ width: 200 }} /></colgroup>
             <TableHeader>
               <TableRow>
                 {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <TableHead data-action-column="standard" className="px-3">Action</TableHead>}
@@ -405,9 +402,8 @@ export default function SubregionsPage() {
 
                 <SortableHeader className="px-3" {...sortHeader('name')}>Subregion Name</SortableHeader>
 
-                <SortableHeader className="px-3" {...sortHeader('region')}>Parent Region</SortableHeader>
 
-              </TableRow>
+              <SortableHeader className="w-[200px] px-3" {...sortHeader('created_at')}>Date Created</SortableHeader></TableRow>
             </TableHeader>
 
             <TableBody>
@@ -418,9 +414,6 @@ export default function SubregionsPage() {
                   columnCount={authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? 5 : 4}
                   getGroup={(subregion) => ({ key: String(subregion.region_id), label: 'Region: ' + (regions.find((region) => region.id === subregion.region_id)?.name || 'Unknown region') })}>
                 {(subregion) => {
-                  const parentRegion = regions.find(
-                    (region) => region.id === subregion.region_id
-                  )
 
                   return (
                     <TableRow key={subregion.id}>
@@ -447,11 +440,8 @@ export default function SubregionsPage() {
 
                       <TableCell className="px-3">{subregion.name}</TableCell>
 
-                      <TableCell className="px-3">
-                        {parentRegion?.name ?? 'Unknown region'}
-                      </TableCell>
 
-                    </TableRow>
+                    <TableCell className="px-3 whitespace-nowrap">{formatCreatedDate(subregion.created_at)}</TableCell></TableRow>
                   )
                 }}</GroupedTableRows>
               ) : (
@@ -460,7 +450,7 @@ export default function SubregionsPage() {
                     colSpan={authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    No subregions found.
+                    No subregions to display.
                   </TableCell>
                 </TableRow>
               )}

@@ -6,7 +6,7 @@ import { Check, ChevronsUpDown } from 'lucide-react'
 
 export type SearchableOption = { value: string; label: string; disabled?: boolean }
 
-export function SearchableSelect({ label, value, options, onValueChange, disabled = false, placeholder = 'Search…', id: providedId, name, required, className = '', inputHeightClassName = 'h-10', freeText = false, onBlur, autoComplete = 'off', 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }: {
+export function SearchableSelect({ label, value, options, onValueChange, disabled = false, placeholder, id: providedId, name, required, className = '', inputHeightClassName = 'h-10', freeText = false, onBlur, autoComplete = 'off', 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }: {
   label?: string
   value: string
   options: SearchableOption[]
@@ -27,8 +27,15 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
   const generatedId = useId()
   const id = providedId ?? generatedId
   const selected = options.find((option) => option.value === value) ?? null
+  const fieldName = (label ?? ariaLabel ?? name ?? 'option').replace(/[*:]/g, '').trim().toLowerCase()
+  // Width follows the field's purpose, never its currently available choices.
+  const contentSize = /customer|product|name|email|reason|kam|salesman/.test(fieldName) ? 'long'
+    : /year/.test(fieldName) ? 'year'
+    : /week|status|role/.test(fieldName) ? 'short'
+    : /month|^region$/.test(fieldName) ? 'month' : 'medium'
+  const hint = placeholder ?? (/^search\b/.test(fieldName) ? `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}…` : `${freeText ? 'Enter' : 'Select'} ${fieldName}…`)
   return (
-    <div className={'min-w-0 ' + (label ? 'space-y-1.5 ' : '') + className}>
+    <div data-content-size={contentSize} className={'min-w-0 ' + (label ? 'space-y-1.5 ' : '') + className}>
       {label && <label htmlFor={id} className="block text-sm font-medium">{label}</label>}
       <Combobox.Root items={options} value={selected} disabled={disabled} name={name} required={required} autoComplete={autoComplete}
         inputValue={freeText ? value : undefined}
@@ -36,8 +43,8 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
         isItemEqualToValue={(a, b) => a.value === b.value}
         onValueChange={(option) => { if (option) onValueChange(option.value); else if (!freeText) onValueChange('') }}>
         <Combobox.InputGroup className="relative">
-          <Combobox.Input id={id} placeholder={placeholder} onBlur={onBlur} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-            className={'block w-full min-w-0 rounded-md border bg-background pr-10 pl-3 text-base font-normal outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 disabled:opacity-60 sm:text-sm ' + inputHeightClassName} />
+          <Combobox.Input id={id} placeholder={hint} onBlur={onBlur} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
+            className={'block w-full min-w-0 text-ellipsis rounded-md border bg-background pr-10 pl-3 text-base font-normal outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 disabled:opacity-60 sm:text-sm ' + inputHeightClassName} />
           <Combobox.Trigger type="button" aria-label={'Show ' + (label ?? ariaLabel ?? 'selection').toLowerCase() + ' options'}
             className="absolute top-0 right-0 flex h-full w-10 items-center justify-center rounded-r-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
             <ChevronsUpDown className="size-4" aria-hidden="true" />

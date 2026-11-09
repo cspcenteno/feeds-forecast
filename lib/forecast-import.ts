@@ -30,12 +30,13 @@ export type ForecastImportScope = {
 
 export const forecastImportFields = [
   ['region', 'Region'], ['year', 'Year'], ['week', 'Week'], ['kam', 'KAM / Salesman'],
+  ['customer', 'Customer'],
   ['product_code', 'Product Code'], ['product_name', 'Product Name'], ['volume', 'Volume'],
 ] as const
 
-// Continue accepting older files without adding extra template columns.
+// Continue accepting legacy subregion and quantity columns.
 export const forecastImportInputFields = [
-  ...forecastImportFields, ['subregion', 'Subregion'], ['customer', 'Customer'], ['forecast', 'Forecast (Qty.)'],
+  ...forecastImportFields, ['subregion', 'Subregion'], ['forecast', 'Forecast (Qty.)'],
 ] as const
 
 export function normalizeImportText(value: string | null | undefined) {

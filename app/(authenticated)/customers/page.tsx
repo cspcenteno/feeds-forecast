@@ -1,5 +1,10 @@
 'use client'
 
+import { Users as HeadingUsers } from 'lucide-react'
+
+import { RecordDialog } from '@/components/ui/record-dialog'
+import { Plus as AddRecordIcon } from 'lucide-react'
+import { UserPlus as ActionUserPlusIcon, X as ActionXIcon } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
 
 import { useActionDialogs } from '@/components/action-dialogs'
@@ -37,6 +42,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [regions, setRegions] = useState<Region[]>([])
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
   const [customer, setCustomer] = useState('')
   const [salesman, setSalesman] = useState('')
   const [regionId, setRegionId] = useState('')
@@ -75,6 +81,7 @@ export default function CustomersPage() {
   }, [loadCustomers])
 
   function resetForm() {
+    setFormOpen(false)
     setEditingId(null)
     setCustomer('')
     setSalesman('')
@@ -87,6 +94,7 @@ export default function CustomersPage() {
   function startEdit(item: Customer) {
     if (!authorization.can('Customers', 'edit')) return
     setEditingId(item.id)
+    setFormOpen(true)
     setCustomer(item.customer)
     setSalesman(item.salesman ?? '')
     setRegionId(item.region_id == null ? '' : String(item.region_id))
@@ -166,14 +174,14 @@ export default function CustomersPage() {
   })
 
   return (
-    <main className="space-y-8">
+    <main className="space-y-4">
+
+      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {authorization.can('Customers', 'add') || editingId !== null ? (
-        <section className="rounded-xl border bg-card p-6 shadow-sm">
+        <RecordDialog open={formOpen} onClose={resetForm} title={editingId === null ? 'Add Customer' : 'Edit Customer'} busy={loading}>
           <div className="mb-5">
-            <h2 className="font-semibold">{editingId === null ? 'Add Customer' : 'Edit Customer'}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage customer details used by Forecast Input and Weekly Sales.
-            </p>
+            <h2 data-section-title="" className="font-semibold"><HeadingUsers className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{editingId === null ? 'Add Customer' : 'Edit Customer'}</h2>
+
           </div>
 
           <div className="overflow-x-auto pb-1">
@@ -209,27 +217,21 @@ export default function CustomersPage() {
 
           {error && <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
-          <div className="mt-5 flex gap-2">
+          <div data-action-toolbar="" className="mt-5 flex gap-2">
             {authorization.can('Customers', editingId === null ? 'add' : 'edit') && (
-              <button data-action-tone="primary" data-action-fill="" onClick={() => void saveCustomer()} disabled={loading} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">
-                {loading ? 'Saving...' : editingId === null ? 'Add Customer' : 'Update Customer'}
+              <button data-action-tone="primary" data-action-fill="" onClick={() => void saveCustomer()} disabled={loading} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
+                {loading ? 'Saving...' : editingId === null ? 'Add Customer' : 'Save Changes'}
               </button>
             )}
-            {editingId !== null && <button data-action-tone="neutral" onClick={resetForm} disabled={loading} className="h-10 rounded-md border px-4 text-sm">Cancel</button>}
+            <button data-action-tone="neutral" onClick={resetForm} disabled={loading} className="h-10 rounded-md border px-4 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button>
           </div>
-        </section>
+        </RecordDialog>
       ) : null}
 
       <TableGroupProvider groupKeys={sortedCustomers.map((item) => item.salesman?.trim() || '')}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div className="flex items-start justify-between gap-3 border-b px-6 py-5">
-          <div>
-          <h2 className="font-semibold">Customers</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{customers.length} customer{customers.length === 1 ? '' : 's'}</p>
-          </div>
-          <TableGroupToggle disabled={tableLoading} />
-        </div>
-        <Table aria-busy={tableLoading}
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Customers', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Customer</button>}<TableGroupToggle disabled={tableLoading} /></div>
+        <Table summary={{ records: sortedCustomers.length }} aria-busy={tableLoading}
           className="min-w-[900px] table-fixed wrap-anywhere"
           containerProps={{ className: "max-h-[min(32rem,65vh)] overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Customers table" }}
         >
@@ -240,13 +242,13 @@ export default function CustomersPage() {
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('segment')}>Segment</SortableHeader>
               <th data-fixed-column="status" className="px-1.5 py-3 sm:px-3 text-left font-medium">Status</th>
-              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('created_at')}>Date created</SortableHeader>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('created_at')}>Date Created</SortableHeader>
             </tr></thead>
             <tbody>
               {tableLoading ? (
                 <TableLoadingRow columns={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} label="customers" />
               ) : customers.length === 0 ? (
-                <tr><td colSpan={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">No customers found.</td></tr>
+                <tr><td colSpan={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">No customers to display.</td></tr>
               ) : <GroupedTableRows rows={sortedCustomers}
                 columnCount={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6}
                 getGroup={(item) => ({ key: item.salesman?.trim() || '', label: 'KAM: ' + (item.salesman?.trim() || 'Unassigned') })}>

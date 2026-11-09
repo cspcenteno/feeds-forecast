@@ -200,7 +200,7 @@ export default function ChangePasswordPage() {
                 type={showPassword ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter your new password"
+                placeholder="Enter new password"
                 autoComplete="new-password"
                 disabled={loading}
                 minLength={8}
@@ -240,7 +240,7 @@ export default function ChangePasswordPage() {
                 type={showConfirmPassword ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter your new password"
+                placeholder="Confirm new password"
                 autoComplete="new-password"
                 disabled={loading}
                 maxLength={128}

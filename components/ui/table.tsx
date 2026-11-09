@@ -2,15 +2,18 @@
 
 import * as React from "react"
 import { cn } from "cn"
+import { TableSummary, type TableSummaryCounts } from '@/components/ui/table-summary'
 
-type TableProps = React.ComponentProps<"table"> & {
+type TableProps = Omit<React.ComponentProps<"table">, 'summary'> & {
   saved?: boolean
   containerProps?: React.ComponentProps<"div">
+  summary?: TableSummaryCounts
 }
 
-function Table({ className, containerProps, saved = false, ...props }: TableProps) {
+function Table({ className, containerProps, saved = false, summary, ...props }: TableProps) {
   const { className: containerClassName, ...containerAttributes } = containerProps ?? {}
   return (
+    <>
     <div
       data-slot="table-container"
       className={cn("app-table-scroll @container relative isolate h-auto w-full max-h-[min(32rem,65vh)] overflow-auto", containerClassName)}
@@ -22,6 +25,8 @@ function Table({ className, containerProps, saved = false, ...props }: TableProp
         {...props}
       />
     </div>
+    {summary && <TableSummary {...summary} />}
+    </>
   )
 }
 

@@ -1,5 +1,10 @@
 'use client'
 
+import { Package as HeadingPackage } from 'lucide-react'
+
+import { RecordDialog } from '@/components/ui/record-dialog'
+import { Plus as AddRecordIcon } from 'lucide-react'
+import { Save as ActionSaveIcon, X as ActionXIcon } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
 
 import { useActionDialogs } from '@/components/action-dialogs'
@@ -7,7 +12,7 @@ import { SelectionField } from '@/components/ui/selection-field'
 import { TableActionButton } from '@/components/ui/table-action-button'
 import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { GroupedTableRows, TableGroupProvider, TableGroupToggle } from '@/components/ui/grouped-table-rows'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
@@ -46,7 +51,7 @@ const sortableColumns = [
   { key: 'name', label: 'Product Name', className: 'w-[18%]' },
   { key: 'product_line', label: 'Product Line', className: 'w-[12%]' },
   { key: 'species', label: 'Species', className: 'w-[10%]' },
-  { key: 'created_at', label: 'Date created', className: 'w-[13%]' },
+  { key: 'created_at', label: 'Date Created', className: 'w-[13%]' },
 ] as const
 
 type SortKey = (typeof sortableColumns)[number]['key']
@@ -68,6 +73,7 @@ export default function ProductsPage() {
   const [isActive, setIsActive] = useState(true)
 
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -189,6 +195,7 @@ export default function ProductsPage() {
   function editProduct(product: Product) {
     if (!authorization.can('Products', 'edit')) return
     setEditingId(product.id)
+    setFormOpen(true)
     setCategoryId(product.category_id?.toString() ?? '')
     setCode(product.code)
     setName(product.name)
@@ -237,6 +244,7 @@ export default function ProductsPage() {
   }
 
   function clearForm() {
+    setFormOpen(false)
     setEditingId(null)
     setCategoryId('')
     setCode('')
@@ -278,21 +286,19 @@ export default function ProductsPage() {
   }) : products
 
   return (
-    <main className="space-y-8">
+    <main className="space-y-4">
+
+      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {/* Form */}
-      {authorization.can('Products', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Products', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Product' : 'Edit Product'} busy={loading}>
         <div className="mb-5">
-          <h2 className="font-semibold">
+          <h2 data-section-title="" className="font-semibold"><HeadingPackage className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
             {editingId !== null
               ? 'Edit Product'
               : 'Add Product'}
           </h2>
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            {editingId !== null
-              ? 'Update the selected product.'
-              : 'Create a new product.'}
-          </p>
+
         </div>
 
         <div className="app-field-row">
@@ -335,7 +341,7 @@ export default function ProductsPage() {
             <input
               id="code"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. BS-001"
+              placeholder="Enter product code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
@@ -353,7 +359,7 @@ export default function ProductsPage() {
             <input
               id="name"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. Broiler Starter"
+              placeholder="Enter product name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -383,7 +389,7 @@ export default function ProductsPage() {
             <label htmlFor="weight" className="text-sm font-medium">Weight</label>
             <input
               id="weight"
-              type="number" step="any" min="0" placeholder="Enter weight"
+              type="number" step="any" min="0" placeholder="Enter weight (kg)"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
@@ -402,28 +408,27 @@ export default function ProductsPage() {
         </div>
 
         {/* Buttons */}
-        <div className="mt-5 flex gap-2">
+        <div data-action-toolbar="" className="mt-5 flex gap-2">
           <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveProduct}
             disabled={loading || !authorization.can('Products', editingId === null ? 'add' : 'edit')}
-          >
+          ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
             {loading
               ? 'Saving...'
               : editingId !== null
-                ? 'Update Product'
+                ? 'Save Changes'
                 : 'Add Product'}
           </button>
 
-          {editingId !== null && (
+
             <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
               onClick={clearForm}
               disabled={loading}
-            >
+            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
               Cancel
             </button>
-          )}
         </div>
 
         {/* Error */}
@@ -432,26 +437,15 @@ export default function ProductsPage() {
             {error}
           </div>
         )}
-      </section> : null}
+      </RecordDialog> : null}
 
       {/* Table */}
       <TableGroupProvider groupKeys={sortedProducts.map((product) => String(product.category_id))}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div className="flex items-start justify-between gap-3 border-b px-6 py-5">
-          <div>
-          <h2 className="font-semibold">
-            Saved Products
-          </h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            List of products currently available in the system.
-          </p>
-          </div>
-          <TableGroupToggle disabled={tableLoading} />
-        </div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Products', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Product</button>}<TableGroupToggle disabled={tableLoading} /></div>
 
         <div className="overflow-x-auto">
-          <Table saved aria-busy={tableLoading} className="table-fixed">
+          <Table summary={{ records: sortedProducts.length }} saved aria-busy={tableLoading} className="table-fixed">
             <TableHeader>
               <TableRow>
                 {canShowActions && <TableHead data-action-column="standard" className="w-[13%] text-left">Action</TableHead>}
@@ -460,6 +454,8 @@ export default function ProductsPage() {
                   const active = sort?.key === key
                   const SortIcon = active ? (sort.descending ? ChevronDown : ChevronUp) : ChevronsUpDown
                   return (
+                    <Fragment key={key}>
+                    {key === 'created_at' && <TableHead className="w-[8%] text-right">Weight</TableHead>}
                     <TableHead key={key} className={className} aria-sort={active ? (sort.descending ? 'descending' : 'ascending') : undefined}>
                       <button
                         type="button"
@@ -470,9 +466,9 @@ export default function ProductsPage() {
                         <SortIcon aria-hidden="true" className={active ? 'size-4 shrink-0' : 'size-4 shrink-0 text-muted-foreground'} />
                       </button>
                     </TableHead>
+                    </Fragment>
                   )
                 })}
-                <TableHead className="w-[8%] text-right">Weight</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -509,13 +505,13 @@ export default function ProductsPage() {
                   <TableCell>{product.name}</TableCell>
                   <TableCell>{product.product_line || '—'}</TableCell>
                   <TableCell>{product.species || '—'}</TableCell>
-                  <TableCell>{product.created_at ? new Date(product.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</TableCell>
                   <TableCell className="text-right">{Number(product.weight).toLocaleString('en-PH')}</TableCell>
+                  <TableCell>{product.created_at ? new Date(product.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</TableCell>
                 </TableRow>
               )}</GroupedTableRows> : (
                 <TableRow>
                   <TableCell colSpan={columnCount} className="h-24 text-center text-muted-foreground">
-                    No products found.
+                    No products to display.
                   </TableCell>
                 </TableRow>
               )}

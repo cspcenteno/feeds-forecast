@@ -13,6 +13,7 @@ export const modules = [
   'Subregions',
   'Users',
   'Week Locks',
+  'Audit Logs',
 ] as const
 
 export type ModuleName = (typeof modules)[number]
@@ -20,6 +21,7 @@ export type Action = 'view' | 'add' | 'edit' | 'delete'
 export type PermissionMap = Record<ModuleName, Record<Action, boolean>>
 
 export const disabledPermissions: Partial<Record<ModuleName, Action[]>> = {
+  'Audit Logs': ['add', 'edit', 'delete'],
   Dashboard: ['add', 'edit', 'delete'],
   'Weekly Sales': ['add', 'edit', 'delete'],
   Approvals: ['add', 'delete'],

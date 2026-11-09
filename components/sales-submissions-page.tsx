@@ -1,6 +1,13 @@
 
 'use client'
 
+import { ClipboardCheck as HeadingClipboardCheck } from 'lucide-react'
+
+import { useStatusNotification } from '@/components/action-dialogs'
+
+import { uniqueCount } from '@/components/ui/table-summary'
+import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { ArrowLeftRight as ActionArrowLeftRightIcon, X as ActionXIcon } from 'lucide-react'
 import { SelectionField } from '@/components/ui/selection-field'
 import { Table } from '@/components/ui/table'
 import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
@@ -195,7 +202,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   const referenceRequest = useRef(0)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const setMessage = useStatusNotification()
 
   const isAdminReview = !weekly && userRole === 'Admin'
   const isAsmReview = userRole === 'Manager' && reviewPosition === 'ASM'
@@ -219,6 +226,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     (userRole === 'Superuser' && reviewPosition === 'Supervisor')
   const canShowActions = availableReviewActions.length > 0
   const requiresReviewReason = actionType === 'return' || actionType === 'reject'
+  const ReviewActionIcon = actionType ? reviewActions[actionType].icon : Check
   const selectedCustomerProducts = useMemo(() => {
     const groups = new Map<string, { customerId: number | null; productId: number | null; volume: number }>()
     for (const item of selectedItems) {
@@ -979,10 +987,6 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     return customerOnly ? null : groupByEndorser ? item.endorsed_by ?? null : item.submitted_by
   }
 
-  const submissionCount = weekly ? filteredSales.length : new Set(
-    filteredSales.map(getReviewGroupId).filter((id) => id !== null)
-  ).size
-
   function compareUsers(first: string | null, second: string | null) {
     return getSubmittedByName(first).localeCompare(getSubmittedByName(second)) ||
       (first ?? '').localeCompare(second ?? '')
@@ -1378,39 +1382,30 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         </div>
       )}
 
-      {message && (
-        <div className="rounded-lg border bg-muted px-4 py-3 text-sm">
-          {message}
-        </div>
-      )}
-
       {/* PENDING SALES SUBMISSIONS */}
 
       <div className="rounded-xl border bg-card shadow-sm">
 
         {/* HEADER, FILTERS AND BULK ACTIONS */}
 
-        <div className="border-b px-6 py-4">
-          <div className="flex flex-col gap-4">
+        <div className="border-b">
+          <div className="flex flex-col">
 
             {/* TITLE */}
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {!weekly && <div data-section-header="" className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h2 className="text-base font-semibold">
+                  <h2 data-section-title="" className="text-base font-semibold"><HeadingClipboardCheck className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
                     {pageTitle}
                   </h2>
 
 
                 </div>
 
-                <p className="text-sm text-muted-foreground">
-                  {customerOnly ? 'Your approved forecasts by customer and product for each week.' : weekly ? 'Approved sales forecasts grouped by week, RSM, and customer.' : groupByEndorser ? 'Review endorsed forecasts grouped by week, RSM, and customer.' : 'Review sales forecasts grouped by week, KAM, and customer.'}
-                </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
                   {!weekly && (userRole === 'Admin' || userRole === 'Superuser') && (
                     <button
                       type="button"
@@ -1420,7 +1415,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                         setExpandedGroups(new Set())
                       }}
                       className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-muted"
-                    >
+                    ><ActionArrowLeftRightIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
                       Switch to {stage === 'Endorsed' ? 'RSM' : 'ASM'}
                     </button>
                   )}
@@ -1440,14 +1435,15 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
               </div>
             </div>
 
+            }
             {/* FILTERS AND BULK ACTIONS */}
 
-            <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex flex-wrap items-end justify-between gap-4 px-6 py-4">
               <div className="min-w-0 max-w-full">
                 {/* MONTH AND REGION */}
 
                 <div className="app-field-row">
-  
+
                   <div data-field-size="compact" className="space-y-1.5">
                     <label className="block text-xs font-medium text-muted-foreground">
                       Month
@@ -1494,11 +1490,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
               {/* BULK ACTIONS */}
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
 
-                <span className="mr-1 text-sm text-muted-foreground">
-                  {submissionCount} {submissionCount === 1 ? 'submission' : 'submissions'}
-                </span>
 
                 {availableReviewActions.filter((action) => action !== 'undo').map((action) => {
                   const { label, icon: Icon, tone } = reviewActions[action]
@@ -1517,6 +1510,10 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   )
                 })}
 
+                {weekly && <button type="button" data-action-tone="neutral" onClick={loadData} disabled={loading}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                  <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />Refresh
+                </button>}
                 <button data-slot="expand-collapse-button" data-action-tone="neutral"
                   type="button"
                   onClick={() =>
@@ -1524,7 +1521,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   }
                   disabled={loading || visibleGroupKeys.size === 0}
                   className="h-9 rounded-md px-3 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
-                >
+                ><ExpandCollapseIcon expanded={allGroupsExpanded} />
                   {allGroupsExpanded ? 'Collapse All' : 'Expand All'}
                 </button>
               </div>
@@ -1534,7 +1531,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
         {/* APPROVAL TABLE */}
 
-        <Table data-volume-layout="review"
+        <Table summary={{ records: filteredSales.length, customers: uniqueCount(filteredSales.map((row) => row.customer_id)), products: uniqueCount(filteredSales.map((row) => row.product_id)) }} data-volume-layout="review"
           className="min-w-[1600px] table-fixed"
           containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": pageTitle + ' table' }}
         >
@@ -1598,7 +1595,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     colSpan={columnCount}
                     className="px-4 py-10 text-center text-sm text-muted-foreground"
                   >
-                    {weekly ? 'No weekly sales records found.' : 'No submissions found for this review stage.'}
+                    {weekly ? 'No weekly sales match the current filters.' : 'No forecasts awaiting review match the current filters.'}
                   </td>
                 </tr>
               ) : (
@@ -1913,8 +1910,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
             {/* MODAL HEADER */}
 
-            <div className="border-b px-4 py-4 wrap-anywhere sm:px-6">
-              <h2 className="text-lg font-semibold">{reviewActions[actionType].label} Sales Forecasts</h2>
+            <div data-section-header="" className="border-b px-4 py-4 wrap-anywhere sm:px-6">
+              <h2 data-section-title="" className="text-lg font-semibold"><HeadingClipboardCheck className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{reviewActions[actionType].label} Sales Forecasts</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {selectedItems.length} forecast record(s) for {actionLabel}.
               </p>
@@ -2034,13 +2031,13 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
               {/* MODAL BUTTONS */}
 
-              <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <div data-action-toolbar="" className="flex flex-col-reverse justify-end gap-2 sm:flex-row">
                 <button data-action-tone="neutral"
                   type="button"
                   onClick={closeModal}
                   disabled={processing}
                   className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
                   Cancel
                 </button>
 
@@ -2051,7 +2048,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   data-action-fill=""
                   disabled={processing}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                ><ReviewActionIcon className="size-4 shrink-0" aria-hidden="true" />
                   {processing ? 'Processing...' : reviewActions[actionType].label + ' (' + selectedItems.length + ')'}
                 </button>
               </div>

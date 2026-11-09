@@ -8,7 +8,7 @@ import { confirmationPresentation, createConfirmationController, type Confirmati
 type Notice = { id: number; message: string; success: boolean }
 type DialogService = {
   confirmAction: (options: ConfirmationOptions) => Promise<ConfirmationTicket | null>
-  notify: (message: string) => void
+  notify: (message: string, options?: { success?: boolean }) => void
 }
 const Context = createContext<DialogService | null>(null)
 
@@ -18,14 +18,22 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<ConfirmationView | null>(null)
   const [controller] = useState(() => createConfirmationController(setView))
   const [notices, setNotices] = useState<Notice[]>([])
+  const noticeTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => () => noticeTimers.current.forEach(clearTimeout), [])
 
   useEffect(() => () => controller.dispose(), [controller])
 
   const confirmAction = useCallback((options: ConfirmationOptions) => controller.request(options), [controller])
 
-  const notify = useCallback((message: string) => {
-    const notice = { id: ++noticeId.current, message, success: /successfully/i.test(message) }
+  const notify = useCallback((message: string, options?: { success?: boolean }) => {
+    if (!message.trim()) return
+    const notice = { id: ++noticeId.current, message, success: options?.success ?? /successfully/i.test(message) }
     setNotices((current) => [...current.slice(-2), notice])
+    const timer = setTimeout(() => {
+      setNotices((current) => current.filter((item) => item.id !== notice.id))
+      noticeTimers.current = noticeTimers.current.filter((item) => item !== timer)
+    }, 6000)
+    noticeTimers.current.push(timer)
   }, [])
 
   const service = useMemo(() => ({ confirmAction, notify }), [confirmAction, notify])
@@ -96,4 +104,11 @@ export function useActionDialogs() {
   const service = useContext(Context)
   if (!service) throw new Error('ActionDialogsProvider is required.')
   return service
+}
+
+export function useStatusNotification() {
+  const { notify } = useActionDialogs()
+  return useCallback((message: string) => {
+    if (message.trim()) notify(message, { success: true })
+  }, [notify])
 }

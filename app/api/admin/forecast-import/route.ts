@@ -85,6 +85,12 @@ export async function POST(request: Request) {
       const { error: saveError } = await supabaseAdmin.from('sales_forecasts')
         .insert(ready.map((row) => ({ ...row.payload, status: 'Draft' })))
       if (saveError) throw new Error(saveError.message)
+      const ids = ready.map((row) => row.source.id)
+      const { data: removed, error: cleanupError } = await supabaseAdmin.from('forecast_import_staging')
+        .delete().in('id', ids).select('id')
+      if (cleanupError || removed?.length !== ids.length) {
+        throw new Error(`${ready.length} forecasts were saved, but staging cleanup did not complete. ${cleanupError?.message ?? 'Some staging rows were unavailable.'} Refresh validation before retrying; saved forecasts remain intact.`)
+      }
     }
     return NextResponse.json({ imported: ready.length, skipped: preview.length - ready.length })
   } catch (error) {

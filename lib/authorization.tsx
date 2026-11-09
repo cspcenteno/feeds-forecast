@@ -219,6 +219,7 @@ export function AuthorizationProvider({
     '/subregions': 'Subregions',
     '/users': 'Users',
     '/locks': 'Week Locks',
+    '/audit-logs': 'Audit Logs',
   }
 
   const currentModule = pathModule[pathname]
@@ -247,6 +248,7 @@ export function AuthorizationProvider({
         Subregions: '/subregions',
         Users: '/users',
         'Week Locks': '/locks',
+        'Audit Logs': '/audit-logs',
       }
 
       if (firstAllowed) {

@@ -1,5 +1,11 @@
 'use client'
 
+import { ClipboardPlus as HeadingClipboardPlus, Archive as HeadingArchive } from 'lucide-react'
+
+import { useStatusNotification } from '@/components/action-dialogs'
+
+import { BudgetValueIndicator } from '@/components/ui/budget-value-indicator'
+import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
 import { useActionDialogs } from '@/components/action-dialogs'
 import { confirmationRecordDetails } from '@/lib/action-confirmation'
 import { customerMonthlyBudgetReference, monthlyBudgetReference } from '@/lib/monthly-budget-reference'
@@ -194,7 +200,7 @@ export default function SalesInputPage() {
   const [importBusy, setImportBusy] = useState(false)
   const loading = pendingAction !== null || importBusy
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const setMessage = useStatusNotification()
   const [removedForecastCount, setRemovedForecastCount] = useState(0)
   const [submittedForecastCount, setSubmittedForecastCount] = useState(0)
   const [savedStatusFilter, setSavedStatusFilter] = useState('')
@@ -1597,16 +1603,14 @@ export default function SalesInputPage() {
       {authorization.can('Forecast Input', 'add') ||
       authorization.can('Forecast Input', 'edit') ? (
         <div className="rounded-xl border bg-card shadow-sm">
-          <div className="border-b px-6 py-4">
+          <div data-section-header="" className="border-b px-6 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-base font-semibold">
+                <h2 data-section-title="" className="text-base font-semibold"><HeadingClipboardPlus className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
                   Add Forecast
                 </h2>
 
-                <p className="text-sm text-muted-foreground">
-                  Enter multiple forecast rows for the selected week.
-                </p>
+
               </div>
 
               <div
@@ -1642,7 +1646,7 @@ export default function SalesInputPage() {
 
                 <div data-field-size="compact" className="space-y-2">
                   <label className="text-sm font-medium">
-                    Week Date
+                    Week
                   </label>
 
                   <input
@@ -1696,7 +1700,7 @@ export default function SalesInputPage() {
                       setSelectedCustomerId(id)
                     }}
                     disabled={isFormDisabled || !selectedRegionId}
-                    placeholder={selectedRegionId ? 'Search customer...' : 'Select region first'}
+                    placeholder={selectedRegionId ? 'Select customer…' : 'Select a region first'}
                     className="w-full" aria-label="Customer" />
 
 
@@ -1751,7 +1755,7 @@ export default function SalesInputPage() {
                   value={selectedMonth}
                   onValueChange={(selectionValue) => setSelectedMonth(Number(selectionValue))}
                   disabled={isFormDisabled}
-                  className="h-9 w-36 rounded-md border bg-background px-3 text-sm font-normal text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-9 w-[160px] min-w-[160px] rounded-md border bg-background px-3 text-sm font-normal text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Month:">
                 {Array.from({ length: 12 }, (_, index) => (
                   <option key={index + 1} value={index + 1}>
@@ -1813,7 +1817,7 @@ export default function SalesInputPage() {
                 options={products.map((product) => ({ value: String(product.id), label: `${product.code} - ${product.name}` }))}
                 onValueChange={(id) => updateRow(row.tempId, 'product_id', id)}
                 disabled={isFormDisabled || !selectedCustomerId}
-                placeholder="Search product by code or name..."
+                placeholder="Select product…"
                 className="w-full min-w-0" aria-label="Product" />
 
 
@@ -1843,15 +1847,15 @@ export default function SalesInputPage() {
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="actual reference" /> : formatNumber(rowActualMonthly)}
+              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="actual reference" /> : <BudgetValueIndicator value={rowActualMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowActualMonthly)}</BudgetValueIndicator>}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="prior-year actual reference" /> : formatNumber(rowActualLastYear)}
+              {!referenceReady ? '—' : selectedActualsLoading ? <LoadingSpinner label="prior-year actual reference" /> : <BudgetValueIndicator value={rowActualLastYear} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowActualLastYear)}</BudgetValueIndicator>}
             </td>
 
             <td className="break-words bg-muted/30 px-1 py-3 text-right font-medium text-muted-foreground">
-              {!referenceReady ? '—' : formatNumber(rowForecastMonthly)}
+              {!referenceReady ? '—' : <BudgetValueIndicator value={rowForecastMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : rowMonthlyBudget}>{formatNumber(rowForecastMonthly)}</BudgetValueIndicator>}
             </td>
           </tr>
         )
@@ -1932,12 +1936,6 @@ export default function SalesInputPage() {
                 {error}
               </div>
             )}
-
-            {message && (
-              <div className="mt-5 rounded-lg border bg-muted px-4 py-3 text-sm">
-                {message}
-              </div>
-            )}
           </div>
         </div>
       ) : null}
@@ -1945,15 +1943,13 @@ export default function SalesInputPage() {
       {/* SAVED FORECASTS */}
 
       <div id="saved-forecasts" className="scroll-mt-4 rounded-xl border bg-card shadow-sm">
-        <div className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold">
+            <h2 data-section-title="" className="text-base font-semibold"><HeadingArchive className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
               Saved Forecasts
             </h2>
 
-            <p className="text-sm text-muted-foreground">
-              Track drafts, pending reviews, endorsements, and returns by week and customer.
-            </p>
+
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1969,6 +1965,32 @@ export default function SalesInputPage() {
                 ))}
               </SelectionField>
             </label>
+          {canSubmitForecasts &&
+            (!savedStatusFilter || savedStatusFilter === 'Draft') &&
+            eligibleSubmissionCount > 0 && (
+              <button data-action-tone="transfer" data-action-fill=""
+                type="button"
+                onClick={handleSubmitAll}
+                disabled={loading}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Send className="size-4" />
+                {pendingAction === 'submitAll' ? 'Submitting...' : 'Submit All'}
+              </button>
+            )}
+          <button data-slot="expand-collapse-button"
+            type="button"
+            data-action-tone="neutral"
+            onClick={() => setExpandedCustomers(new Set(
+              allSavedCustomersExpanded ? [] : savedCustomers.map((customer) => customer.key)
+            ))}
+            disabled={savedCustomers.length === 0}
+            className="h-9 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          ><ExpandCollapseIcon expanded={allSavedCustomersExpanded} />
+            {allSavedCustomersExpanded ? 'Collapse All' : 'Expand All'}
+          </button>
+
+
           </div>
         </div>
 
@@ -1977,7 +1999,7 @@ export default function SalesInputPage() {
 
       {/* SAVED FORECAST TABLE */}
 
-        <Table data-volume-layout="forecast" saved aria-busy={savedTableLoading || initializing}
+        <Table summary={{ records: savedCustomers.reduce((count, customer) => count + customer.items.length, 0), customers: totalSavedCustomers, products: totalSavedProducts }} data-volume-layout="forecast" saved aria-busy={savedTableLoading || initializing}
           className="table-fixed"
           containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Forecasts table" }}
         >
@@ -2035,7 +2057,7 @@ export default function SalesInputPage() {
                     colSpan={savedColumnCount}
                     className="px-4 py-10 text-center text-sm text-muted-foreground"
                   >
-                    No saved forecasts found.
+                    No forecasts match the current filters.
                   </td>
                 </tr>
               ) : (
@@ -2182,15 +2204,15 @@ export default function SalesInputPage() {
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(customerActualMonthly)}
+                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={customerActualMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerActualMonthly)}</BudgetValueIndicator>}
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(customerActualLastYear)}
+                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={customerActualLastYear} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerActualLastYear)}</BudgetValueIndicator>}
                             </td>
 
                             <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {formatNumber(customerForecastMonthly)}
+                              {<BudgetValueIndicator value={customerForecastMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerForecastMonthly)}</BudgetValueIndicator>}
                             </td>
                           </tr>
 
@@ -2292,17 +2314,15 @@ export default function SalesInputPage() {
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(productGroup.actualMonthly)}
+                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={productGroup.actualMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.actualMonthly)}</BudgetValueIndicator>}
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : formatNumber(productGroup.actualLastYear)}
+                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={productGroup.actualLastYear} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.actualLastYear)}</BudgetValueIndicator>}
                                   </td>
 
                                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {formatNumber(
-                                      productGroup.forecastMonthly
-                                    )}
+                                    {<BudgetValueIndicator value={productGroup.forecastMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.forecastMonthly)}</BudgetValueIndicator>}
                                   </td>
                                 </tr>
                               )
@@ -2315,37 +2335,7 @@ export default function SalesInputPage() {
               )}
             </tbody>
         </Table>
-        <div className="flex flex-wrap items-center gap-2 border-t px-4 py-3">
-          {canSubmitForecasts &&
-            (!savedStatusFilter || savedStatusFilter === 'Draft') &&
-            eligibleSubmissionCount > 0 && (
-              <button data-action-tone="transfer" data-action-fill=""
-                type="button"
-                onClick={handleSubmitAll}
-                disabled={loading}
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Send className="size-4" />
-                {pendingAction === 'submitAll' ? 'Submitting...' : 'Submit All'}
-              </button>
-            )}
-          <button data-slot="expand-collapse-button"
-            type="button"
-            data-action-tone="neutral"
-            onClick={() => setExpandedCustomers(new Set(
-              allSavedCustomersExpanded ? [] : savedCustomers.map((customer) => customer.key)
-            ))}
-            disabled={savedCustomers.length === 0}
-            className="h-9 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
-            {allSavedCustomersExpanded ? 'Collapse All' : 'Expand All'}
-          </button>
-          <span className="text-sm text-muted-foreground">
-            {totalSavedCustomers} {totalSavedCustomers === 1 ? 'Customer' : 'Customers'}
-            {' · '}
-            {totalSavedProducts} {totalSavedProducts === 1 ? 'Product' : 'Products'}
-          </span>
-        </div>
+
         {submittedForecastCount > 0 && (
           <div role="status" className="border-t bg-muted/50 px-4 py-3 text-sm">
             {submittedForecastCount} forecast record(s) submitted for RSM review.

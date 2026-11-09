@@ -1,5 +1,6 @@
 'use client'
 
+import { LogIn as ActionLogInIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -127,7 +128,7 @@ export default function SignupPage() {
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Enter your full name"
+              placeholder="Enter full name"
               required
               className="h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-base outline-none transition placeholder:text-slate-400 focus:border-emerald-700 focus:ring-3 focus:ring-emerald-700/10 sm:text-sm dark:border-slate-700 dark:bg-slate-900 dark:focus:border-emerald-400"
             />
@@ -142,7 +143,7 @@ export default function SignupPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
+              placeholder="Enter email address"
               required
               className="h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-base outline-none transition placeholder:text-slate-400 focus:border-emerald-700 focus:ring-3 focus:ring-emerald-700/10 sm:text-sm dark:border-slate-700 dark:bg-slate-900 dark:focus:border-emerald-400"
             />
@@ -157,7 +158,7 @@ export default function SignupPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="Enter password"
               required
               className="h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-base outline-none transition placeholder:text-slate-400 focus:border-emerald-700 focus:ring-3 focus:ring-emerald-700/10 sm:text-sm dark:border-slate-700 dark:bg-slate-900 dark:focus:border-emerald-400"
             />
@@ -172,7 +173,7 @@ export default function SignupPage() {
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm your password"
+              placeholder="Confirm password"
               required
               className="h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-base outline-none transition placeholder:text-slate-400 focus:border-emerald-700 focus:ring-3 focus:ring-emerald-700/10 sm:text-sm dark:border-slate-700 dark:bg-slate-900 dark:focus:border-emerald-400"
             />
@@ -205,7 +206,7 @@ export default function SignupPage() {
             type="button"
             onClick={() => router.push('/login')}
             className="font-semibold text-[#174c36] hover:underline dark:text-emerald-400"
-          >
+          ><ActionLogInIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
             Sign In
           </button>
         </div>

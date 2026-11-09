@@ -1,8 +1,12 @@
 
 'use client'
 
+import { UserRoundCog as HeadingUserRoundCog, ShieldCheck as HeadingShieldCheck, Users as HeadingUsers } from 'lucide-react'
+
+import { ListChecks as ActionListChecksIcon, RefreshCw as ActionRefreshCwIcon } from 'lucide-react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
+import { RecordDialog } from '@/components/ui/record-dialog'
 
 import { useActionDialogs } from '@/components/action-dialogs'
 import { SelectionField } from '@/components/ui/selection-field'
@@ -18,6 +22,7 @@ import {
   RefreshCw,
   Plus,
   Search,
+  X,
 } from 'lucide-react'
 
 import { SortableHeader, useTableSort } from '@/components/ui/sortable-header'
@@ -148,6 +153,7 @@ export default function UsersPage() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [userDialogOpen, setUserDialogOpen] = useState(false)
 
   // Edit User state
   const [fullName, setFullName] = useState('')
@@ -380,6 +386,7 @@ export default function UsersPage() {
   }
 
   async function selectUser(user: User) {
+    setUserDialogOpen(true)
     setResetTemporaryPassword('')
     setShowUserPermissions(false)
     setSelectedUser(user)
@@ -408,6 +415,7 @@ export default function UsersPage() {
   }
 
   function clearSelection() {
+    setUserDialogOpen(false)
     setResetTemporaryPassword('')
     setShowUserPermissions(false)
     setSelectedUser(null)
@@ -439,11 +447,9 @@ export default function UsersPage() {
   }
 
   function openCreateUserForm() {
-    if (selectedUser) {
-      clearSelection()
-      resetCreateUserForm()
-    }
-    document.getElementById('user-editor')?.scrollIntoView({ block: 'start' })
+    clearSelection()
+    resetCreateUserForm()
+    setUserDialogOpen(true)
   }
 
   function handleNewRoleChange(newRole: string) {
@@ -650,6 +656,7 @@ export default function UsersPage() {
 
       await loadUsers()
       resetCreateUserForm()
+      setUserDialogOpen(false)
 
       notify('User created successfully. Share the temporary password securely. The user must change it after signing in.')
     } catch (error) {
@@ -799,6 +806,7 @@ export default function UsersPage() {
       setPermissionLoadError(false)
 
       notify('User details and permissions saved successfully.')
+      setUserDialogOpen(false)
     } catch (error) {
       console.error('Save User Error:', error)
 
@@ -937,13 +945,12 @@ export default function UsersPage() {
       />}
       {/* User form */}
       {isAdmin && (selectedUser || authorization.can('Users', 'add')) && (
-        <div id="user-editor" className="scroll-mt-4 overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <RecordDialog open={userDialogOpen} onClose={() => { clearSelection(); resetCreateUserForm() }} title={selectedUser ? 'Edit User' : 'Create User'} busy={formBusy} wide>
+        <div id="user-editor" className="min-w-0">
+          <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-semibold">{selectedUser ? 'Edit User' : 'Create User'}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {selectedUser ? 'Update the account and its permissions.' : 'Create an account and assign its initial role and permissions.'}
-              </p>
+              <h2 data-section-title="" className="font-semibold"><HeadingUserRoundCog className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{selectedUser ? 'Edit User' : 'Create User'}</h2>
+
             </div>
 
           </div>
@@ -981,7 +988,7 @@ export default function UsersPage() {
                 required
                 disabled={formBusy || Boolean(selectedUser)}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                placeholder="user@company.com"
+                placeholder="Enter email address"
               />
             </div>
 
@@ -1119,13 +1126,11 @@ export default function UsersPage() {
           <div className="flex flex-col gap-3 border-t px-6 pt-4 pb-2">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="font-semibold">User Permissions</h3>
-                <p className="text-sm text-muted-foreground">
-                  {selectedUser ? 'Configure module access for this account.' : 'Configure module access before creating the account.'}
-                </p>
+                <h3 data-section-title="" className="font-semibold"><HeadingShieldCheck className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />User Permissions</h3>
+
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div data-action-toolbar="" className="flex flex-wrap gap-2">
                 {showUserPermissions && (
                   <button
                     type="button"
@@ -1133,8 +1138,8 @@ export default function UsersPage() {
                     onClick={() => toggleFormPermissions(!allFormPermissionsEnabled)}
                     disabled={permissionsBusy}
                     className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                  >
-                    {allFormPermissionsEnabled ? 'Disable All' : 'Enable All'}
+                  ><ActionListChecksIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
+                    {allFormPermissionsEnabled ? 'Disable All Permissions' : 'Enable All Permissions'}
                   </button>
                 )}
                 <button data-slot="show-hide-button" data-action-tone="neutral"
@@ -1162,7 +1167,7 @@ export default function UsersPage() {
                     type="button"
                     onClick={() => selectedUser && loadUserPermissions(selectedUser.id, role)}
                     className="mt-3 rounded-md border px-3 py-2 hover:bg-muted"
-                  >
+                  ><ActionRefreshCwIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
                     Retry
                   </button>
                 </div>
@@ -1280,7 +1285,8 @@ export default function UsersPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-6 py-4">
+          <div data-action-toolbar="" className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-6 py-4">
+            <button type="button" data-action-tone="neutral" disabled={formBusy} onClick={() => { clearSelection(); resetCreateUserForm() }} className="inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm"><X className="size-4" aria-hidden="true" />Cancel</button>
             <button data-action-tone="primary" data-action-fill=""
               type="button"
               onClick={selectedUser ? handleSave : handleCreateUser}
@@ -1308,32 +1314,31 @@ export default function UsersPage() {
                 className="ml-auto inline-flex items-center gap-2 rounded-md border border-destructive px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
               >
                 <Trash2 className="size-4" />
-                {deleting ? 'Deleting...' : 'Delete'}
+                {deleting ? 'Deleting...' : 'Delete User'}
               </button>
             )}
           </div>
         </div>
+        </RecordDialog>
       )}
 
       {/* User Accounts */}
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold">User Accounts</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {accountSearchTerms.length ? `${visibleUsers.length} of ${users.length} users` : `${users.length} user${users.length !== 1 ? 's' : ''}`}
-            </p>
+            <h2 data-section-title="" className="font-semibold"><HeadingUsers className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />User Accounts</h2>
+
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
             <label className="relative w-full sm:w-64">
               <span className="sr-only">Search user accounts by full name</span>
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input type="search" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)}
-                placeholder="Search full name…" autoComplete="off"
+                placeholder="Search users…" autoComplete="off"
                 className="h-10 w-full rounded-md border bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             </label>
-            {selectedUser && authorization.can('Users', 'add') && <button data-action-tone="primary" data-action-fill=""
+            {isAdmin && authorization.can('Users', 'add') && <button data-action-tone="primary" data-action-fill=""
               type="button"
               onClick={openCreateUserForm}
               disabled={formBusy || loadingPermissions}
@@ -1357,7 +1362,7 @@ export default function UsersPage() {
           </div>
         </div>
 
-        <Table saved
+        <Table summary={{ records: visibleUsers.length }} saved
           containerProps={{ tabIndex: 0, role: "region", "aria-label": "User Accounts table", 'aria-busy': loading || refreshing }}
         >
             <thead className="sticky top-0 z-10 bg-card">
@@ -1382,7 +1387,7 @@ export default function UsersPage() {
                     colSpan={authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete') ? 8 : 7}
                     className="px-6 py-8 text-center text-muted-foreground"
                   >
-                    {accountSearchTerms.length ? 'No accounts match this full name.' : 'No users found.'}
+                    {accountSearchTerms.length ? 'No users match your search.' : 'No users to display.'}
                   </td>
                 </tr>
               ) : (

@@ -1,10 +1,13 @@
 'use client'
 
-import Image from 'next/image'
+import { LayoutDashboard as HeadingLayoutDashboard, ChartNoAxesCombined as HeadingChartNoAxesCombined, ChartColumn as HeadingChartColumn, ChartPie as HeadingChartPie, Lightbulb as HeadingLightbulb, CalendarDays as HeadingCalendarDays } from 'lucide-react'
+
+import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { uniqueCount } from '@/components/ui/table-summary'
 import Link from 'next/link'
 import { useForecastAttention } from '@/lib/use-forecast-attention'
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, LoaderCircle, RefreshCw } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, LoaderCircle, RefreshCw, SquareCheck, Triangle, TriangleAlert } from 'lucide-react'
 import {
   Bar, BarChart, CartesianGrid, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -58,6 +61,22 @@ const number = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 })
 
 function achievement(forecast: number, budget: number) {
   return budget > 0 ? forecast / budget * 100 : null
+}
+
+function varianceColor(value: number) {
+  return value < 0 ? 'text-red-700 dark:text-red-400' : value > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'
+}
+
+function AchievementIndicator({ value }: { value: number | null }) {
+  const status = value === null ? 'No positive baseline' : value >= 100 ? 'Target met' : value >= 90 ? 'Near target' : 'Below target'
+  const color = value === null ? 'text-muted-foreground bg-muted' : value >= 100
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : value >= 90 ? 'text-amber-500 dark:text-amber-400'
+      : 'text-red-500 dark:text-red-400'
+  return <span title={status} aria-label={`${formatPercent(value)}: ${status}`} className={`inline-flex items-center justify-end gap-1.5 font-medium ${color}`}>
+    {formatPercent(value)}
+    {value !== null && (value >= 100 ? <SquareCheck className="size-4 shrink-0" aria-hidden="true" /> : value >= 90 ? <TriangleAlert className="size-4 shrink-0" aria-hidden="true" /> : <Triangle className="size-3.5 shrink-0 rotate-180" aria-hidden="true" />)}
+  </span>
 }
 
 function formatPercent(value: number | null) {
@@ -149,7 +168,7 @@ const comparisonAppearance = {
   'forecast-actual': 'border-violet-700 bg-violet-700 text-white dark:border-violet-400',
 }
 const performanceLabels = {
-  company: { title: 'Area Volume performance', column: 'Area', by: 'Area', plural: 'areas' },
+  company: { title: 'Regional Volume Performance', column: 'Region', by: 'Region', plural: 'regions' },
   region: { title: 'Regional Volume performance', column: 'Region', by: 'Region', plural: 'regions' },
   subregion: { title: 'Subregional Volume performance', column: 'Subregion', by: 'Subregion', plural: 'subregions' },
   'customer': { title: 'Customer Volume performance', column: 'Customer', by: 'Customer', plural: 'customers' },
@@ -277,8 +296,7 @@ export default function DashboardPage() {
       <header className="rounded-lg border border-t-4 border-t-emerald-500 bg-card px-4 py-3 shadow-sm dark:border-slate-600 dark:border-t-emerald-400 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Image src="/vitarich-logo.png" alt="Vitarich" width={36} height={36} className="size-9 shrink-0 object-contain" />
-            <h2 className="text-lg leading-tight font-semibold sm:text-xl">Sales Performance Dashboard</h2>
+            <h2 data-section-title="" className="text-base leading-6 font-semibold"><HeadingLayoutDashboard className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Sales Performance Dashboard</h2>
           </div>
           <div className="flex max-w-full items-center gap-2">
             <input aria-label="Month" type="month" value={month} onChange={(event) => {
@@ -331,8 +349,8 @@ export default function DashboardPage() {
           <div id="dashboard-comparison-results" className="grid gap-3 xl:grid-cols-2">
             <div className="contents">
               <section aria-busy={loading} className={panel + ' order-1 flex flex-col'}>
-                <h3 className={panelTitle}>{performanceLabel.title}</h3>
-                <Table containerProps={{ className: 'max-h-[22rem] overflow-x-hidden overflow-y-auto' }} className="table-fixed text-xs">
+                <h3 data-section-title="" className={panelTitle}><HeadingChartNoAxesCombined className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{performanceLabel.title}</h3>
+                <Table summary={{ records: regions.length }} containerProps={{ className: 'max-h-[22rem] overflow-x-hidden overflow-y-auto' }} className="table-fixed text-xs">
                   <colgroup>
                     <col className="w-[24%]" />
                     {performanceMetrics.map((metric) => <col key={metric} />)}
@@ -349,23 +367,24 @@ export default function DashboardPage() {
                       return <tr key={row.key ?? row.region} className="border-b even:bg-muted/25">
                         <th scope="row" className="px-1.5 py-2 text-left font-medium wrap-anywhere sm:px-2">{row.region}</th>
                         {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(row[metric])}</td>)}
-                        <td className={'px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2 ' + (difference < 0 ? 'text-red-700 dark:text-red-400' : '')}>{number.format(difference)}</td>
-                        <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{formatPercent(achievement(row[comparison.measured], row[comparison.baseline]))}</td>
+                        <td className={'px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2 ' + varianceColor(difference)}>{number.format(difference)}</td>
+                        <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2"><AchievementIndicator value={achievement(row[comparison.measured], row[comparison.baseline])} /></td>
                       </tr>
                     })}
-                    {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className="px-3 py-3 text-center text-muted-foreground">{loading ? <LoadingIndicator label="area volume performance" /> : 'No volume recorded for this month.'}</td></tr>}
+                    {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className="px-3 py-3 text-center text-muted-foreground">{loading ? <LoadingIndicator label="regional volume performance" /> : 'No regional volume data for the selected month.'}</td></tr>}
                   </tbody>
                   {!loading && <tfoot className="sticky bottom-0 border-t-2 bg-card font-semibold">
                     <tr><th scope="row" className="px-1.5 py-2 text-left wrap-anywhere sm:px-2">Grand total</th>
-                      {[...performanceMetrics.map((metric) => totals[metric]), variance].map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(value)}</td>)}
-                      <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{formatPercent(percent)}</td>
+                      {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(totals[metric])}</td>)}
+                      <td className={'px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2 ' + varianceColor(variance)}>{number.format(variance)}</td>
+                      <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2"><AchievementIndicator value={percent} /></td>
                     </tr>
                   </tfoot>}
                 </Table>
               </section>
 
               <section aria-busy={loading} className={panel + ' order-3 flex h-[22rem] flex-col'}>
-                <h3 className={panelTitle}>{comparison.title} by {performanceLabel.by} (bags)</h3>
+                <h3 data-section-title="" className={panelTitle}><HeadingChartColumn className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{comparison.title} by {performanceLabel.by} (bags)</h3>
                 {loading ? <LoadingIndicator label="comparison chart" /> : chartRows.length ? (
                   <div className="min-h-0 flex-1 px-2 py-3 text-xs">
                     <ResponsiveContainer width="100%" height="100%">
@@ -387,7 +406,7 @@ export default function DashboardPage() {
 
             <div className="contents">
               <section aria-busy={loading} className={panel + ' order-2 flex min-h-64 flex-col'}>
-                <h3 className={panelTitle}>{metricLabels[comparison.baseline]} Volume Contribution by {performanceLabel.by}</h3>
+                <h3 data-section-title="" className={panelTitle}><HeadingChartPie className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{metricLabels[comparison.baseline]} Volume Contribution by {performanceLabel.by}</h3>
                 {loading ? <LoadingIndicator label="volume contribution chart" /> : baselineContributionRows.length ? (
                   <div className="grid min-h-0 flex-1 items-center gap-3 p-3 sm:grid-cols-2">
                     <div className="relative h-32 min-w-0 text-xs sm:h-44">
@@ -417,7 +436,7 @@ export default function DashboardPage() {
 
 
               <section aria-busy={loading} className={panel + ' order-4 flex h-[22rem] flex-col'}>
-                <h3 className={panelTitle}>Monthly Highlights</h3>
+                <h3 data-section-title="" className={panelTitle}><HeadingLightbulb className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Monthly Highlights</h3>
                 {loading ? <LoadingIndicator label="monthly highlights" /> : <ol className="min-h-0 flex-1 list-decimal divide-y overflow-y-auto px-4 pl-8 text-sm">
                   {[
                     percent === null ? 'No positive ' + metricLabels[comparison.baseline].toLowerCase() + ' is available for this comparison.' : metricLabels[comparison.measured] + ' is ' + formatPercent(percent) + ' of ' + metricLabels[comparison.baseline].toLowerCase() + ', a variance of ' + number.format(variance) + ' bags.',
@@ -432,28 +451,28 @@ export default function DashboardPage() {
           </div>
 
           <section aria-busy={loading} className={panel}>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
+            <div data-section-header="" className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
               <div>
-                <h3 className="text-sm font-semibold">Monthly Sales · {monthLabel}</h3>
+                <h3 data-section-title="" className="text-sm font-semibold"><HeadingCalendarDays className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Monthly Sales · {monthLabel}</h3>
               </div>
               <button data-slot="expand-collapse-button" data-action-tone="neutral" type="button" disabled={keys.length === 0}
                 onClick={() => setExpanded(new Set(allExpanded ? [] : keys))}
-                className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
+                className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"><ExpandCollapseIcon expanded={allExpanded} />
                 {allExpanded ? 'Collapse All' : 'Expand All'}
               </button>
             </div>
-            <Table data-monthly-sales className="min-w-[1000px] table-fixed text-xs" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
+            <Table summary={{ records: data?.details.length ?? 0, customers: uniqueCount((data?.details ?? []).map((row) => row.customer_id)), products: uniqueCount((data?.details ?? []).map((row) => row.product_id)) }} data-monthly-sales className="min-w-[1000px] table-fixed text-xs" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Monthly Sales table' }}>
               <colgroup><col /><col data-fixed-column="area" />{Array.from({ length: 6 }, (_, index) => <col key={index} data-volume-column="number" />)}</colgroup>
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b bg-muted/40">
                   <th scope="col" className="px-2 py-3 text-left font-semibold">Sales structure</th>
-                  <th scope="col" className="px-2 py-3 text-left font-semibold">Area</th>
+                  <th scope="col" className="px-2 py-3 text-left font-semibold">Region</th>
                   <MonthlySalesHeaders />
                 </tr>
               </thead>
               <tbody>
                 {salesGroups.length ? salesGroups.map((group) => renderSalesGroup(group, 0)) : (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">{loading ? <LoadingIndicator label="monthly sales" /> : 'No approved forecasts for this month.'}</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">{loading ? <LoadingIndicator label="monthly sales" /> : 'No approved forecasts for the selected month.'}</td></tr>
                 )}
               </tbody>
             </Table>

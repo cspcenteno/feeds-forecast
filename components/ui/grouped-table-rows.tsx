@@ -1,5 +1,6 @@
 'use client'
 
+import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
 import { cloneElement, createContext, Fragment, isValidElement, useContext, useId, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -21,7 +22,7 @@ export function TableGroupToggle({ disabled = false }: { disabled?: boolean }) {
   const allExpanded = keys.every((key) => !collapsed.has(key))
   return <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !keys.length}
     className="shrink-0 rounded-md border px-3 py-2 text-sm"
-    onClick={() => setCollapsed(allExpanded ? new Set(keys) : new Set())}>
+    onClick={() => setCollapsed(allExpanded ? new Set(keys) : new Set())}><ExpandCollapseIcon expanded={allExpanded} />
     {allExpanded ? 'Collapse All' : 'Expand All'}
   </button>
 }

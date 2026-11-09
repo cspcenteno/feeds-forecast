@@ -1,5 +1,11 @@
 'use client'
 
+import { MapPin as HeadingMapPin } from 'lucide-react'
+
+import { formatCreatedDate } from '@/lib/format-created-date'
+import { RecordDialog } from '@/components/ui/record-dialog'
+import { Plus as AddRecordIcon } from 'lucide-react'
+import { Save as ActionSaveIcon, X as ActionXIcon } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
 
 import { useActionDialogs } from '@/components/action-dialogs'
@@ -20,6 +26,7 @@ import {
 } from '@/components/ui/table'
 
 type Region = {
+  created_at: string | null
   id: number
   name: string
   code: string | null
@@ -37,6 +44,7 @@ export default function RegionsPage() {
   const [isActive, setIsActive] = useState(true)
 
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -49,7 +57,7 @@ export default function RegionsPage() {
 
       const { data, error } = await supabase
         .from('regions')
-        .select('id, name, code, is_active')
+        .select('id, name, code, is_active, created_at')
         .order('id')
 
       if (error) {
@@ -134,6 +142,7 @@ export default function RegionsPage() {
   function editRegion(region: Region) {
     if (!authorization.can('Regions', 'edit')) return
     setEditingId(region.id)
+    setFormOpen(true)
     setName(region.name)
     setCode(region.code ?? '')
     setIsActive(region.is_active)
@@ -179,6 +188,7 @@ export default function RegionsPage() {
   }
 
   function clearForm() {
+    setFormOpen(false)
     setEditingId(null)
     setName('')
     setCode('')
@@ -191,26 +201,25 @@ export default function RegionsPage() {
   }, [])
 
   const { sortedRows: sortedRegions, sortHeader } = useTableSort(regions, {
+    created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
   })
 
   return (
-    <main className="space-y-8">
+    <main className="space-y-4">
+
+      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {/* Form */}
-      {authorization.can('Regions', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Regions', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Region' : 'Edit Region'} busy={loading}>
         <div className="mb-5">
-          <h2 className="font-semibold">
+          <h2 data-section-title="" className="font-semibold"><HeadingMapPin className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
             {editingId !== null
               ? 'Edit Region'
               : 'Add Region'}
           </h2>
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            {editingId !== null
-              ? 'Update the selected region.'
-              : 'Create a new region.'}
-          </p>
+
         </div>
 
         <div className="app-field-row">
@@ -226,7 +235,7 @@ export default function RegionsPage() {
             <input
               id="name"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. Luzon"
+              placeholder="Enter region name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -244,7 +253,7 @@ export default function RegionsPage() {
             <input
               id="code"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. LUZ"
+              placeholder="Enter region code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
@@ -262,28 +271,27 @@ export default function RegionsPage() {
         </div>
 
         {/* Buttons */}
-        <div className="mt-5 flex gap-2">
+        <div data-action-toolbar="" className="mt-5 flex gap-2">
           <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveRegion}
             disabled={loading || !authorization.can('Regions', editingId === null ? 'add' : 'edit')}
-          >
+          ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
             {loading
               ? 'Saving...'
               : editingId !== null
-                ? 'Update Region'
+                ? 'Save Changes'
                 : 'Add Region'}
           </button>
 
-          {editingId !== null && (
+
             <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
               onClick={clearForm}
               disabled={loading}
-            >
+            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
               Cancel
             </button>
-          )}
         </div>
         {/* Error */}
         {error && (
@@ -291,22 +299,14 @@ export default function RegionsPage() {
             {error}
           </div>
         )}
-      </section> : null}
+      </RecordDialog> : null}
 
       {/* Table */}
       <section className="rounded-xl border bg-card shadow-sm">
-        <div className="border-b px-6 py-5">
-          <h2 className="font-semibold">
-            Saved Regions
-          </h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            List of regions currently available in the system.
-          </p>
-        </div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Regions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Region</button>}</div>
 
         <div className="overflow-x-auto">
-          <Table saved aria-busy={tableLoading}>
+          <Table summary={{ records: sortedRegions.length }} saved aria-busy={tableLoading}>
             <TableHeader>
               <TableRow>
                 {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableHead data-action-column="standard" className="w-[180px] text-left">Action</TableHead>}
@@ -315,12 +315,12 @@ export default function RegionsPage() {
 
                 <SortableHeader {...sortHeader('name')}>Region Name</SortableHeader>
 
-              </TableRow>
+              <SortableHeader className="w-[200px] px-3" {...sortHeader('created_at')}>Date Created</SortableHeader></TableRow>
             </TableHeader>
 
             <TableBody>
               {tableLoading ? (
-                <TableLoadingRow columns={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 4 : 3} label="regions" />
+                <TableLoadingRow columns={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 5 : 4} label="regions" />
               ) : regions.length > 0 ? (
                 sortedRegions.map((region) => (
                   <TableRow key={region.id}>
@@ -349,15 +349,15 @@ export default function RegionsPage() {
                       {region.name}
                     </TableCell>
 
-                  </TableRow>
+                  <TableCell className="px-3 whitespace-nowrap">{formatCreatedDate(region.created_at)}</TableCell></TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 4 : 3}
+                    colSpan={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    No regions found.
+                    No regions to display.
                   </TableCell>
                 </TableRow>
               )}

@@ -28,6 +28,7 @@ export default function AuthenticatedLayout({
     "/week-locks": "Week Locks",
     "/locks": "Week Locks",
     "/users": "Users",
+    "/audit-logs": "Audit Logs",
   }
 
   const pageTitle = pageTitles[pathname] || "Feed Sales Forecast"

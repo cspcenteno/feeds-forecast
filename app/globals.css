@@ -504,6 +504,57 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
 
 /* Form widths follow the information being entered, not the field count.
    Flex wrapping responds to the space left by the expanded sidebar. */
+[data-section-title] {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
+[data-section-title]:has(> svg) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+[data-section-title] > svg {
+  margin-right: 0;
+  flex-shrink: 0;
+}
+
+.sales-dashboard [data-section-title] {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+[data-section-header] {
+  display: flex;
+  box-sizing: border-box;
+  min-height: 4.5rem;
+  padding: 1rem 1.5rem;
+  align-items: center;
+}
+
+@media (max-width: 639px) {
+  [data-section-header] { padding-inline: 1rem; }
+
+  [data-section-header]:has([data-section-title]) {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  [data-section-header] [data-section-title] {
+    text-align: left;
+    justify-content: flex-start;
+  }
+
+  [data-section-header] > :is(div, span):has([data-section-title]) {
+    align-self: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
 .app-field-row {
   display: flex;
   flex-wrap: wrap;
@@ -520,6 +571,38 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
 
 .app-field-row > [data-field-size="compact"] { flex-basis: 12rem; width: 12rem; }
 .app-field-row > [data-field-size="wide"] { flex-basis: 20rem; width: 20rem; }
+
+/* Use the longest selection label, including space for the dropdown trigger.
+   Apply the same sizing to direct fields and fields inside label wrappers. */
+.app-field-row > :is([data-content-size="short"], :has([data-content-size="short"])) { --field-width: 120px; }
+.app-field-row > :is([data-content-size="year"], :has([data-content-size="year"])) { --field-width: 160px; }
+.app-field-row > :is([data-content-size="month"], :has([data-content-size="month"])) { --field-width: 160px; }
+.app-field-row > :is([data-content-size="medium"], :has([data-content-size="medium"])) { --field-width: 224px; }
+.app-field-row > :is([data-content-size="long"], :has([data-content-size="long"])) { --field-width: 288px; }
+.app-field-row > :is([data-content-size="extra-long"], :has([data-content-size="extra-long"])) { --field-width: 352px; }
+.app-field-row > :is(input[type="number"], :has(input[type="number"])) { --field-width: 144px; }
+.app-field-row > :is(input[type="date"], input[type="week"], :has(input[type="date"], input[type="week"] )) { --field-width: 176px; }
+.app-field-row > :is(input[type="email"], :has(input[type="email"]), :has(input[autocomplete="name"])) { --field-width: 320px; }
+.app-field-row > :is([data-content-size], :has([data-content-size]), input[type="number"], :has(input[type="number"]), input[type="date"], input[type="week"], :has(input[type="date"], input[type="week"], input[type="email"], input[autocomplete="name"]), input[type="email"]) {
+  flex-basis: var(--field-width);
+  width: var(--field-width);
+}
+.app-field-row > [data-field-size="wide"]:has([data-content-size]) {
+  flex-basis: max(20rem, var(--field-width, 20rem));
+  width: max(20rem, var(--field-width, 20rem));
+}
+
+@media (min-width: 1024px) {
+  .app-field-row.saved-volume-filters {
+    display: grid;
+    grid-template-columns: 160px minmax(140px, 0.8fr) minmax(140px, 0.8fr) minmax(180px, 1.3fr) minmax(180px, 1.3fr);
+  }
+  .app-field-row.saved-volume-filters > div {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 .app-field-row > [data-field-size="toggle"],
 .app-field-row > label:has(> span > input[type="checkbox"]) {
   flex: 0 0 auto;
@@ -552,10 +635,84 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
 .app-field-row > label > :is(input, div) { margin-top: 0.375rem; }
 
 @media (max-width: 639px) {
+  [data-action-toolbar] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  [data-action-toolbar] > button,
+  [data-action-toolbar] > [data-slot="button"] {
+    flex: 1 1 10rem;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.75rem;
+    height: auto;
+    padding-block: 0.625rem;
+    white-space: normal;
+    overflow-wrap: normal;
+  }
+
+  /* Keep mobile text fields and dropdowns equally readable and easy to tap. */
+  :root body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="color"]):not([type="image"]),
+  :root body select {
+    box-sizing: border-box;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  :root body textarea {
+    font-size: 16px;
+    line-height: 1.5;
+    min-height: 5.5rem;
+  }
+
   .app-field-row > :not([data-field-size="toggle"]):not(:has(> span > input[type="checkbox"])) {
     flex-basis: 100%;
     width: 100%;
   }
+}
+
+/* Short record forms use two columns inside dialogs and stack on mobile. */
+[data-record-dialog] .app-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-record-dialog] .app-field-row > * {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Dialog grid cells own field widths; page-level content widths must not
+   leave short controls floating inside otherwise equal columns. */
+[data-record-dialog] .app-field-row > :is(div, label):not([data-field-size="toggle"]) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+[data-record-dialog] .app-field-row [data-content-size] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+[data-record-dialog] .app-field-row > :has(#description) {
+  grid-column: 1 / -1;
+}
+
+[data-record-dialog] h2 { padding-right: 2rem; }
+
+@media (max-width: 639px) {
+  [data-record-dialog] .app-field-row { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Keep monthly comparison titles on the same two lines in every sales table. */
@@ -571,15 +728,74 @@ th[data-monthly-sales-column] {
   overflow-wrap: normal;
 }
 
-@container (width < 1200px) {
-  table[data-volume-layout="forecast-import"] {
-    width: 100%;
-    min-width: 760px;
-    table-layout: fixed;
-  }
+table[data-week-schedule] {
+  min-width: 760px;
+  table-layout: fixed;
+}
+
+table[data-week-schedule] > tbody > tr > td:nth-child(-n+3),
+table[data-week-schedule] > thead > tr > th {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+table[data-week-schedule] > tbody > tr > td:nth-child(3) > span {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+table[data-volume-layout="forecast-import"] {
+  width: 1928px;
+  min-width: 1928px;
+  table-layout: fixed;
+}
+
+table[data-volume-layout="import"] {
+  width: 1424px;
+  min-width: 1424px;
+  table-layout: fixed;
+}
+
+table:is([data-volume-layout="forecast-import"], [data-volume-layout="import"]) > thead > tr > th {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 /* Base styles */
+[data-login-form] input,
+[data-login-form] input:focus,
+[data-login-form] input:autofill {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  letter-spacing: normal;
+}
+
+/* Chromium paints autofill previews separately until the first interaction. */
+.dark [data-login-form] input {
+  background-color: #1c2c26;
+  border-color: #3b5147;
+  color: #f1f5f9;
+  color-scheme: dark;
+}
+
+.dark [data-login-form] input:-webkit-autofill,
+.dark [data-login-form] input:-webkit-autofill:hover,
+.dark [data-login-form] input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #1c2c26 inset;
+  -webkit-text-fill-color: #f1f5f9;
+  caret-color: #f1f5f9;
+}
+
+[data-login-form] input:-webkit-autofill::first-line {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
 @layer base {
   * {
     border-color: var(--border);

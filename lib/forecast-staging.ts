@@ -15,7 +15,7 @@ export function fromForecastStagingRow(row: Record<string, unknown>): ForecastIm
   } as ForecastImportRow
 }
 
-export async function loadForecastStaging(client: Client) {
+export async function loadForecastStaging(client: Client, onProgress?: (rows: ForecastImportRow[]) => void) {
   const records: ForecastImportRow[] = []
   let lastId: string | null = null
   while (true) {
@@ -25,6 +25,7 @@ export async function loadForecastStaging(client: Client) {
     if (error) throw new Error(`Unable to load Forecast staging: ${error.message}`)
     const page = (data ?? []) as unknown as Record<string, unknown>[]
     records.push(...page.map(fromForecastStagingRow))
+    onProgress?.([...records])
     if (page.length < 500) return records
     lastId = String(page[page.length - 1].id)
   }

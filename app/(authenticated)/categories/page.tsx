@@ -1,5 +1,11 @@
 'use client'
 
+import { Tags as HeadingTags } from 'lucide-react'
+
+import { formatCreatedDate } from '@/lib/format-created-date'
+import { RecordDialog } from '@/components/ui/record-dialog'
+import { Plus as AddRecordIcon } from 'lucide-react'
+import { Save as ActionSaveIcon, X as ActionXIcon } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
 
 import { useActionDialogs } from '@/components/action-dialogs'
@@ -20,6 +26,7 @@ import {
 } from '@/components/ui/table'
 
 type Category = {
+  created_at: string | null
   id: number
   code: string | null
   name: string
@@ -39,6 +46,7 @@ export default function CategoriesPage() {
   const [isActive, setIsActive] = useState(true)
 
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -51,7 +59,7 @@ export default function CategoriesPage() {
 
       const { data, error } = await supabase
         .from('categories')
-        .select('id, code, name, description, is_active')
+        .select('id, code, name, description, is_active, created_at')
         .order('id')
 
       if (error) {
@@ -138,6 +146,7 @@ export default function CategoriesPage() {
   function editCategory(category: Category) {
     if (!authorization.can('Categories', 'edit')) return
     setEditingId(category.id)
+    setFormOpen(true)
     setCode(category.code ?? '')
     setName(category.name)
     setDescription(category.description ?? '')
@@ -184,6 +193,7 @@ export default function CategoriesPage() {
   }
 
   function clearForm() {
+    setFormOpen(false)
     setEditingId(null)
     setCode('')
     setName('')
@@ -197,27 +207,26 @@ export default function CategoriesPage() {
   }, [])
 
   const { sortedRows: sortedCategories, sortHeader } = useTableSort(categories, {
+    created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
     description: (row) => row.description,
   })
 
   return (
-    <main className="space-y-8">
+    <main className="space-y-4">
+
+      {!formOpen && error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {/* Form */}
-      {authorization.can('Categories', 'add') || editingId !== null ? <section className="rounded-xl border bg-card p-6 shadow-sm">
+      {authorization.can('Categories', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Category' : 'Edit Category'} busy={loading}>
         <div className="mb-5">
-          <h2 className="font-semibold">
+          <h2 data-section-title="" className="font-semibold"><HeadingTags className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
             {editingId !== null
               ? 'Edit Category'
               : 'Add Category'}
           </h2>
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            {editingId !== null
-              ? 'Update the selected category.'
-              : 'Create a new product category.'}
-          </p>
+
         </div>
 
         <div className="app-field-row">
@@ -233,7 +242,7 @@ export default function CategoriesPage() {
             <input
               id="code"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. BR"
+              placeholder="Enter category code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
@@ -251,7 +260,7 @@ export default function CategoriesPage() {
             <input
               id="name"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="e.g. Broiler"
+              placeholder="Enter category name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -269,7 +278,7 @@ export default function CategoriesPage() {
             <input
               id="description"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Category description"
+              placeholder="Enter description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -287,28 +296,27 @@ export default function CategoriesPage() {
         </div>
 
         {/* Buttons */}
-        <div className="mt-5 flex gap-2">
+        <div data-action-toolbar="" className="mt-5 flex gap-2">
           <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveCategory}
             disabled={loading || !authorization.can('Categories', editingId === null ? 'add' : 'edit')}
-          >
+          ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
             {loading
               ? 'Saving...'
               : editingId !== null
-                ? 'Update Category'
+                ? 'Save Changes'
                 : 'Add Category'}
           </button>
 
-          {editingId !== null && (
+
             <button data-action-tone="neutral"
               className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
               onClick={clearForm}
               disabled={loading}
-            >
+            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
               Cancel
             </button>
-          )}
         </div>
         {/* Error */}
         {error && (
@@ -316,38 +324,39 @@ export default function CategoriesPage() {
             {error}
           </div>
         )}
-      </section> : null}
+      </RecordDialog> : null}
 
       {/* Table */}
       <section className="rounded-xl border bg-card shadow-sm">
-        <div className="border-b px-6 py-5">
-          <h2 className="font-semibold">
-            Saved Categories
-          </h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            List of categories currently available in the system.
-          </p>
-        </div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Categories', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Category</button>}</div>
 
         <div className="overflow-x-auto">
-          <Table saved aria-busy={tableLoading}>
+          <Table summary={{ records: sortedCategories.length }} className="w-full min-w-[1120px] table-fixed" aria-busy={tableLoading}
+            containerProps={{ className: 'overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Categories table' }}>
+            <colgroup>
+              {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <col data-action-column="standard" />}
+              <col style={{ width: 112 }} />
+              <col style={{ width: 128 }} />
+              <col style={{ width: '24%' }} />
+              <col />
+              <col style={{ width: 224 }} />
+            </colgroup>
             <TableHeader>
               <TableRow>
-                {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableHead data-action-column="standard" className="w-[180px] text-left">Action</TableHead>}
-                <TableHead data-fixed-column="status" className="w-[120px]">Status</TableHead>
-                <SortableHeader className="pl-6 w-[150px]" {...sortHeader('code')}>Code</SortableHeader>
+                {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableHead data-action-column="standard" className="text-left">Action</TableHead>}
+                <TableHead data-fixed-column="status" className="px-3">Status</TableHead>
+                <SortableHeader className="pl-6" {...sortHeader('code')}>Code</SortableHeader>
 
-                <SortableHeader className="w-[250px]" {...sortHeader('name')}>Name</SortableHeader>
+                <SortableHeader className="px-3" {...sortHeader('name')}>Name</SortableHeader>
 
                 <SortableHeader {...sortHeader('description')}>Description</SortableHeader>
 
-              </TableRow>
+              <SortableHeader className="px-3" {...sortHeader('created_at')}>Date Created</SortableHeader></TableRow>
             </TableHeader>
 
             <TableBody>
               {tableLoading ? (
-                <TableLoadingRow columns={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 5 : 4} label="categories" />
+                <TableLoadingRow columns={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 6 : 5} label="categories" />
               ) : categories.length > 0 ? (
                 sortedCategories.map((category) => (
                   <TableRow key={category.id}>
@@ -380,15 +389,15 @@ export default function CategoriesPage() {
                       {category.description || '—'}
                     </TableCell>
 
-                  </TableRow>
+                  <TableCell className="px-3 whitespace-nowrap">{formatCreatedDate(category.created_at)}</TableCell></TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 5 : 4}
+                    colSpan={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 6 : 5}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    No categories found.
+                    No categories to display.
                   </TableCell>
                 </TableRow>
               )}
