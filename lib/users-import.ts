@@ -65,7 +65,7 @@ export function validateUserImport(rows: UserImportRow[], refs: UserImportRefere
     if (role === 'Admin') {
       if (source.region_name.trim() || source.subregion_name.trim()) issues.push('Leave region and subregion blank for Admin accounts.')
     } else {
-      if (!region) issues.push('Region name is required and must match one active region.')
+      if (!region && (position !== 'NSM' || source.region_name.trim())) issues.push('Region name is required and must match one active region.')
       if (source.subregion_name.trim() && !subregion) issues.push('Subregion must match one active subregion in the selected region.')
     }
     const status = issues.length ? 'Invalid' : existing.has(email) ? 'Already exists' : seen.has(email) ? 'Duplicate in file' : 'Ready'

@@ -189,8 +189,6 @@ export default function UsersPage() {
     () => createDefaultPermissions(),
   )
 
-  const [hasSavedPermissions, setHasSavedPermissions] = useState(false)
-  const [permissionsDirty, setPermissionsDirty] = useState(false)
   const [loadingPermissions, setLoadingPermissions] = useState(false)
   const [permissionLoadError, setPermissionLoadError] = useState(false)
 
@@ -315,17 +313,14 @@ export default function UsersPage() {
       ])
 
       if (selectedUser) {
-        await loadUserPermissions(selectedUser.id, role)
+        await loadUserPermissions(selectedUser.id)
       }
     } finally {
       setRefreshing(false)
     }
   }
 
-  async function loadUserPermissions(
-    userId: string,
-    selectedRole: string,
-  ) {
+  async function loadUserPermissions(userId: string) {
     setLoadingPermissions(true)
     setPermissionLoadError(false)
 
@@ -350,14 +345,11 @@ export default function UsersPage() {
     }
 
     if (!data?.length) {
-      setHasSavedPermissions(false)
-      setPermissionsDirty(false)
-      setPermissions(getDefaultPermissions(selectedRole))
+      setPermissions(getDefaultPermissions(''))
       setLoadingPermissions(false)
       return
     }
 
-    const roleDefaults = getDefaultPermissions(selectedRole)
     const savedPermissions = new Map(
       data.map((item) => [item.module, item]),
     )
@@ -365,7 +357,6 @@ export default function UsersPage() {
     const mergedPermissions: ModulePermission[] = modules.map(
       (module) => {
         const saved = savedPermissions.get(module)
-        const fallback = roleDefaults.find((permission) => permission.module === module)
 
         return normalizePermission(saved ? {
           module,
@@ -375,16 +366,14 @@ export default function UsersPage() {
           can_delete: saved.can_delete,
         } : {
           module,
-          can_view: fallback?.can_view ?? false,
-          can_add: fallback?.can_add ?? false,
-          can_edit: fallback?.can_edit ?? false,
-          can_delete: fallback?.can_delete ?? false,
+          can_view: false,
+          can_add: false,
+          can_edit: false,
+          can_delete: false,
         })
       },
     )
 
-    setHasSavedPermissions(data.some((item) => !item.is_default))
-    setPermissionsDirty(false)
     setPermissions(mergedPermissions)
     setLoadingPermissions(false)
   }
@@ -402,15 +391,11 @@ export default function UsersPage() {
     setSubregionId(user.subregion_id)
     setIsActive(user.is_active)
 
-    await loadUserPermissions(user.id, user.role)
+    await loadUserPermissions(user.id)
   }
 
   function handleRoleChange(newRole: string) {
     setRole(newRole)
-
-    if (!hasSavedPermissions && !permissionsDirty) {
-      setPermissions(getDefaultPermissions(newRole))
-    }
 
     if (newRole === 'Admin') {
       setRegionId(null)
@@ -431,8 +416,6 @@ export default function UsersPage() {
     setSubregionId(null)
     setIsActive(false)
     setPermissions(createDefaultPermissions())
-    setHasSavedPermissions(false)
-    setPermissionsDirty(false)
     setLoadingPermissions(false)
     setPermissionLoadError(false)
   }
@@ -458,7 +441,6 @@ export default function UsersPage() {
 
   function handleNewRoleChange(newRole: string) {
     setNewRole(newRole)
-    setNewPermissions(getDefaultPermissions(newRole))
 
     if (newRole === 'Admin') {
       setNewRegionId(null)
@@ -528,7 +510,6 @@ export default function UsersPage() {
     checked: boolean,
   ) {
     if (isPermissionDisabled(module, field)) return
-    setPermissionsDirty(true)
 
     setPermissions((current) =>
       current.map((permission) =>
@@ -546,7 +527,6 @@ export default function UsersPage() {
     module: ModuleName,
     checked: boolean,
   ) {
-    setPermissionsDirty(true)
     setPermissions((current) =>
       current.map((permission) => {
         if (permission.module !== module) return permission
@@ -565,7 +545,6 @@ export default function UsersPage() {
   }
 
   function toggleAllPermissions(checked: boolean) {
-    setPermissionsDirty(true)
     setPermissions((current) =>
       current.map((permission) => {
         const updated = { ...permission }
@@ -602,7 +581,7 @@ export default function UsersPage() {
       return
     }
 
-    if (newRole !== 'Admin' && newRegionId === null) {
+    if (newRole !== 'Admin' && newPosition !== 'NSM' && newRegionId === null) {
       notify('Please select a region.')
       return
     }
@@ -696,7 +675,7 @@ export default function UsersPage() {
       return
     }
 
-    if (role !== 'Admin' && regionId === null) {
+    if (role !== 'Admin' && position !== 'NSM' && regionId === null) {
       notify('Please select a region.')
       return
     }
@@ -805,8 +784,6 @@ export default function UsersPage() {
       setIsActive(updatedUser.is_active)
 
       setPermissions(normalizedPermissions)
-      setHasSavedPermissions(true)
-      setPermissionsDirty(false)
       setPermissionLoadError(false)
 
       notify('User details and permissions saved successfully.')
@@ -1054,7 +1031,7 @@ export default function UsersPage() {
             <div className="space-y-2">
               <label htmlFor="newRegion" className="text-sm font-medium">
                 Region{' '}
-                {formRole !== 'Admin' && (
+                {formRole !== 'Admin' && (selectedUser ? position : newPosition) !== 'NSM' && (
                   <span className="text-destructive">*</span>
                 )}
               </label>
@@ -1076,7 +1053,7 @@ export default function UsersPage() {
                     setFormSubregionId(null)
                   }}
                   disabled={formBusy}
-                  required
+                  required={(selectedUser ? position : newPosition) !== 'NSM'}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                   aria-label="Selection">
                   <option value="">Select region</option>
@@ -1170,7 +1147,7 @@ export default function UsersPage() {
                   </p>
                   <button data-action-tone="neutral"
                     type="button"
-                    onClick={() => selectedUser && loadUserPermissions(selectedUser.id, role)}
+                    onClick={() => selectedUser && loadUserPermissions(selectedUser.id)}
                     className="mt-3 rounded-md border px-3 py-2 hover:bg-muted"
                   ><ActionRefreshCwIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
                     Retry

@@ -9,9 +9,9 @@ import { createClient } from '@/lib/client'
 
 import {
   emptyPermissions,
+  savedPermissions,
   modules,
   disabledPermissions,
-  defaultPermissions,
 } from '@/lib/authorization-rules'
 
 import type {
@@ -121,63 +121,7 @@ export function AuthorizationProvider({
 
       if (!live) return
 
-      const permissions = defaultPermissions(role)
-      let hasSavedPermissions = false
-
-      if (!permissionError && saved?.length) {
-        hasSavedPermissions = true
-        for (const row of saved) {
-          if (!modules.includes(row.module as ModuleName)) continue
-          const moduleName = row.module as ModuleName
-          permissions[moduleName] = {
-            view: !!row.can_view,
-            add: !!row.can_add,
-            edit: !!row.can_edit,
-            delete: !!row.can_delete,
-          }
-        }
-      }
-
-      // If RLS hides the saved rows (or the table is empty), ask the
-      // security-definer permission helper, which is the database authority.
-      if (!hasSavedPermissions) {
-        const actions: Action[] = ['view', 'add', 'edit', 'delete']
-        const effectiveChecks = await Promise.all(
-          modules.flatMap((module) =>
-            actions.map(async (action) => {
-              const { data, error } = await supabase.rpc(
-                module === 'Actual' ? 'has_actual_permission' :
-                  module === 'Customers' ? 'customers_actual_permission' : 'has_module_permission',
-                module === 'Actual' ? { p_action: action } : { p_module: module, p_action: action },
-              )
-
-              return { module, action, allowed: data === true, error }
-            }),
-          ),
-        )
-
-        if (!live) return
-
-        const moduleChecks = effectiveChecks.filter((check) => check.module !== 'Actual' && check.module !== 'Customers')
-        if (moduleChecks.every((check) => !check.error)) {
-          for (const check of moduleChecks) {
-            permissions[check.module][check.action] = check.allowed
-          }
-        } else if (permissionError) {
-          Object.assign(permissions, emptyPermissions())
-        }
-
-        for (const check of effectiveChecks) {
-          if ((check.module === 'Actual' || check.module === 'Customers') && !check.error) {
-            permissions[check.module][check.action] = check.allowed
-          }
-        }
-      }
-
-      // A Superuser needs an explicit Approvals grant.
-      if (role === 'Superuser' && (permissionError || !saved?.some((row) => row.module === 'Approvals'))) {
-        permissions.Approvals.view = false
-      }
+      const permissions = savedPermissions(permissionError ? [] : saved ?? [])
 
       for (const moduleName of modules) {
         for (const action of disabledPermissions[moduleName] ?? []) {

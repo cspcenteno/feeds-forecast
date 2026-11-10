@@ -249,6 +249,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   const supabase = createClient()
   const authorization = useAuthorization()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const savedRecordsRequestRef = useRef<AbortController | null>(null)
+  const stagingRequestRef = useRef<AbortController | null>(null)
 
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
@@ -318,27 +320,36 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }, [editingImport?.id])
 
   useEffect(() => {
+    let cancelled = false
     async function initialize() {
       try {
-        if (await loadUserAccess()) await loadInitialData()
+        if (await loadUserAccess(() => cancelled) && !cancelled) await loadInitialData(() => cancelled)
       } catch (error) {
-        setError(error instanceof Error ? error.message : 'Unable to load the page.')
+        if (!cancelled) setError(error instanceof Error ? error.message : 'Unable to load the page.')
       } finally {
-        setInitializing(false)
+        if (!cancelled) setInitializing(false)
       }
     }
 
     initialize()
 
+    return () => {
+      cancelled = true
+      savedRecordsRequestRef.current?.abort()
+      stagingRequestRef.current?.abort()
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function loadUserAccess() {
+  async function loadUserAccess(isCancelled: () => boolean) {
     setError('')
 
     const {
       data: { user },
     } = await supabase.auth.getUser()
+
+    if (isCancelled()) return false
 
     if (!user) {
       setError('User session not found.')
@@ -351,6 +362,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       .eq('id', user.id)
       .abortSignal(AbortSignal.timeout(LOAD_REQUEST_TIMEOUT_MS))
       .single()
+
+    if (isCancelled()) return false
 
     if (profileError) {
       setError(profileError.message)
@@ -377,7 +390,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     return true
   }
 
-  async function loadInitialData() {
+  async function loadInitialData(isCancelled: () => boolean) {
     setError('')
 
     const [
@@ -403,6 +416,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       supabase.from('subregions').select('id, name, region_id').order('name')
         .abortSignal(AbortSignal.timeout(LOAD_REQUEST_TIMEOUT_MS)),
     ])
+
+    if (isCancelled()) return
 
     if (regionsResult.error) {
       setError(regionsResult.error.message)
@@ -452,6 +467,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }
 
   async function loadBudgets() {
+    savedRecordsRequestRef.current?.abort()
+    const request = new AbortController()
+    savedRecordsRequestRef.current = request
     setLoadingSavedRecords(true)
     setSavedRecordsComplete(false)
     setError('')
@@ -484,7 +502,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
         const { data, error } = await query
           .order('id', { ascending: false })
           .limit(SAVED_RECORDS_PAGE_SIZE)
-          .abortSignal(AbortSignal.timeout(SAVED_RECORDS_TIMEOUT_MS))
+          .abortSignal(AbortSignal.any([request.signal, AbortSignal.timeout(SAVED_RECORDS_TIMEOUT_MS)]))
+
+        if (request.signal.aborted) return
 
         if (error) {
           setError('Unable to load all saved ' + label + ' records. Please refresh to retry. ' + error.message)
@@ -504,9 +524,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
       setBudgets(allRecords.sort(compareSavedRecords))
       setSavedRecordsComplete(true)
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Unable to load saved records.')
+      if (!request.signal.aborted) setError(error instanceof Error ? error.message : 'Unable to load saved records.')
     } finally {
-      setLoadingSavedRecords(false)
+      if (!request.signal.aborted) setLoadingSavedRecords(false)
     }
   }
 
@@ -518,6 +538,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
   }
 
   async function loadStagingRecords() {
+    stagingRequestRef.current?.abort()
+    const request = new AbortController()
+    stagingRequestRef.current = request
     setLoadingStaging(true)
     setStagingLoaded(false)
     setStagingRecords([])
@@ -545,7 +568,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
         .limit(SAVED_RECORDS_PAGE_SIZE)
       if (lastId !== null) query.gt('id', lastId)
       const { data, error } = await query
-        .abortSignal(AbortSignal.timeout(SAVED_RECORDS_TIMEOUT_MS))
+        .abortSignal(AbortSignal.any([request.signal, AbortSignal.timeout(SAVED_RECORDS_TIMEOUT_MS)]))
+
+      if (request.signal.aborted) return
 
       if (error) {
         throw new Error(`Unable to load ${label} staging data: ${error.message}`)
@@ -563,10 +588,11 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
     setStagingRecords(allRecords)
     setStagingLoaded(true)
     } catch (error) {
+      if (request.signal.aborted) return
       const message = error instanceof Error ? error.message : 'Unable to load uploaded records.'
       setStagingError(message + ' Refresh staging records to retry; your uploads have not been removed.')
     } finally {
-      setLoadingStaging(false)
+      if (!request.signal.aborted) setLoadingStaging(false)
     }
   }
 

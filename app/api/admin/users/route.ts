@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/server'
 import { supabaseAdmin } from '@/lib/admin'
 import {
-  defaultPermissions,
   disabledPermissions,
   modules,
 } from '@/lib/authorization-rules'
@@ -203,29 +202,20 @@ async function canManageModule(
     throw new Error(`Unable to verify administrator permissions: ${error.message}`)
   }
 
-  // When no custom permissions are saved, use the shared Admin defaults.
-  if (!data || data.length === 0 || data.every((item) => item.is_default)) {
-    const defaults = defaultPermissions('Admin') as Record<
-      string,
-      { add: boolean; edit: boolean; delete: boolean }
-    >
-
-    return action === 'can_add'
-      ? Boolean(defaults.Users?.add)
-      : action === 'can_edit' ? Boolean(defaults.Users?.edit) : Boolean(defaults.Users?.delete)
-  }
-
-  return data.some((item) => Boolean(item[action]))
+  return (data ?? []).some((item) => item[action] === true)
 }
 
 async function validateRegion(
   role: Role,
   regionId: number | null,
   subregionId: number | null,
+  position: string,
 ) {
   if (role === 'Admin') {
     return { valid: regionId === null && subregionId === null }
   }
+
+  if (position === 'NSM' && regionId === null && subregionId === null) return { valid: true }
 
   if (!Number.isInteger(regionId) || regionId === null) {
     return { valid: false }
@@ -363,6 +353,7 @@ export async function POST(request: Request) {
       role,
       regionId,
       subregionId,
+      position,
     )
 
     if (!regionValidation.valid) {
@@ -569,6 +560,7 @@ export async function PATCH(request: Request) {
       role,
       regionId,
       subregionId,
+      position,
     )
 
     if (!regionValidation.valid) {

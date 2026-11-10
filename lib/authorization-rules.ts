@@ -36,6 +36,28 @@ export function emptyPermissions(): PermissionMap {
   ) as PermissionMap
 }
 
+export function savedPermissions(rows: readonly {
+  module: string
+  can_view: boolean | null
+  can_add: boolean | null
+  can_edit: boolean | null
+  can_delete: boolean | null
+}[]): PermissionMap {
+  const permissions = emptyPermissions()
+  for (const row of rows) {
+    if (!modules.includes(row.module as ModuleName)) continue
+    const moduleName = row.module as ModuleName
+    permissions[moduleName] = {
+      view: row.can_view === true,
+      add: row.can_add === true,
+      edit: row.can_edit === true,
+      delete: row.can_delete === true,
+    }
+    for (const action of disabledPermissions[moduleName] ?? []) permissions[moduleName][action] = false
+  }
+  return permissions
+}
+
 export function defaultPermissions(role: string): PermissionMap {
   const p = emptyPermissions()
 

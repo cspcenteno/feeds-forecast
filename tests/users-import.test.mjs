@@ -11,6 +11,18 @@ const refs = {
 const row = { id: '1', full_name: 'Person A', email: 'person@example.com', role: 'User', position: 'KAM', region_name: 'North', subregion_name: 'Area A' }
 const validate = (source = row, references = refs) => validateUserImport([source], references)[0]
 
+test('NSM permits no region while validating supplied geographic assignments', () => {
+  const nsm = { ...row, role: 'Manager', position: 'nsm', region_name: '', subregion_name: '' }
+  const result = validate(nsm)
+  assert.equal(result.status, 'Ready')
+  assert.equal(result.values.regionId, null)
+  assert.equal(result.values.subregionId, null)
+  assert.equal(validate({ ...nsm, region_name: 'Unknown' }).status, 'Invalid')
+  assert.equal(validate({ ...nsm, subregion_name: 'Area A' }).status, 'Invalid')
+  assert.equal(validate({ ...nsm, region_name: 'North', subregion_name: 'Area A' }).status, 'Ready')
+  assert.equal(validate({ ...nsm, position: 'RSM' }).status, 'Invalid')
+})
+
 test('uses exactly the six file columns without account status', () => {
   assert.deepEqual([...userImportColumns], ['full_name', 'email', 'role', 'position', 'region_name', 'subregion_name'])
 })
