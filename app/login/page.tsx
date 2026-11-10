@@ -105,15 +105,13 @@ export default function LoginPage() {
         <div className="relative my-auto max-w-lg pt-6 lg:py-16">
           <div className="mb-5 h-1 w-12 rounded-full bg-[#bfa34f] lg:mb-4" />
           <h1 className="tracking-tight">
-            <span className="block text-sm font-normal text-emerald-50/80 lg:text-lg">Welcome to</span>
             <span className="mt-2 block text-3xl leading-tight font-semibold xl:text-4xl">Feed Sales Forecast</span>
-            <span className="mt-3 block text-sm font-normal text-emerald-50/80 lg:text-lg">of Vitarich Corporation</span>
           </h1>
-          <p className="hidden mt-4 max-w-sm text-sm leading-relaxed text-emerald-50/75 lg:block lg:mt-6 lg:text-base">Bring your forecasts, approvals, and sales performance together in one workspace.</p>
+          <p className="hidden mt-4 max-w-sm text-sm leading-relaxed text-emerald-50/75 lg:block lg:mt-6 lg:text-base">Plan and track sales forecasts in one place.</p>
           <div className="mt-5 hidden flex-wrap items-center gap-x-5 gap-y-3 text-xs text-emerald-100/80 lg:mt-10 lg:flex">
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Forecast</span>
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Review</span>
-            <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Track performance</span>
+            <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Track</span>
           </div>
         </div>
 
@@ -126,15 +124,15 @@ export default function LoginPage() {
         </button>
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6">
 
-          <h2 className="text-lg leading-tight font-semibold tracking-tight">Welcome back</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Sign in to manage your forecasts and keep your team moving forward.</p>
+          <h2 className="text-lg leading-tight font-semibold tracking-tight">Sign in</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Access your account.</p>
 
           <form data-login-form data-auth-form onSubmit={handleLogin} aria-busy={loading} className="mt-4 space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm leading-5 font-medium">Email address</label>
               <div className="relative">
                 <Mail aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400" />
-                <input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter email address" autoComplete="username" required disabled={loading}
+                <input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" autoComplete="username" required disabled={loading}
                   className="h-11 w-full rounded-md border border-input bg-card sm:h-10 pr-4 pl-10 text-base outline-none transition placeholder:text-muted-foreground focus:border-emerald-700 focus:ring-3 focus:ring-emerald-700/10 disabled:opacity-60 sm:text-sm dark:focus:border-emerald-400" />
               </div>
             </div>
@@ -143,7 +141,7 @@ export default function LoginPage() {
               <label htmlFor="password" className="block text-sm leading-5 font-medium">Password</label>
               <div className="relative">
                 <LockKeyhole aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400" />
-                <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" autoComplete="current-password" required disabled={loading}
+                <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" required disabled={loading}
                   className="h-11 w-full rounded-md border border-input bg-card sm:h-10 pr-12 pl-10 text-base outline-none transition placeholder:text-muted-foreground focus:border-emerald-700 focus:ring-3 focus:ring-emerald-700/10 disabled:opacity-60 sm:text-sm dark:focus:border-emerald-400" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}
                   className="absolute top-1/2 right-1 flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 outline-none hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-600 dark:hover:text-emerald-400">
@@ -161,7 +159,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-4 border-t border-border pt-4 text-center text-sm text-slate-500   dark:text-slate-400">
-            Don&apos;t have an account?{' '}
+            New here?{' '}
             <button type="button" onClick={() => router.push('/signup')} className="rounded-sm font-semibold text-[#174c36] outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-400"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Sign Up</button>
           </div>
         </div>

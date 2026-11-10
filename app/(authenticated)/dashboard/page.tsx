@@ -373,14 +373,14 @@ export default function DashboardPage() {
               <button key={label} type="button" aria-pressed={active} aria-controls="dashboard-comparison-results"
                 aria-busy={loading}
                 onClick={() => setComparisonId(targetComparison)}
-                className={`cursor-pointer rounded-lg border border-t-4 px-3 py-2.5 text-left shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${active ? comparisonAppearance[targetComparison] : metricAppearance[metric]}`}>
-                <span className="flex items-center justify-between gap-2 text-sm font-semibold">{label}{active && <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />}</span>
-                {loading ? <LoadingIndicator label={label.toLowerCase()} /> : <p className="mt-1 text-2xl leading-tight font-bold tabular-nums">{number.format(totals[metric])} <span className="text-xs font-medium">bags</span></p>}
-                <div className="mt-2 border-t border-current/20 pt-2">
-                  <p className="text-xs font-medium">{cardComparison.title}</p>
-                  <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-base font-semibold tabular-nums">{loading ? '—' : formatPercent(values.percent)}</span>
-                    <span className={`text-xs font-semibold tabular-nums ${active ? 'text-white' : values.variance < 0 ? 'text-rose-700 dark:text-rose-300' : values.variance > 0 ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                className={`grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-3 gap-y-1 cursor-pointer rounded-lg border border-t-4 px-3 py-2 text-left shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 sm:block sm:py-2.5 ${active ? comparisonAppearance[targetComparison] : metricAppearance[metric]}`}>
+                <span className="col-span-2 flex items-center justify-between gap-2 text-sm font-semibold">{label}{active && <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />}</span>
+                {loading ? <div className="col-start-1 row-start-2 self-center sm:mt-1"><LoadingIndicator label={label.toLowerCase()} /></div> : <p className="col-start-1 row-start-2 mt-0 self-center whitespace-nowrap text-xl leading-tight font-bold tabular-nums sm:mt-1 sm:text-2xl">{number.format(totals[metric])} <span className="text-xs font-medium">bags</span></p>}
+                <div className="col-start-2 row-start-2 mt-0 self-center border-l border-current/20 pl-2 sm:mt-2 sm:border-l-0 sm:border-t sm:pt-2 sm:pl-0">
+                  <p className="text-right text-[11px] leading-tight font-medium sm:text-xs">{cardComparison.title}</p>
+                  <div className="mt-0.5 flex flex-col items-end gap-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
+                    <span className="text-sm font-semibold tabular-nums sm:text-base">{loading ? '—' : formatPercent(values.percent)}</span>
+                    <span className={`whitespace-nowrap text-[11px] font-semibold tabular-nums sm:text-xs ${active ? 'text-white' : values.variance < 0 ? 'text-rose-700 dark:text-rose-300' : values.variance > 0 ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
                       {loading ? '—' : `${values.variance > 0 ? '+' : ''}${number.format(values.variance)} bags`}
                     </span>
                   </div>
@@ -394,7 +394,7 @@ export default function DashboardPage() {
             <div className="contents">
               <section aria-busy={loading} className={panel + ' order-1 flex flex-col'}>
                 <h3 data-section-title="" className={panelTitle}><HeadingChartNoAxesCombined className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{performanceLabel.title}</h3>
-                <Table summary={summaryForLevel(regions.length, performanceLevel === 'kam' ? 'kams' : performanceLevel === 'customer' ? 'customers' : performanceLevel === 'subregion' ? 'subregions' : 'regions', regions.map((row) => row.key ?? row.region))} containerProps={{ className: 'max-h-[22rem] overflow-x-hidden overflow-y-auto' }} className="table-fixed text-xs">
+                <Table summary={summaryForLevel(regions.length, performanceLevel === 'kam' ? 'kams' : performanceLevel === 'customer' ? 'customers' : performanceLevel === 'subregion' ? 'subregions' : 'regions', regions.map((row) => row.key ?? row.region))} containerProps={{ className: 'max-h-[22rem] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': `${performanceLabel.title} table` }} className="min-w-[620px] table-fixed text-xs sm:min-w-0">
                   <colgroup>
                     <col className="w-[24%]" />
                     {performanceMetrics.map((metric) => <col key={metric} />)}
@@ -403,10 +403,12 @@ export default function DashboardPage() {
                   <thead className="sticky top-0 z-10 bg-card text-muted-foreground">
                     <tr>{[performanceLabel.column, ...performanceMetrics.map((metric) => metricLabels[metric]), 'Variance', 'Ach. %'].map((label, index) => {
                       const key = ['region', ...performanceMetrics, 'variance', 'achievement'][index]
+                      const className = 'px-1.5 py-3 whitespace-nowrap sm:px-2 ' + (index === 0 ? 'text-left' : 'text-right')
+                      if (index === 0) return <th key={key} scope="col" className={className}>{label}</th>
                       return <SortableHeader plain key={key}
                         direction={performanceSort?.key === key ? performanceSort.direction : undefined}
                         onSort={() => setPerformanceSort((current) => ({ key, direction: current?.key === key && current.direction === 'ascending' ? 'descending' : 'ascending' }))}
-                        className={'px-1.5 py-3 wrap-anywhere sm:px-2 ' + (index === 0 ? 'text-left' : 'text-right')}>{label}</SortableHeader>
+                        className={className}>{label}</SortableHeader>
                     })}</tr>
                   </thead>
                   <tbody>
@@ -414,18 +416,18 @@ export default function DashboardPage() {
                       const difference = Number(row[comparison.measured]) - Number(row[comparison.baseline])
                       return <tr key={row.key ?? row.region} className="border-b even:bg-muted/25">
                         <th scope="row" className="px-1.5 py-2 text-left font-medium wrap-anywhere sm:px-2">{row.region}</th>
-                        {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(row[metric])}</td>)}
-                        <td className={'px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2 ' + varianceColor(difference)}>{number.format(difference)}</td>
-                        <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2"><AchievementIndicator value={achievement(row[comparison.measured], row[comparison.baseline])} /></td>
+                        {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2">{number.format(row[metric])}</td>)}
+                        <td className={'px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2 ' + varianceColor(difference)}>{number.format(difference)}</td>
+                        <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2"><AchievementIndicator value={achievement(row[comparison.measured], row[comparison.baseline])} /></td>
                       </tr>
                     })}
                     {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className="px-3 py-3 text-center text-muted-foreground">{loading ? <LoadingIndicator label="regional volume performance" /> : 'No regional volume data for the selected month.'}</td></tr>}
                   </tbody>
                   {!loading && <tfoot className="sticky bottom-0 border-t-2 bg-card font-semibold">
                     <tr><th scope="row" className="px-1.5 py-2 text-left wrap-anywhere sm:px-2">Grand total</th>
-                      {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{number.format(totals[metric])}</td>)}
-                      <td className={'px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2 ' + varianceColor(variance)}>{number.format(variance)}</td>
-                      <td className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2"><AchievementIndicator value={percent} /></td>
+                      {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2">{number.format(totals[metric])}</td>)}
+                      <td className={'px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2 ' + varianceColor(variance)}>{number.format(variance)}</td>
+                      <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2"><AchievementIndicator value={percent} /></td>
                     </tr>
                   </tfoot>}
                 </Table>

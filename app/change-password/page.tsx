@@ -6,7 +6,7 @@ import { usePopupError, useStatusNotification } from '@/components/action-dialog
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, LoaderCircle, Moon, Sun } from 'lucide-react'
 
 import { createClient } from '@/lib/client'
 
@@ -22,6 +22,16 @@ export default function ChangePasswordPage() {
   const [loading, setLoading] = useState(false)
   const [, setError] = usePopupError()
   const setSuccess = useStatusNotification()
+
+  useEffect(() => {
+    const theme = localStorage.getItem('theme')
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [])
+
+  function toggleTheme() {
+    const dark = document.documentElement.classList.toggle('dark')
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
+  }
 
   useEffect(() => {
     let active = true
@@ -136,56 +146,45 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <main className="min-h-svh bg-background text-foreground lg:grid lg:grid-cols-[1.05fr_1fr] ">
-      <section className="relative hidden min-h-svh flex-col justify-between overflow-hidden bg-[#153f30] p-10 text-white lg:flex xl:p-14" aria-label="Vitarich Corporation Feed Sales Forecast">
+    <main className="relative min-h-svh bg-background text-foreground lg:grid lg:grid-cols-[1.05fr_1fr]">
+      <section className="relative flex flex-col justify-between overflow-hidden bg-[#153f30] px-5 pt-6 pb-8 text-white sm:px-10 lg:min-h-svh lg:p-10 xl:p-14" aria-label="Vitarich Corporation Feed Sales Forecast">
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-52 -left-36 size-[42rem] rounded-full border border-white/10" />
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-36 -left-20 size-[34rem] rounded-full border border-white/10" />
         <div aria-hidden="true" className="pointer-events-none absolute -right-36 top-20 size-96 rounded-full bg-[#bfa34f]/10 blur-3xl" />
 
-        <div className="relative flex items-center gap-3">
-          <Image src="/vitarich-logo.png" alt="Vitarich Corporation" width={56} height={56} preload className="size-14 object-contain" />
-          <div>
-            <p className="text-xl font-semibold tracking-tight">Vitarich Corporation</p>
-            <p className="mt-0.5 text-xs tracking-wide text-emerald-100/70">Feed Sales Forecast</p>
-          </div>
+        <div className="relative flex items-center gap-3 pr-36 lg:pr-0">
+          <Image src="/vitarich-login-logo.png" alt="Vitarich Corporation" width={883} height={490} preload className="h-auto w-28 object-contain sm:w-36 lg:w-52" />
         </div>
 
-        <div className="relative max-w-lg py-16">
-          <div className="mb-4 h-1 w-12 rounded-full bg-[#bfa34f]" />
-          <p className="mb-5 text-xs font-semibold tracking-[0.2em] text-emerald-100/70 uppercase">Plan with perspective</p>
-          <h1 className="text-3xl leading-tight font-semibold tracking-tight xl:text-4xl">A clearer view of<br />what comes next.</h1>
-          <p className="mt-6 max-w-sm text-base leading-relaxed text-emerald-50/75">Bring your forecasts, approvals, and sales performance together in one workspace.</p>
-          <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3 text-xs text-emerald-100/80">
+        <div className="relative my-auto max-w-lg pt-6 lg:py-16">
+          <div className="mb-5 h-1 w-12 rounded-full bg-[#bfa34f] lg:mb-4" />
+          <h1 className="tracking-tight">
+            <span className="mt-2 block text-3xl leading-tight font-semibold xl:text-4xl">Feed Sales Forecast</span>
+          </h1>
+          <p className="mt-4 max-w-sm text-sm leading-relaxed text-emerald-50/75 lg:mt-6 lg:text-base">Plan and track sales forecasts in one place.</p>
+          <div className="mt-5 hidden flex-wrap items-center gap-x-5 gap-y-3 text-xs text-emerald-100/80 lg:mt-10 lg:flex">
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Forecast</span>
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Review</span>
-            <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Track performance</span>
+            <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Track</span>
           </div>
         </div>
 
-        <p className="relative text-xs text-emerald-100/50">Vitarich Corporation · Feed Sales Forecast</p>
       </section>
 
-      <section className="flex min-h-svh flex-col items-center justify-center px-6 py-10 sm:px-10 lg:px-12">
+      <section className="relative flex flex-col items-center justify-start px-5 pt-8 pb-6 sm:px-10 sm:pb-10 lg:min-h-svh lg:justify-center lg:px-12 lg:pt-24">
+        <button type="button" onClick={toggleTheme} aria-label="Toggle light or dark mode" className="absolute top-6 right-6 z-10 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-600 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+          <Moon className="size-4 dark:hidden" aria-hidden="true" /><Sun className="hidden size-4 dark:block" aria-hidden="true" />
+          <span className="dark:hidden">Dark Mode</span><span className="hidden dark:inline">Light Mode</span>
+        </button>
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6">
-          <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <Image src="/vitarich-logo.png" alt="Vitarich Corporation" width={48} height={48} loading="eager" className="size-12 object-contain" />
-            <div>
-              <p className="text-lg font-semibold tracking-tight">Vitarich Corporation</p>
-              <p className="text-xs text-muted-foreground">Feed Sales Forecast</p>
-            </div>
-          </div>
 
         <div className="mb-4">
-          <div className="mb-5 flex size-12 items-center justify-center rounded-xl bg-sidebar-accent text-sidebar-accent-foreground">
-            <LockKeyhole className="size-5" />
-          </div>
-
           <h1 className="text-lg leading-tight font-semibold tracking-tight">
-            Set your new password
+            Change password
           </h1>
 
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            For your security, set a new password before continuing to Feed Sales Forecast.
+            Choose a new password to continue.
           </p>
         </div>
 
@@ -202,7 +201,7 @@ export default function ChangePasswordPage() {
                 type={showPassword ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
+                placeholder="New password"
                 autoComplete="new-password"
                 disabled={loading}
                 minLength={8}
@@ -226,14 +225,14 @@ export default function ChangePasswordPage() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Use at least 8 characters.
+              At least 8 characters.
             </p>
           </div>
 
           {/* Confirm password */}
           <div className="space-y-1.5">
             <label htmlFor="confirmPassword" className="block text-sm leading-5 font-medium">
-              Confirm New Password
+              Confirm password
             </label>
 
             <div className="relative">
@@ -278,10 +277,9 @@ export default function ChangePasswordPage() {
             disabled={loading}
             className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#174c36] px-4 text-sm font-semibold text-white outline-none transition hover:bg-[#103b29] focus-visible:ring-3 focus-visible:ring-emerald-600/40 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-700 dark:hover:bg-emerald-600"
           >
-            {loading ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />Updating password…</> : <>Update password<ArrowRight aria-hidden="true" className="size-4" /></>}
+            {loading ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />Saving…</> : <>Save password<ArrowRight aria-hidden="true" className="size-4" /></>}
           </button>
         </form>
-          <p className="mt-8 text-center text-xs text-slate-400">Feed Sales Forecast · Vitarich Corporation</p>
         </div>
       </section>
     </main>
