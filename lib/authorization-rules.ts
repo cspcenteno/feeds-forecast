@@ -25,6 +25,7 @@ export const disabledPermissions: Partial<Record<ModuleName, Action[]>> = {
   Dashboard: ['add', 'edit', 'delete'],
   'Weekly Sales': ['add', 'edit', 'delete'],
   Approvals: ['add', 'delete'],
+  'Week Locks': ['delete'],
 }
 
 export function emptyPermissions(): PermissionMap {

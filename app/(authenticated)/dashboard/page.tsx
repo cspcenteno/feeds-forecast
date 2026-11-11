@@ -394,7 +394,7 @@ export default function DashboardPage() {
             <div className="contents">
               <section aria-busy={loading} className={panel + ' order-1 flex flex-col'}>
                 <h3 data-section-title="" className={panelTitle}><HeadingChartNoAxesCombined className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{performanceLabel.title}</h3>
-                <Table summary={summaryForLevel(regions.length, performanceLevel === 'kam' ? 'kams' : performanceLevel === 'customer' ? 'customers' : performanceLevel === 'subregion' ? 'subregions' : 'regions', regions.map((row) => row.key ?? row.region))} containerProps={{ className: 'max-h-[22rem] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': `${performanceLabel.title} table` }} className="min-w-[620px] table-fixed text-xs sm:min-w-0">
+                <Table summary={{ records: regions.length }} containerProps={{ className: 'max-h-[22rem] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': `${performanceLabel.title} table` }} className="min-w-[620px] table-fixed text-xs sm:min-w-0">
                   <colgroup>
                     <col className="w-[24%]" />
                     {performanceMetrics.map((metric) => <col key={metric} />)}
