@@ -29,7 +29,7 @@ export type ForecastImportScope = {
 }
 
 export const forecastImportFields = [
-  ['region', 'Region'], ['year', 'Year'], ['week', 'Week'], ['kam', 'KAM / Salesman'],
+  ['region', 'Region'], ['year', 'Year'], ['week', 'Week'], ['kam', 'KAM'],
   ['customer', 'Customer'],
   ['product_code', 'Product Code'], ['product_name', 'Product Name'], ['volume', 'Volume'],
 ] as const

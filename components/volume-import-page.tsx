@@ -1807,7 +1807,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                   {([
                     ...(isActual ? [['actual_date', 'Date']] as const : [['year', 'Year'], ['month', 'Month']] as const),
                     ['region', 'Region'],
-                    ['kam', 'KAM / Salesman'],
+                    ['kam', 'KAM'],
                     ['customer', 'Customer'], ['product_code', 'Product Code'],
                     ['product_name', 'Product Name'], ['volume', volumeLabel],
                   ] as const).map(([field, label]) => (
@@ -1858,7 +1858,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                     {!isActual && <th className="px-3 py-3 text-left font-medium">Year</th>}
                     <th className="px-3 py-3 text-left font-medium">{isActual ? 'Date' : 'Month'}</th>
                     <th className="px-3 py-3 text-left font-medium">Region</th>
-                    <th className="px-3 py-3 text-left font-medium">KAM / Salesman</th>
+                    <th className="px-3 py-3 text-left font-medium">KAM</th>
                     <th className="px-3 py-3 text-left font-medium">Customer</th>
                     <th className="px-3 py-3 text-left font-medium">Product Code</th>
                     <th className="w-44 px-3 py-3 text-left font-medium">Product Name</th>

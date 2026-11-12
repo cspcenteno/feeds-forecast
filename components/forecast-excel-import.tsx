@@ -146,7 +146,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
       const { data: profile, error: profileError } = await supabase.from('users')
         .select('role, is_active').eq('id', user.id).single()
       if (profileError) throw new Error(profileError.message)
-      if (profile?.role !== 'Admin' || !profile.is_active) throw new Error('Forecast Excel Import is available only to active Admin accounts.')
+      if (profile?.role !== 'Admin' || !profile.is_active) throw new Error('Forecasts Excel Import is available only to active Admin accounts.')
       await work()
     }
     catch (error) { setError(error instanceof Error ? error.message : 'Unable to process the forecast upload.') }
@@ -292,7 +292,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
     <section className="rounded-xl border bg-card shadow-sm">
       <div data-section-header="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
         <div>
-          <h2 data-section-title="" className="text-base font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Forecast Excel Import</h2>
+          <h2 data-section-title="" className="text-base font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Forecasts Excel Import</h2>
 
         </div>
         <div data-action-toolbar="" className="flex flex-wrap gap-2">

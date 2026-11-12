@@ -56,21 +56,22 @@ export default function AuthenticatedLayout({
 
   const pageTitle = pageTitles[pathname] || "Feed Sales Forecast"
   const PageIcon = pageIcons[pathname]
+  const boundedSalesPage = pathname === '/approvals' || pathname === '/weekly-sales' || pathname === '/forecasts'
 
   return (
     <SidebarProvider>
       <AuthorizationProvider>
       <ForecastAttentionProvider>
       <AppSidebar />
-      <main className="w-full min-w-0">
-        <div className="flex h-14 items-center border-b px-4">
+      <main className={boundedSalesPage ? 'w-full min-w-0 md:flex md:h-dvh md:flex-col md:overflow-hidden' : 'w-full min-w-0'}>
+        <div className="flex h-14 shrink-0 items-center border-b px-4">
           <h1 className="flex items-center gap-2 text-lg leading-tight font-semibold">
             {PageIcon && <PageIcon className="size-5 shrink-0" aria-hidden="true" />}
             {pageTitle}
           </h1>
         </div>
 
-        <div className="app-tables p-4 md:p-6">
+        <div className={boundedSalesPage ? 'app-tables p-4 md:min-h-0 md:flex-1 md:overflow-hidden md:p-6' : 'app-tables p-4 md:p-6'}>
           {children}
         </div>
       </main>

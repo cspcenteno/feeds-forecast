@@ -33,6 +33,7 @@ export type {
 type Authz = {
   loading: boolean
   role: string
+  position: string | null
   regionId: number | null
   subregionId: number | null
   permissions: PermissionMap
@@ -42,6 +43,7 @@ type Authz = {
 const Context = createContext<Authz>({
   loading: true,
   role: '',
+  position: null,
   regionId: null,
   subregionId: null,
   permissions: emptyPermissions(),
@@ -61,6 +63,7 @@ export function AuthorizationProvider({
   const [state, setState] = useState<Omit<Authz, 'can'>>({
     loading: true,
     role: '',
+    position: null,
     regionId: null,
     subregionId: null,
     permissions: emptyPermissions(),

@@ -12,16 +12,31 @@ type TableProps = Omit<React.ComponentProps<"table">, 'summary'> & {
 
 function Table({ className, containerProps, saved = false, summary, ...props }: TableProps) {
   const { className: containerClassName, ...containerAttributes } = containerProps ?? {}
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+    const updateWidth = () => {
+      container.style.setProperty('--table-viewport-width', `${container.clientWidth}px`)
+    }
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <>
     <div
+      ref={scrollRef}
       data-slot="table-container"
       className={cn("app-table-scroll @container relative isolate h-auto w-full max-h-[min(32rem,65vh)] overflow-auto", containerClassName)}
       {...containerAttributes}
     >
       <table
         data-slot="table"
-        className={cn("caption-bottom text-sm [&>tbody>tr]:h-12", saved ? "w-[1600px]" : "w-full", className)}
+        className={cn("min-w-[768px] caption-bottom text-sm [&>tbody>tr]:h-12", saved ? "w-[1600px]" : "w-full", className)}
         {...props}
       />
     </div>

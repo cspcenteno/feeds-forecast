@@ -475,12 +475,22 @@ td[data-action-column] > div {
 }
 
 /* Structural columns keep their width; description columns share spare space. */
+@media (min-width: 768px) {
+  [data-sales-review-page] .app-table-scroll,
+  [data-saved-forecasts-page] #saved-forecasts > .app-table-scroll {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: none;
+    overscroll-behavior: contain;
+  }
+}
+
 [data-fixed-column="status"],
 col[data-volume-column="status"] { width: 96px; min-width: 96px; max-width: 96px; }
 [data-fixed-column="area"],
 col[data-volume-column="area"] { width: 144px; min-width: 144px; max-width: 144px; }
 [data-fixed-column="person"],
-col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 144px; }
+col[data-volume-column="person"] { width: 192px; min-width: 192px; max-width: 192px; }
 [data-volume-layout="forecast"] [data-action-column],
 [data-volume-layout="review"] [data-action-column] { --action-column-width: 224px; }
 
@@ -489,7 +499,9 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
 @container (width < 1600px) {
   table[data-volume-layout="forecast"],
   table[data-volume-layout="review"] {
-    --volume-visible-width: max(760px, 100cqw);
+    /* Use the scroll viewport, excluding a scrollbar only when present. */
+    --volume-visible-width: max(760px, var(--table-viewport-width, 100cqw));
+    --volume-description-min: 80px;
     --volume-action-width: 0px;
     --volume-person-width: 0px;
     --volume-date-width: 0px;
@@ -499,7 +511,7 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
     min-width: 0;
   }
   table[data-volume-layout]:has(col[data-action-column]) { --volume-action-width: 224px; }
-  table[data-volume-layout="review"]:has(col[data-volume-column="person"]) { --volume-person-width: 144px; }
+  table[data-volume-layout="review"]:has(col[data-volume-column="person"]) { --volume-person-width: 192px; }
   table[data-volume-layout="review"]:has(col[data-volume-column="date"]) { --volume-date-width: 90px; }
   table[data-volume-layout="forecast"]:has(col[data-volume-column="remarks"]) { --volume-remarks-width: 208px; }
   [data-volume-layout="forecast"] [data-action-column],
@@ -507,15 +519,22 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
   [data-volume-layout] col[data-volume-column="customer"],
   [data-volume-layout] col[data-volume-column="product"] {
     /* Status + Area = 240px; Forecast Qty. + Volume = 224px. */
-    width: max(80px, calc((var(--volume-visible-width) - 464px - var(--volume-action-width) - var(--volume-person-width) - var(--volume-date-width)) / 2));
+    width: max(var(--volume-description-min), calc((var(--volume-visible-width) - 464px - var(--volume-action-width) - var(--volume-person-width) - var(--volume-date-width)) / 2));
   }
   [data-volume-layout] col[data-volume-column="date"] { width: 90px; }
   table[data-volume-layout="forecast"]:not(:has(col[data-volume-column="area"])) col:is([data-volume-column="customer"], [data-volume-column="product"]) {
     /* Share the removed 144px Area column equally between Customer and Product. */
-    width: max(80px, calc((var(--volume-visible-width) - 320px - var(--volume-action-width) - var(--volume-person-width) - var(--volume-date-width)) / 2));
+    width: max(var(--volume-description-min), calc((var(--volume-visible-width) - 320px - var(--volume-action-width) - var(--volume-person-width) - var(--volume-date-width)) / 2));
   }
   [data-volume-layout] col[data-volume-column="number"] { width: 112px; }
-  [data-volume-layout] td:not([colspan]) { overflow-wrap: anywhere; }
+  [data-volume-layout] td:not([colspan]) { overflow-wrap: normal; }
+  @media (max-width: 767px) {
+    table[data-volume-layout="forecast"],
+    table[data-volume-layout="review"] {
+      --volume-visible-width: max(calc(880px + var(--volume-action-width) + var(--volume-person-width) + var(--volume-date-width)), var(--table-viewport-width, 100cqw));
+      --volume-description-min: 208px;
+    }
+  }
 }
 
 /* Form widths follow the information being entered, not the field count.
@@ -1053,7 +1072,8 @@ button[data-slot="profile-menu-action"]:not(:hover) {
 .app-tables table {
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .app-tables table > thead {
@@ -1070,6 +1090,8 @@ button[data-slot="profile-menu-action"]:not(:hover) {
 }
 
 .app-tables table > thead > tr > th {
+  overflow-wrap: normal;
+  word-break: normal;
   padding-block: 0.625rem;
   font-size: 0.875rem;
   line-height: 1.25rem;

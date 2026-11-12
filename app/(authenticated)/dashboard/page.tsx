@@ -23,7 +23,9 @@ import { budgetComparison } from '@/lib/budget-comparison'
 import { compareRegionNames } from '@/lib/region-order'
 import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
 import { compareVolumes, dashboardComparisons, metricColors, metricLabels, type RegionalVolumes } from '@/lib/dashboard-comparisons'
-import type { DashboardLevel } from '@/lib/dashboard-performance'
+import { dashboardLevel, type DashboardLevel } from '@/lib/dashboard-performance'
+import { useAuthorization } from '@/lib/authorization'
+import { SelectionField } from '@/components/ui/selection-field'
 
 type RegionVolume = RegionalVolumes & { key?: string }
 
@@ -182,6 +184,7 @@ function LoadingIndicator({ label }: { label: string }) {
 }
 
 export default function DashboardPage() {
+  const authorization = useAuthorization()
   const [, reportError] = usePopupError()
   const attention = useForecastAttention()
   const [month, setMonth] = useState(() => new Intl.DateTimeFormat('sv-SE', {
@@ -194,6 +197,8 @@ export default function DashboardPage() {
   const comparison = dashboardComparisons.find((item) => item.id === comparisonId)!
   const contributionMetric = comparisonId === 'budget-actual' ? 'actual' : comparison.baseline
   const [performanceSort, setPerformanceSort] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null)
+  const [chartSort, setChartSort] = useState('baseline')
+  const [chartDescending, setChartDescending] = useState(true)
   const performanceMetrics = [comparison.baseline, comparison.measured]
   const performanceColumnCount = performanceMetrics.length + 3
 
@@ -225,7 +230,7 @@ export default function DashboardPage() {
   const loading = current === null
   const data = current?.data
   const regions = [...(data?.performance.rows ?? [])].sort((a, b) => compareRegionNames(a.region, b.region))
-  const performanceLevel = data?.performance.level ?? 'company'
+  const performanceLevel = data?.performance.level ?? dashboardLevel(authorization)
   const performanceLabel = performanceLabels[performanceLevel]
   const sortedPerformance = performanceSort ? [...regions].sort((a, b) => {
     if (performanceSort.key === 'region' && (performanceLevel === 'company' || performanceLevel === 'region')) return compareRegionNames(a.region, b.region)
@@ -256,6 +261,13 @@ export default function DashboardPage() {
   const lowestAchievement = regions.filter((row) => Number(row[comparison.baseline]) > 0).sort((a, b) =>
     Number(a[comparison.measured]) / Number(a[comparison.baseline]) - Number(b[comparison.measured]) / Number(b[comparison.baseline])
   )[0]
+  const lowestPercent = lowestAchievement
+    ? achievement(lowestAchievement[comparison.measured], lowestAchievement[comparison.baseline])
+    : null
+  const lowestPerformers = lowestPercent === null ? [] : regions.filter((row) =>
+    Number(row[comparison.baseline]) > 0 &&
+    Math.abs(achievement(row[comparison.measured], row[comparison.baseline])! - lowestPercent) < 1e-9
+  )
   const chartRows = regions.map((row) => ({
     key: row.key ?? row.region,
     region: row.region,
@@ -267,6 +279,12 @@ export default function DashboardPage() {
   const baselineContributionRows = chartRows.filter((row) => row[contributionMetric] > 0)
     .map((row, index) => ({ ...row, fill: regionColors[index % regionColors.length] }))
   const baselineContributionTotal = baselineContributionRows.reduce((sum, row) => sum + row[contributionMetric], 0)
+  const sortedChartRows = [...chartRows].sort((a, b) => {
+    const nameOrder = a.region.localeCompare(b.region, undefined, { numeric: true, sensitivity: 'base' })
+    const difference = chartSort === 'name' ? nameOrder
+      : a[chartSort === 'baseline' ? comparison.baseline : comparison.measured] - b[chartSort === 'baseline' ? comparison.baseline : comparison.measured]
+    return (chartDescending ? -difference : difference) || nameOrder
+  })
   const salesGroups = useMemo(() => data ? buildSalesGroups(data) : [], [data])
   const keys = groupKeys(salesGroups)
   const allExpanded = keys.length > 0 && keys.every((key) => expanded.has(key))
@@ -354,7 +372,11 @@ export default function DashboardPage() {
               return (
               <button key={label} type="button" aria-pressed={active} aria-controls="dashboard-comparison-results"
                 aria-busy={loading}
-                onClick={() => setComparisonId(targetComparison)}
+                onClick={() => {
+                  setComparisonId(targetComparison)
+                  setChartSort(metric === cardComparison.baseline ? 'baseline' : 'measured')
+                  setChartDescending(true)
+                }}
                 className={`grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-3 gap-y-1 cursor-pointer rounded-lg border border-t-4 px-3 py-2 text-left shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 sm:block sm:py-2.5 ${active ? comparisonAppearance[targetComparison] : metricAppearance[metric]}`}>
                 <span className="col-span-2 flex items-center justify-between gap-2 text-sm font-semibold">{label}{active && <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />}</span>
                 {loading ? <div className="col-start-1 row-start-2 self-center sm:mt-1"><LoadingIndicator label={label.toLowerCase()} /></div> : <p className="col-start-1 row-start-2 mt-0 self-center whitespace-nowrap text-xl leading-tight font-bold tabular-nums sm:mt-1 sm:text-2xl">{number.format(totals[metric])} <span className="text-xs font-medium">bags</span></p>}
@@ -403,7 +425,7 @@ export default function DashboardPage() {
                         <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2"><AchievementIndicator value={achievement(row[comparison.measured], row[comparison.baseline])} /></td>
                       </tr>
                     })}
-                    {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className="px-3 py-3 text-center text-muted-foreground">{loading ? <LoadingIndicator label="regional volume performance" /> : 'No regional volume data for the selected month.'}</td></tr>}
+                    {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className="px-3 py-3 text-center text-muted-foreground">{loading ? <LoadingIndicator label={performanceLabel.title.toLowerCase()} /> : `No volume data by ${performanceLabel.column.toLowerCase()} for the selected month.`}</td></tr>}
                   </tbody>
                   {!loading && <tfoot className="sticky bottom-0 border-t-2 bg-card font-semibold">
                     <tr><th scope="row" className="px-1.5 py-2 text-left wrap-anywhere sm:px-2">Grand total</th>
@@ -417,12 +439,27 @@ export default function DashboardPage() {
 
               <section aria-busy={loading} className={panel + ' order-3 flex h-[22rem] flex-col'}>
                 <h3 data-section-title="" className={panelTitle}><HeadingChartColumn className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{comparison.title} by {performanceLabel.by} (bags)</h3>
+                <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 pt-2 text-xs">
+                  <label className="flex items-center gap-2">
+                    Sort by
+                    <SelectionField aria-label="Chart sort field" value={chartSort} onValueChange={setChartSort} className="h-9 w-32 rounded-md border bg-background px-2">
+                      <option value="name">{performanceLabel.column}</option>
+                      <option value="baseline">{metricLabels[comparison.baseline]}</option>
+                      <option value="measured">{metricLabels[comparison.measured]}</option>
+                    </SelectionField>
+                  </label>
+                  <button type="button" onClick={() => setChartDescending((value) => !value)} className="h-9 rounded-md border px-3" aria-label="Toggle chart sort direction">
+                    {chartSort === 'name' ? chartDescending ? 'Z–A' : 'A–Z' : chartDescending ? 'Highest first' : 'Lowest first'}
+                  </button>
+                </div>
                 {loading ? <LoadingIndicator label="comparison chart" /> : chartRows.length ? (
                   <div className="min-h-0 flex-1 px-2 py-3 text-xs">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartRows} accessibilityLayer>
+                      <BarChart data={sortedChartRows} accessibilityLayer>
                         <CartesianGrid vertical={false} stroke="var(--border)" />
-                        <XAxis dataKey="region" tickLine={false} tickFormatter={shortLabel} />
+                        <XAxis dataKey="region" tickLine={false} tickFormatter={shortLabel}
+                          tick={performanceLevel === 'customer' ? false : undefined}
+                          height={performanceLevel === 'customer' ? 8 : undefined} />
                         <YAxis width={52} tickLine={false} axisLine={false} tickFormatter={(value: number) => compactNumber.format(value)} />
                         <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: 'var(--popover-foreground)' }}
                           formatter={(value) => number.format(Number(value)) + ' bags'} />
@@ -471,9 +508,19 @@ export default function DashboardPage() {
                 <h3 data-section-title="" className={panelTitle}><HeadingLightbulb className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Monthly Highlights</h3>
                 {loading ? <LoadingIndicator label="monthly highlights" /> : <ol className="min-h-0 flex-1 list-decimal divide-y overflow-y-auto px-4 pl-8 text-sm">
                   {[
-                    percent === null ? 'No positive ' + metricLabels[comparison.baseline].toLowerCase() + ' is available for this comparison.' : metricLabels[comparison.measured] + ' is ' + formatPercent(percent) + ' of ' + metricLabels[comparison.baseline].toLowerCase() + ', a variance of ' + number.format(variance) + ' bags.',
-                    highestVolume && Number(highestVolume[comparison.measured]) > 0 ? highestVolume.region + ' contributes the most ' + metricLabels[comparison.measured].toLowerCase() + ' volume at ' + number.format(highestVolume[comparison.measured]) + ' bags.' : null,
-                    lowestAchievement ? lowestAchievement.region + ' has the lowest ' + metricLabels[comparison.measured].toLowerCase() + '-to-' + metricLabels[comparison.baseline].toLowerCase() + ' ratio at ' + formatPercent(achievement(lowestAchievement[comparison.measured], lowestAchievement[comparison.baseline])) + '.' : null,
+                    percent === null
+                      ? `Check ${metricLabels[comparison.baseline].toLowerCase()} records for this month; no positive baseline is available.`
+                      : variance < 0
+                        ? `${metricLabels[comparison.measured]} is ${number.format(Math.abs(variance))} bags below ${metricLabels[comparison.baseline].toLowerCase()}. ${comparison.measured === 'forecast' ? 'Follow up on forecast submissions and approvals.' : 'Check sales updates and pending deliveries.'}`
+                        : `${metricLabels[comparison.measured]} has reached ${formatPercent(percent)} of ${metricLabels[comparison.baseline].toLowerCase()}. ${comparison.measured === 'forecast' ? 'Confirm planned orders with customers.' : 'Confirm sales records are complete.'}`,
+                    lowestAchievement && Number(lowestAchievement[comparison.measured]) < Number(lowestAchievement[comparison.baseline])
+                      ? lowestPerformers.length > 1
+                        ? `${lowestPerformers.map((row) => row.region).join(', ')} are tied at ${formatPercent(lowestPercent)} of ${metricLabels[comparison.baseline].toLowerCase()}. Review their gaps with the sales owners.`
+                        : `Prioritize ${lowestAchievement.region} (${formatPercent(lowestPercent)} of ${metricLabels[comparison.baseline].toLowerCase()}). Review the gap with its sales owner.`
+                      : null,
+                    highestVolume && Number(highestVolume[comparison.measured]) > 0
+                      ? `${highestVolume.region} leads with ${number.format(highestVolume[comparison.measured])} bags. Review its top customers and products for more opportunities.`
+                      : 'No positive volume recorded. Check this month’s records.',
                   ].filter((text): text is string => Boolean(text)).map((text) => (
                     <li key={text} className="py-2.5 pl-1">{text}</li>
                   ))}

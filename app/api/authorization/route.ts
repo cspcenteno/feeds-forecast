@@ -13,7 +13,7 @@ export async function GET() {
     // Always scope privileged reads to the verified session, never a supplied ID.
     // Permission-table RLS must not prevent an account from loading its own grants.
     const { data: profile, error: profileError } = await supabaseAdmin.from('users')
-      .select('role, is_active, region_id, subregion_id').eq('id', user.id).maybeSingle()
+      .select('role, position, is_active, region_id, subregion_id').eq('id', user.id).maybeSingle()
     if (profileError) throw new Error('Unable to load account details.')
     if (!profile?.is_active) return NextResponse.json({ error: 'An active account is required.' }, { status: 403, headers })
 
@@ -22,6 +22,7 @@ export async function GET() {
     if (permissionError) throw new Error('Unable to load permissions. Please try again.')
     return NextResponse.json({
       role: profile.role,
+      position: profile.position,
       regionId: profile.region_id == null ? null : Number(profile.region_id),
       subregionId: profile.subregion_id == null ? null : Number(profile.subregion_id),
       permissions: savedPermissions(rows ?? []),

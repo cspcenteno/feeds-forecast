@@ -1183,11 +1183,21 @@ export default function SalesInputPage() {
       }))
 
     for (const [index, row] of payload.entries()) {
-      if (!findExistingForecast(row, forecasts)) continue
+      const existing = findExistingForecast(row, forecasts)
+      if (!existing) continue
       const product = products.find((item) => item.id === row.product_id)
       const customer = customers.find((item) => item.id === row.customer_id)
       setPendingAction(null)
-      setError(`Row ${index + 1}: ${product?.code || 'This product'} already has a forecast for ${customer?.customer || 'this customer'} in Week ${week}, ${year}. Open Saved Forecasts and edit the existing record instead of adding it again.`)
+      const guidance = existing.status === 'Draft' || existing.status === 'Rejected'
+        ? `The existing forecast is ${existing.status === 'Rejected' ? 'Returned' : 'Draft'}. Open Saved Forecasts and edit the existing record instead of adding it again.`
+        : existing.status === 'Approved'
+          ? 'The existing forecast is Approved and cannot be edited.'
+          : existing.status === 'Pending'
+            ? 'The existing forecast is Pending. Please wait for endorsement/approval; it cannot be edited while under review.'
+            : existing.status === 'Endorsed'
+              ? 'The existing forecast is Endorsed. Please wait for approval; it cannot be edited while under review.'
+              : 'The existing forecast cannot be added again. Check its status in Saved Forecasts.'
+      setError(`Row ${index + 1}: ${product?.code || 'This product'} already has a forecast for ${customer?.customer || 'this customer'} in Week ${week}, ${year}. ${guidance}`)
       return
     }
 
@@ -1640,7 +1650,7 @@ export default function SalesInputPage() {
   }))
 
   return (
-    <div className="space-y-4">
+    <div data-saved-forecasts-page className="space-y-4 md:flex md:h-full md:min-h-0 md:flex-col">
 
       {/* ADD FORECAST */}
 
@@ -1999,7 +2009,7 @@ export default function SalesInputPage() {
       ) : null}
 
       {canCreateForecast && (
-        <div className="flex justify-end">
+        <div className="flex shrink-0 justify-end">
           <button type="button" data-action-tone="primary" data-action-fill=""
             disabled={loading || initializing || workspaceOwner !== userId}
             onClick={() => {
@@ -2014,8 +2024,8 @@ export default function SalesInputPage() {
 
       {/* SAVED FORECASTS */}
 
-      <div id="saved-forecasts" className="scroll-mt-4 rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div id="saved-forecasts" className="scroll-mt-4 rounded-xl border bg-card shadow-sm md:flex md:min-h-0 md:flex-[0_1_auto] md:flex-col">
+        <div data-section-header="" className="flex shrink-0 flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 data-section-title="" className="text-base font-semibold"><HeadingArchive className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
               Saved Forecasts

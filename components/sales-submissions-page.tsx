@@ -1281,6 +1281,10 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     const isRsmSummary = groupByEndorser && !nestedKam
     const areas = isRsmSummary || asmLabel || showKamSummary ? Array.from(new Set(items.map((item) => getAreaName(item.region_id, item.subregion_id, asmLabel ? 'region' : 'subregion')))) : []
     const salesmanCount = new Set(items.map((item) => item.submitted_by).filter(Boolean)).size
+    const teamCount = weeklyAsmLevel && asmLabel
+      ? new Set(items.map((item) => item.endorsed_by).filter(Boolean)).size
+      : salesmanCount
+    const teamRole = weeklyAsmLevel ? (asmLabel ? 'RSM' : 'KAM') : isAsmReview ? 'KAM' : null
     const customerCount = new Set(items.map((item) => item.customer_id).filter((id) => id !== null)).size
     const productCount = new Set(items.map((item) => item.product_id).filter((id) => id !== null)).size
     const customerItems = new Map<string, SalesForecast>()
@@ -1318,7 +1322,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     )))
     return (
       <Fragment key={key}>
-        {renderReviewHeading(key, label, nestedKam)}
+        {!nestedKam && renderReviewHeading(key, label)}
         <tr className="border-b bg-muted/30 font-semibold">
           {canShowActions && (
             <td data-action-column="review" className="px-2 py-2">{!nestedKam && <ActionButtons items={items} label={label} level={isRsmSummary ? 'rsm' : 'kam'} />}</td>
@@ -1333,7 +1337,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
           <td className="px-2 py-2">{areas.join(', ')}</td>
           {groupByEndorser && (
             <td className="px-2 py-2">
-              {!nestedKam && <>{formatNumber(salesmanCount)} {salesmanCount === 1 ? 'Salesman' : 'Salesmen'}</>}
+              {nestedKam
+                ? renderReviewToggle(key, getSubmittedByName(reviewerId))
+                : <>{formatNumber(teamCount)} {teamRole ? `${teamRole}${teamCount === 1 ? '' : 's'}` : teamCount === 1 ? 'Salesman' : 'Salesmen'}</>}
             </td>
           )}
           <td className="px-2 py-2">{formatNumber(customerCount)} {customerCount === 1 ? 'Customer' : 'Customers'}</td>
@@ -1390,7 +1396,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   // -----------------------------------------
 
   return (
-    <div className="space-y-4">
+    <div data-sales-review-page className="flex flex-col md:h-full md:min-h-0">
 
       {/* MESSAGES */}
 
@@ -1398,11 +1404,11 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
       {/* PENDING SALES SUBMISSIONS */}
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="flex flex-col rounded-xl border bg-card shadow-sm md:min-h-0 md:flex-[0_1_auto]">
 
         {/* HEADER, FILTERS AND BULK ACTIONS */}
 
-        <div className="border-b">
+        <div className="shrink-0 border-b">
           <div className="flex flex-col">
 
             {/* TITLE */}
@@ -1586,7 +1592,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   Area
                 </th>
 
-                {groupByEndorser && <th data-fixed-column="person" className="px-2 py-3 text-left font-medium">KAM / Salesman</th>}
+                {groupByEndorser && <th data-fixed-column="person" className="px-2 py-3 text-left font-medium">{weeklyAsmLevel || isAsmReview ? 'Sales Team' : 'KAM / Salesman'}</th>}
 
                 <th className="px-2 py-3 text-left font-medium">
                   Customer
