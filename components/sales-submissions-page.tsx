@@ -229,7 +229,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   const customerOnly = weekly && (reviewPosition === 'KAM' || (userRole === 'User' && !['NSM', 'ASM', 'RSM', 'Supervisor', 'SV'].includes(reviewPosition)))
   const weeklyKamLevel = weekly && ['RSM', 'Supervisor', 'SV'].includes(reviewPosition)
   const weeklyAsmLevel = weekly && (userRole === 'Admin' || reviewPosition === 'NSM')
-  const nestedKamGroups = (!weekly && stage === 'Endorsed') || weeklyAsmLevel
+  const nestedKamGroups = !weekly && stage === 'Endorsed'
   const groupByEndorser = nestedKamGroups || (weekly && !customerOnly && !weeklyKamLevel)
   const showKamSummary = weeklyKamLevel || (!weekly && !nestedKamGroups)
   const showWeekDateColumn = !weekly && !groupByEndorser && !showKamSummary
@@ -1325,7 +1325,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
           )}
           <td className="px-2 py-2 text-center">
             <div className="flex flex-wrap justify-center gap-1">
-              {!nestedKam && statuses.map((status) => (
+              {!nestedKam && !(weeklyAsmLevel && isRsmSummary && !asmLabel) && statuses.map((status) => (
                 <StatusBadge key={status} status={status} />
               ))}
             </div>
