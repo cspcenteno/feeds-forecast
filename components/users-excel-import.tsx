@@ -127,7 +127,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
       try {
         for (const [index, row] of eligible.entries()) {
           setProgress(`Creating account ${index + 1} of ${eligible.length}…`)
-          const roleDefaults = defaultPermissions(row.values.role!)
+          const roleDefaults = defaultPermissions(row.values.role!, row.values.position)
           const response = await fetch('/api/admin/users', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...row.values, temporaryPassword, permissions: modules.map((module) => ({

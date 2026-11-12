@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { ArrowRight, Eye, EyeOff, LoaderCircle, Moon, Sun } from 'lucide-react'
 
 import { createClient } from '@/lib/client'
+import { AuthLogo } from '@/components/auth-logo'
 
 export default function ChangePasswordPage() {
   const router = useRouter()
@@ -178,14 +179,17 @@ export default function ChangePasswordPage() {
         </button>
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6">
 
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-3">
+          <AuthLogo />
+          <div className="min-w-0">
           <h1 className="text-lg leading-tight font-semibold tracking-tight">
             Change password
           </h1>
 
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
             Choose a new password to continue.
           </p>
+          </div>
         </div>
 
         <form data-auth-form onSubmit={handleSubmit} aria-busy={loading} className="space-y-4">

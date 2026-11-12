@@ -1,4 +1,22 @@
 export const userImportColumns = ['full_name', 'email', 'role', 'position', 'region_name', 'subregion_name'] as const
+
+export function positionsForRole(role: string): string[] {
+  return role === 'User' ? ['KAM'] : role === 'Superuser' ? ['Supervisor'] : role === 'Manager' ? ['RSM','ASM','NSM'] : []
+}
+
+export function positionForRole(role: string, current = '') {
+  const options = positionsForRole(role)
+  const matched = options.find((option) => option.toUpperCase() === current.trim().toUpperCase())
+  return options.length === 1 ? options[0] : matched ?? ''
+}
+
+export function validRolePosition(role: string, position: string) {
+  return role === 'Admin' ? position.trim() === '' : positionsForRole(role).some((option) => option.toUpperCase() === position.trim().toUpperCase())
+}
+
+export function requiresUserSubregion(role: string, position: string) {
+  return role !== 'Admin' && ['KAM', 'RSM'].includes(position.trim().toUpperCase())
+}
 export type UserImportRow = Record<(typeof userImportColumns)[number], string> & { id: string }
 export type UserImportReferences = {
   users: { email: string | null }[]
@@ -53,7 +71,9 @@ export function validateUserImport(rows: UserImportRow[], refs: UserImportRefere
     const fullName = source.full_name.trim()
     const email = source.email.trim().toLowerCase()
     const role = roles.find((item) => item.toLowerCase() === normalize(source.role)) ?? null
-    const position = ['KAM', 'RSM', 'ASM', 'NSM', 'Supervisor'].find((item) => item.toLowerCase() === normalize(source.position)) ?? source.position.trim()
+    const position = role === 'Admin' ? '' : !source.position.trim() ? positionForRole(role ?? '')
+      : ['KAM', 'RSM', 'ASM', 'NSM', 'Supervisor'].find((item) => item.toLowerCase() === normalize(source.position)) ?? source.position.trim()
+    if (role && !validRolePosition(role, position)) issues.push('Select a sales position allowed for this role.')
     if (!fullName || fullName.length > 150) issues.push('Full name is required and must be at most 150 characters.')
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) issues.push('Enter a valid email address.')
     if (!role) issues.push('Role must be User, Superuser, Manager, or Admin.')
@@ -65,6 +85,7 @@ export function validateUserImport(rows: UserImportRow[], refs: UserImportRefere
     if (role === 'Admin') {
       if (source.region_name.trim() || source.subregion_name.trim()) issues.push('Leave region and subregion blank for Admin accounts.')
     } else {
+      if (requiresUserSubregion(role ?? '', position) && !subregion) issues.push('Subregion is required for KAM and RSM accounts.')
       if (!region && (position !== 'NSM' || source.region_name.trim())) issues.push('Region name is required and must match one active region.')
       if (source.subregion_name.trim() && !subregion) issues.push('Subregion must match one active subregion in the selected region.')
     }

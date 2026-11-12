@@ -2,13 +2,15 @@
 'use client'
 
 import { sortRegions } from '@/lib/region-order'
+import { permissionDefaultPreview } from '@/lib/permission-default-preview'
+import { requiresUserSubregion, positionsForRole, positionForRole, validRolePosition } from '@/lib/users-import'
 
 import { StatusBadge } from '@/components/ui/status-badge'
 
 import { UserRoundCog as HeadingUserRoundCog, ShieldCheck as HeadingShieldCheck, Users as HeadingUsers } from 'lucide-react'
 
-import { ListChecks as ActionListChecksIcon, RefreshCw as ActionRefreshCwIcon } from 'lucide-react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { RefreshCw as ActionRefreshCwIcon } from 'lucide-react'
+
 import { ActiveField } from '@/components/ui/active-field'
 import { RecordDialog } from '@/components/ui/record-dialog'
 
@@ -121,8 +123,8 @@ function normalizePermission(
   return normalized
 }
 
-function getDefaultPermissions(role: string): ModulePermission[] {
-  const shared = sharedDefaultPermissions(role)
+function getDefaultPermissions(role: string, position = ''): ModulePermission[] {
+  const shared = sharedDefaultPermissions(role, position)
 
   return modules.map((module) =>
     normalizePermission({
@@ -169,7 +171,7 @@ export default function UsersPage() {
   const [isActive, setIsActive] = useState(false)
 
   // Create User state
-  const [showUserPermissions, setShowUserPermissions] = useState(false)
+
   const [creatingUser, setCreatingUser] = useState(false)
   const [newFullName, setNewFullName] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -178,7 +180,9 @@ export default function UsersPage() {
   const [newRole, setNewRole] = useState<string>('User')
   const [newRegionId, setNewRegionId] = useState<number | null>(null)
   const [newSubregionId, setNewSubregionId] = useState<number | null>(null)
-  const [newPosition, setNewPosition] = useState('')
+  const [newPosition, setNewPosition] = useState('KAM')
+  const [updatingNewDefaults, setUpdatingNewDefaults] = useState(false)
+  const [applyingRoleDefaults, setApplyingRoleDefaults] = useState(false)
 
   // Permissions for new and existing users
   const [newPermissions, setNewPermissions] = useState<ModulePermission[]>(
@@ -381,14 +385,14 @@ export default function UsersPage() {
   async function selectUser(user: User) {
     setUserDialogOpen(true)
     setResetTemporaryPassword('')
-    setShowUserPermissions(false)
+
     setSelectedUser(user)
     setFullName(user.full_name ?? '')
     setEmail(user.email)
-    setPosition(user.position ?? '')
+    setPosition(positionForRole(user.role, user.position ?? ''))
     setRole(user.role)
-    setRegionId(user.region_id)
-    setSubregionId(user.subregion_id)
+    setRegionId(user.position === 'NSM' ? null : user.region_id)
+    setSubregionId(user.position === 'NSM' ? null : user.subregion_id)
     setIsActive(user.is_active)
 
     await loadUserPermissions(user.id)
@@ -396,8 +400,17 @@ export default function UsersPage() {
 
   function handleRoleChange(newRole: string) {
     setRole(newRole)
+    setPosition(positionForRole(newRole, position))
 
-    if (newRole === 'Admin') {
+    if (newRole === 'Admin' || positionForRole(newRole, position) === 'NSM') {
+      setRegionId(null)
+      setSubregionId(null)
+    }
+  }
+
+  function handlePositionChange(nextPosition: string) {
+    setPosition(nextPosition)
+    if (nextPosition === 'NSM') {
       setRegionId(null)
       setSubregionId(null)
     }
@@ -406,7 +419,7 @@ export default function UsersPage() {
   function clearSelection() {
     setUserDialogOpen(false)
     setResetTemporaryPassword('')
-    setShowUserPermissions(false)
+
     setSelectedUser(null)
     setFullName('')
     setEmail('')
@@ -421,7 +434,7 @@ export default function UsersPage() {
   }
 
   function resetCreateUserForm() {
-    setShowUserPermissions(false)
+
     setNewFullName('')
     setNewEmail('')
     setNewTemporaryPassword('')
@@ -429,7 +442,7 @@ export default function UsersPage() {
     setNewRole('User')
     setNewRegionId(null)
     setNewSubregionId(null)
-    setNewPosition('')
+    setNewPosition('KAM')
     setNewPermissions(getDefaultPermissions('User'))
   }
 
@@ -439,12 +452,66 @@ export default function UsersPage() {
     setUserDialogOpen(true)
   }
 
-  function handleNewRoleChange(newRole: string) {
-    setNewRole(newRole)
+  async function changeNewUserDefaults(nextRole: string, nextPosition: string) {
+    if (updatingNewDefaults || (nextRole === newRole && nextPosition === newPosition)) return
+    const defaults = getDefaultPermissions(nextRole, nextPosition)
+    const customized = JSON.stringify(newPermissions) !== JSON.stringify(getDefaultPermissions(newRole, newPosition))
+    const replacing = JSON.stringify(newPermissions) !== JSON.stringify(defaults)
+    let ticket: Awaited<ReturnType<typeof confirmAction>> = null
+    setUpdatingNewDefaults(true)
+    try {
+      if (customized && replacing) {
+        ticket = await confirmAction({
+          title: 'Replace customized permissions?',
+          message: 'Changing the role or sales position will replace your customized checkboxes with the defaults for the new selection.',
+          confirmLabel: 'Replace permissions',
+        })
+        if (!ticket) return
+      }
+      setNewRole(nextRole)
+      setNewPosition(nextPosition)
+      setNewPermissions(defaults)
+      if (nextRole === 'Admin' || nextPosition === 'NSM') {
+        setNewRegionId(null)
+        setNewSubregionId(null)
+      }
+    } finally {
+      ticket?.finish()
+      setUpdatingNewDefaults(false)
+    }
+  }
 
-    if (newRole === 'Admin') {
-      setNewRegionId(null)
-      setNewSubregionId(null)
+  function handleNewRoleChange(nextRole: string) {
+    void changeNewUserDefaults(nextRole, positionForRole(nextRole, newPosition))
+  }
+
+  function handleNewPositionChange(nextPosition: string) {
+    void changeNewUserDefaults(newRole, nextPosition)
+  }
+
+  async function applyExistingRoleDefaults() {
+    if (!selectedUser || applyingRoleDefaults || loadingPermissions || permissionLoadError || !authorization.can('Users', 'edit')) return
+    const defaults = getDefaultPermissions(role, position)
+    const changes = permissionDefaultPreview(permissions, defaults)
+
+    if (!changes.length) {
+      notify('Permission checkboxes already match the role defaults.', { success: true })
+      return
+    }
+    let ticket: Awaited<ReturnType<typeof confirmAction>> = null
+    setApplyingRoleDefaults(true)
+    try {
+      ticket = await confirmAction({
+        title: 'Apply role defaults?',
+        message: 'Replace this user’s permission checkboxes with the selected role and sales position defaults? Review the changes below. They take effect only after you save the user.',
+        confirmLabel: 'Apply defaults',
+        tone: 'caution',
+        details: [{ label: 'User', value: fullName }, { label: 'Role / Position', value: [role, position].filter(Boolean).join(' / ') }, ...changes],
+      })
+      if (ticket) setPermissions(defaults)
+    } finally {
+      ticket?.finish()
+      setApplyingRoleDefaults(false)
     }
   }
 
@@ -580,9 +647,17 @@ export default function UsersPage() {
       notify('Please select a valid role.')
       return
     }
+    if (!validRolePosition(newRole, newPosition)) {
+      notify('Please select a sales position allowed for this role.')
+      return
+    }
 
     if (newRole !== 'Admin' && newPosition !== 'NSM' && newRegionId === null) {
       notify('Please select a region.')
+      return
+    }
+    if (requiresUserSubregion(newRole, newPosition) && newSubregionId === null) {
+      notify('Please select a subregion for this KAM or RSM account.')
       return
     }
 
@@ -674,9 +749,17 @@ export default function UsersPage() {
       notify('Please select a valid role.')
       return
     }
+    if (!validRolePosition(role, position)) {
+      notify('Please select a sales position allowed for this role.')
+      return
+    }
 
     if (role !== 'Admin' && position !== 'NSM' && regionId === null) {
       notify('Please select a region.')
+      return
+    }
+    if (requiresUserSubregion(role, position) && subregionId === null) {
+      notify('Please select a subregion for this KAM or RSM account.')
       return
     }
 
@@ -889,7 +972,7 @@ export default function UsersPage() {
     }
   }
 
-  const formBusy = loading || importBusy || resettingPassword || (selectedUser ? saving || deleting : creatingUser)
+  const formBusy = loading || importBusy || resettingPassword || updatingNewDefaults || applyingRoleDefaults || (selectedUser ? saving || deleting : creatingUser)
   const permissionsBusy = formBusy || Boolean(selectedUser && (loadingPermissions || permissionLoadError))
   const formPermissions = selectedUser ? permissions : newPermissions
   const allFormPermissionsEnabled = formPermissions.every((permission) =>
@@ -897,6 +980,8 @@ export default function UsersPage() {
       isPermissionDisabled(permission.module, field) || permission[field]
     )
   )
+  const someFormPermissionsEnabled = formPermissions.some((permission) =>
+    permissionFields.some(({ field }) => !isPermissionDisabled(permission.module, field) && permission[field]))
   const updateFormPermission = selectedUser ? updatePermission : updateNewPermission
   const toggleFormModulePermissions = selectedUser ? toggleModulePermissions : toggleNewModulePermissions
   const toggleFormPermissions = selectedUser ? toggleAllPermissions : toggleAllNewPermissions
@@ -913,6 +998,7 @@ export default function UsersPage() {
   const accountSearchTerms = accountSearch.trim().toLocaleLowerCase('en-PH').split(/\s+/).filter(Boolean)
   const visibleUsers = sortedUsers.filter((user) => accountSearchTerms.every((term) =>
     (user.full_name ?? '').toLocaleLowerCase('en-PH').includes(term)
+      || (user.email ?? '').toLocaleLowerCase('en-PH').includes(term)
   ))
 
   if (!isAdmin && !loading) return null
@@ -1015,16 +1101,12 @@ export default function UsersPage() {
               </label>
               <SelectionField id="newPosition"
                   value={selectedUser ? position : newPosition}
-                  onValueChange={(selectionValue) => (selectedUser ? setPosition : setNewPosition)(selectionValue)}
-                  disabled={formBusy || formRole === 'Admin'}
+                  onValueChange={(selectionValue) => (selectedUser ? handlePositionChange : handleNewPositionChange)(selectionValue)}
+                  disabled={formBusy || positionsForRole(formRole).length <= 1}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                   aria-label="Sales Position">
-                <option value="">Select a sales position</option>
-                <option value="KAM">KAM</option>
-                <option value="RSM">RSM</option>
-                <option value="ASM">ASM</option>
-                <option value="NSM">NSM</option>
-                <option value="Supervisor">Supervisor</option>
+                <option value="">{formRole === 'Admin' ? 'Not applicable' : 'Select a sales position'}</option>
+                {positionsForRole(formRole).map((option) => <option key={option} value={option}>{option}</option>)}
               </SelectionField>
             </div>
 
@@ -1036,7 +1118,7 @@ export default function UsersPage() {
                 )}
               </label>
 
-              {formRole === 'Admin' ? (
+              {formRole === 'Admin' || (selectedUser ? position : newPosition) === 'NSM' ? (
                 <SelectionField id="newRegion"
                   value=""
                   disabled
@@ -1068,9 +1150,11 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <label htmlFor="newSubregion" className="text-sm font-medium">
-                Subregion (Optional)
+                {requiresUserSubregion(formRole, selectedUser ? position : newPosition)
+                  ? <>Subregion <span className="text-destructive">*</span></>
+                  : 'Subregion (Optional)'}
               </label>
-              {formRole === 'Admin' ? (
+              {formRole === 'Admin' || (selectedUser ? position : newPosition) === 'NSM' ? (
                 <SelectionField id="newSubregion"
                   value=""
                   disabled
@@ -1081,6 +1165,7 @@ export default function UsersPage() {
               ) : (
                 <SelectionField id="newSubregion"
                   value={(selectedUser ? subregionId : newSubregionId) ?? ''}
+                  required={requiresUserSubregion(formRole, selectedUser ? position : newPosition)}
                   onValueChange={(selectionValue) => {
                     const value = selectionValue
                     setFormSubregionId(value ? Number(value) : null)
@@ -1105,7 +1190,7 @@ export default function UsersPage() {
           </div>
 
           {/* Create User Permissions */}
-          <div className="flex flex-col gap-3 border-t px-4 pt-4 pb-2 sm:px-6">
+          <div data-user-permissions className="flex flex-col gap-3 border-t px-4 pt-4 pb-2 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 data-section-title="" className="font-semibold"><HeadingShieldCheck className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />User Permissions</h3>
@@ -1113,30 +1198,17 @@ export default function UsersPage() {
               </div>
 
               <div data-action-toolbar="" data-permissions-toolbar="" className="flex flex-wrap gap-2">
-                {showUserPermissions && (
-                  <button
-                    type="button"
-                    data-action-tone={allFormPermissionsEnabled ? 'caution' : 'positive'}
-                    onClick={() => toggleFormPermissions(!allFormPermissionsEnabled)}
-                    disabled={permissionsBusy}
-                    className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                  ><ActionListChecksIcon className="size-4 shrink-0" aria-hidden="true" />
-                    <span className="min-w-0">{allFormPermissionsEnabled ? 'Disable All Permissions' : 'Enable All Permissions'}</span>
-                  </button>
-                )}
-                <button data-slot="show-hide-button" data-action-tone="neutral"
-                  type="button"
-                  aria-expanded={showUserPermissions}
-                  aria-controls="user-editor-permissions"
-                  onClick={() => setShowUserPermissions((visible) => !visible)}
-                  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
-                >
-                  {showUserPermissions ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}{showUserPermissions ? 'Hide' : 'Show'}
-                </button>
+                {selectedUser && authorization.can('Users', 'edit') && <button
+                  type="button" data-action-tone="neutral" onClick={() => void applyExistingRoleDefaults()}
+                  disabled={permissionsBusy} className="rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-50">
+                  <ActionRefreshCwIcon className="size-4 shrink-0" aria-hidden="true" />
+                  Apply role defaults
+                </button>}
+
               </div>
             </div>
 
-            <div id="user-editor-permissions" hidden={!showUserPermissions} className="space-y-4">
+            <div id="user-editor-permissions" className="space-y-4">
               {permissionLoadError ? (
                 <div className="rounded-lg border border-destructive/40 p-4 text-sm">
                   <p className="font-medium">
@@ -1172,7 +1244,16 @@ export default function UsersPage() {
                           </th>
                         ))}
                         <th className="px-4 py-3 text-center font-medium">
-                          All
+                          <label className="inline-flex cursor-pointer items-center justify-center gap-2">
+                            <input type="checkbox" aria-label="All available permissions across all modules"
+                              checked={allFormPermissionsEnabled}
+                              aria-checked={someFormPermissionsEnabled && !allFormPermissionsEnabled ? 'mixed' : allFormPermissionsEnabled}
+                              ref={(input) => { if (input) input.indeterminate = someFormPermissionsEnabled && !allFormPermissionsEnabled }}
+                              disabled={permissionsBusy}
+                              onChange={(event) => toggleFormPermissions(event.target.checked)}
+                              className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50" />
+                            All
+                          </label>
                         </th>
                       </tr>
                     </thead>
@@ -1314,10 +1395,10 @@ export default function UsersPage() {
 
           <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
             <label className="relative w-full sm:w-64">
-              <span className="sr-only">Search user accounts by full name</span>
+              <span className="sr-only">Search user accounts by name or email</span>
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input type="search" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)}
-                placeholder="Search users…" autoComplete="off"
+                placeholder="Search name or email…" autoComplete="off"
                 className="h-10 w-full rounded-md border bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             </label>
             {isAdmin && authorization.can('Users', 'add') && <button data-action-tone="primary" data-action-fill=""

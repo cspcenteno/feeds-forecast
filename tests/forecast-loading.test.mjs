@@ -2,8 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
+import { sortRegions } from '../lib/region-order.ts'
 
-const source = await readFile(new URL('../app/(authenticated)/forecast-input/page.tsx', import.meta.url), 'utf8')
+const source = await readFile(new URL('../app/(authenticated)/forecasts/page.tsx', import.meta.url), 'utf8')
 const tree = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 function loadFunction(name, dependencies, sourceTree = tree) {
   let text
@@ -29,7 +30,9 @@ test('saved forecast rows render without waiting for Actual references', async (
   let loaded, busy, referencesStarted = false
   const query = { select: () => query, eq: () => query, order: () => query, range: async () => ({ data: rows, error: null }) }
   const load = loadFunction('loadForecasts', {
-    supabase: { from: () => query }, PAGE_SIZE: 1000, setSavedError: noop,
+    supabase: { rpc: (name) => name === 'get_saved_forecast_owners'
+      ? { order: () => ({ range: async () => ({ data: [], error: null }) }) } : query },
+    PAGE_SIZE: 1000, setSavedError: noop, setForecastLoadError: noop, setSavedOwnerNames: noop,
     setSavedTableLoading: (value) => { busy = value }, setForecasts: (value) => { loaded = value },
     window: { dispatchEvent: noop }, Event,
     loadSavedActualReferences: () => { referencesStarted = true; return pending },
@@ -50,7 +53,7 @@ test('basic lookups start together and do not wait for Budget references', async
   } }
   let budgetStarted = false
   const load = loadFunction('loadInitialData', {
-    supabase, loadBudgetReferences: () => { budgetStarted = true; return pending },
+    supabase, sortRegions, loadBudgetReferences: () => { budgetStarted = true; return pending },
     fetch: async () => ({ ok: true, json: async () => ({ customers: [], restricted: true }) }),
     setError: noop, setRegions: noop, setSubregions: noop, setCategories: noop,
     setCustomers: noop, setCustomerAssignmentRestricted: noop, setProducts: noop,
@@ -110,13 +113,16 @@ test('Approvals and Weekly Sales rows do not wait for monthly reference RPCs', a
     }
     const setters = Object.fromEntries([...new Set(salesSource.match(/\bset[A-Z]\w+/g))].map((name) => [name,noop]))
     const load = loadFunction('fetchSalesData', {
-      ...setters, weekly, referenceRequest: { current: 0 },
+      ...setters, weekly, sortRegions, referenceRequest: { current: 0 },
       setSales: (value) => { records = value }, setReferencesLoading: (value) => { referenceLoading = value },
       window: { dispatchEvent: noop }, Event, AbortSignal,
+      fetch: async () => ({ ok: true, json: async () => ({ users: [] }) }),
       supabase: {
         auth: { getUser: async () => ({ data: { user: { id: 'manager' } } }) },
-        from: (table) => query(table === 'sales_forecasts' ? [record] : []),
-        rpc: (name) => name === 'get_forecast_review_queue' ? query([record]) : query([], name !== 'get_weekly_sales_reviewer_names'),
+        from: (table) => query(table === 'forecasts' ? [record] : []),
+        rpc: (name) => ['get_forecast_review_queue', 'get_weekly_sales_reporting'].includes(name)
+          ? query([record]) : query([], ['get_forecast_review_reference', 'get_forecast_review_customer_reference',
+            'get_weekly_sales_monthly_actuals', 'get_weekly_sales_monthly_budgets', 'get_weekly_sales_customer_reference'].includes(name)),
       },
     }, salesTree)
     await promptly(load())

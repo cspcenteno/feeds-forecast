@@ -6,7 +6,7 @@ import { Check, ChevronsUpDown } from 'lucide-react'
 
 export type SearchableOption = { value: string; label: string; disabled?: boolean }
 
-export function SearchableSelect({ label, value, options, onValueChange, disabled = false, placeholder, id: providedId, name, required, className = '', inputHeightClassName = 'h-10', freeText = false, onBlur, autoComplete = 'off', 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }: {
+export function SearchableSelect({ label, value, options, onValueChange, disabled = false, placeholder, id: providedId, name, required, className = '', inputHeightClassName = 'h-10', multiline = false, freeText = false, onBlur, autoComplete = 'off', 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }: {
   label?: string
   value: string
   options: SearchableOption[]
@@ -18,6 +18,7 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
   required?: boolean
   className?: string
   inputHeightClassName?: string
+  multiline?: boolean
   freeText?: boolean
   onBlur?: FocusEventHandler<HTMLInputElement>
   autoComplete?: string
@@ -48,9 +49,15 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
         } : undefined}
         isItemEqualToValue={(a, b) => a.value === b.value}
         onValueChange={(option) => { if (option) onValueChange(option.value); else if (!freeText) onValueChange('') }}>
-        <Combobox.InputGroup className="relative">
+        <Combobox.InputGroup data-multiline-selection={multiline && selected ? '' : undefined} className="group/selection relative">
           <Combobox.Input id={id} placeholder={hint} onBlur={onBlur} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-            className={'block w-full min-w-0 text-ellipsis rounded-md border bg-background pr-10 pl-3 text-base font-normal outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 disabled:opacity-60 sm:text-sm ' + inputHeightClassName} />
+            style={multiline ? { fontSize: '0.75rem', lineHeight: '1rem' } : undefined}
+            className={'block w-full min-w-0 text-ellipsis rounded-md border bg-background pr-10 pl-3 text-base font-normal outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 disabled:opacity-60 sm:text-sm ' + inputHeightClassName + (multiline && selected ? ' text-transparent sm:text-transparent group-focus-within/selection:text-foreground' : '')} />
+          {multiline && selected && (
+            <div data-selected-label aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-10 left-3 flex items-center" title={selected.label}>
+              <span className="line-clamp-2 wrap-anywhere" style={{ fontSize: '0.75rem', lineHeight: '1rem' }}>{selected.label}</span>
+            </div>
+          )}
           <Combobox.Trigger type="button" aria-label={'Show ' + (label ?? ariaLabel ?? 'selection').toLowerCase() + ' options'}
             className="absolute top-0 right-0 flex h-full w-10 items-center justify-center rounded-r-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
             <ChevronsUpDown className="size-4" aria-hidden="true" />
@@ -65,7 +72,7 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
               <Combobox.List>
                 {(option: SearchableOption) => <Combobox.Item key={option.value} value={option} disabled={option.disabled}
                   className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-highlighted:bg-sidebar-accent data-highlighted:text-sidebar-accent-foreground data-disabled:cursor-default data-disabled:opacity-50">
-                  <span className="min-w-0 flex-1 whitespace-normal break-words">{option.label}</span>
+                  <span className={"min-w-0 flex-1 whitespace-normal break-words " + (multiline ? "text-xs leading-4" : "")}>{option.label}</span>
                   <Combobox.ItemIndicator className="shrink-0"><Check className="size-4" aria-hidden="true" /></Combobox.ItemIndicator>
                 </Combobox.Item>}
               </Combobox.List>

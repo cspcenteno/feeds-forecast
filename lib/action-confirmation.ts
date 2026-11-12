@@ -8,6 +8,7 @@ export type ConfirmationOptions = {
   details?: ConfirmationDetail[]
   layout?: 'review'
   items?: { label: string; volume: string }[]
+  forecastSummary?: import('../components/forecast-confirmation-summary').ForecastConfirmationSummaryProps
 }
 
 export type ConfirmationTicket = { finish: () => void }

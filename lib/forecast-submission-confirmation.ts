@@ -1,7 +1,7 @@
 import type { ConfirmationOptions } from './action-confirmation'
 
 export function forecastSubmissionConfirmation(
-  records: { customer_id: number | null; product_id: number | null; volume: number | null }[],
+  records: { customer_id: number | null; product_id: number | null; volume: number | null; year?: number; week?: number }[],
   scope: string,
   customerName: (id: number | null) => string,
   productName: (id: number | null) => string,
@@ -17,6 +17,7 @@ export function forecastSubmissionConfirmation(
   return {
     layout: 'review', title: 'Submit Sales Forecasts', confirmLabel: `Submit (${records.length})`, tone: 'transfer',
     message: `${records.length} forecast record${records.length === 1 ? '' : 's'} ready for RSM review.`,
+    forecastSummary: { records, scope, level: 'submit', customerName, productName },
     details: [
       { label: 'Action Scope', value: scope },
       { label: 'Customers', value: String(new Set(records.map((record) => record.customer_id)).size) },

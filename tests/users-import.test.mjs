@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseUserImportSheets, userImportColumns, validateUserImport } from '../lib/users-import.ts'
+import { parseUserImportSheets, userImportColumns, validateUserImport, positionsForRole, positionForRole, validRolePosition } from '../lib/users-import.ts'
 import * as XLSX from 'xlsx'
 
 const refs = {
@@ -10,6 +10,37 @@ const refs = {
 }
 const row = { id: '1', full_name: 'Person A', email: 'person@example.com', role: 'User', position: 'KAM', region_name: 'North', subregion_name: 'Area A' }
 const validate = (source = row, references = refs) => validateUserImport([source], references)[0]
+
+test('role position choices auto-select single options and require an allowed Manager position', () => {
+  assert.deepEqual(positionsForRole('Manager'),['RSM','ASM','NSM'])
+  assert.equal(positionForRole('User','ASM'),'KAM')
+  assert.equal(positionForRole('Superuser','KAM'),'Supervisor')
+  assert.equal(positionForRole('Admin','RSM'),'')
+  assert.equal(positionForRole('Manager','KAM'),'')
+  assert.equal(positionForRole('Manager','asm'),'ASM')
+  assert.equal(validRolePosition('User','RSM'),false)
+  assert.equal(validRolePosition('Superuser','KAM'),false)
+  assert.equal(validRolePosition('Manager','Supervisor'),false)
+  assert.equal(validRolePosition('Manager',''),false)
+})
+
+test('imports auto-pick singleton positions when blank and reject incompatible supplied positions', () => {
+  assert.equal(validate({...row,position:''}).values.position,'KAM')
+  assert.equal(validate({...row,role:'Superuser',position:''}).values.position,'Supervisor')
+  assert.equal(validate({...row,role:'Manager',position:''}).status,'Invalid')
+  assert.equal(validate({...row,position:'ASM'}).status,'Invalid')
+  assert.equal(validate({...row,role:'Superuser',position:'RSM'}).status,'Invalid')
+})
+
+test('KAM and RSM accounts require an active subregion within their region', () => {
+  for (const [role,position] of [['User','KAM'],['Manager','rsm']]) {
+    assert.equal(validate({...row,role,position}).status,'Ready')
+    const missing = validate({...row,role,position,subregion_name:''})
+    assert.equal(missing.status,'Invalid')
+    assert.ok(missing.issues.some(issue => issue.includes('Subregion is required')))
+    assert.equal(validate({...row,role,position,subregion_name:'Area B'}).status,'Invalid')
+  }
+})
 
 test('NSM permits no region while validating supplied geographic assignments', () => {
   const nsm = { ...row, role: 'Manager', position: 'nsm', region_name: '', subregion_name: '' }
@@ -52,8 +83,8 @@ test('rejects unknown or ambiguous regions and cross-region subregions', () => {
   assert.equal(validate(row, { ...refs, regions: [...refs.regions, { id: 5, name: 'North' }] }).status, 'Invalid')
 })
 
-test('supports an optional subregion and globally assigned Admin accounts', () => {
-  assert.equal(validate({ ...row, subregion_name: '' }).status, 'Ready')
+test('supports an optional subregion for ASM and globally assigned Admin accounts', () => {
+  assert.equal(validate({ ...row, role: 'Manager', position: 'ASM', subregion_name: '' }).status, 'Ready')
   const admin = validate({ ...row, role: 'admin', region_name: '', subregion_name: '' })
   assert.equal(admin.status, 'Ready')
   assert.equal(admin.values.regionId, null)

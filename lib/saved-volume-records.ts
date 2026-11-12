@@ -59,7 +59,7 @@ export async function persistSavedVolumeUpdate(
 
 export async function persistCustomerVolumeUpdates(
   client: Pick<ReturnType<typeof createClient>, 'rpc'>,
-  module: 'Budget' | 'Actual',
+  module: 'Budgets' | 'Actuals',
   rows: { original: Snapshot; volume: string; year: string; month: string; actualDate: string;
     kam?: string | null; customerId?: number | null; regionId?: number | null;
     productId?: number | null; categoryId?: number | null }[],
@@ -70,23 +70,23 @@ export async function persistCustomerVolumeUpdates(
     || (row.regionId !== undefined && row.regionId !== row.original.region_id)
     || (row.productId !== undefined && row.productId !== row.original.product_id)
     || (row.categoryId !== undefined && row.categoryId !== row.original.category_id)
-    || (module === 'Actual' ? row.actualDate !== row.original.actual_date
+    || (module === 'Actuals' ? row.actualDate !== row.original.actual_date
       : Number(row.year) !== row.original.year || (row.month === '' ? null : Number(row.month)) !== row.original.month))
   if (!changes.length) return 0
   const records = changes.map((row) => {
-    validateSavedVolumePeriod(row.volume, module === 'Actual', row.year, row.month, row.actualDate)
+    validateSavedVolumePeriod(row.volume, module === 'Actuals', row.year, row.month, row.actualDate)
     const { id, volume, region_id, subregion_id, customer_id, product_id, category_id, asm, rsm, kam } = row.original
     return {
       id,
       original: { volume, region_id, subregion_id, customer_id, product_id, category_id, asm, rsm, kam,
-        ...(module === 'Actual' ? { actual_date: row.original.actual_date } : { year: row.original.year, month: row.original.month }) },
+        ...(module === 'Actuals' ? { actual_date: row.original.actual_date } : { year: row.original.year, month: row.original.month }) },
       volume: Number(row.volume),
       ...(row.kam !== undefined ? { kam: row.kam } : {}),
       ...(row.customerId !== undefined ? { customer_id: row.customerId } : {}),
       ...(row.regionId !== undefined ? { region_id: row.regionId } : {}),
       ...(row.productId !== undefined ? { product_id: row.productId } : {}),
       ...(row.categoryId !== undefined ? { category_id: row.categoryId } : {}),
-      ...(module === 'Actual' ? { actual_date: row.actualDate } : { year: Number(row.year), month: row.month === '' ? null : Number(row.month) }),
+      ...(module === 'Actuals' ? { actual_date: row.actualDate } : { year: Number(row.year), month: row.month === '' ? null : Number(row.month) }),
     }
   })
   const { data, error } = await client.rpc('update_customer_volume_records', { p_module: module, p_records: records })

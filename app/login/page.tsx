@@ -10,6 +10,7 @@ import Image from 'next/image'
 import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, Moon, Sun } from 'lucide-react'
 
 import { createClient } from '@/lib/client'
+import { AuthLogo } from '@/components/auth-logo'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -124,8 +125,13 @@ export default function LoginPage() {
         </button>
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6">
 
-          <h2 className="text-lg leading-tight font-semibold tracking-tight">Sign in</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Access your account.</p>
+          <div className="flex items-center gap-3">
+            <AuthLogo />
+            <div className="min-w-0">
+              <h2 className="text-lg leading-tight font-semibold tracking-tight">Sign in</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">Access your account.</p>
+            </div>
+          </div>
 
           <form data-login-form data-auth-form onSubmit={handleLogin} aria-busy={loading} className="mt-4 space-y-4">
             <div className="space-y-1.5">

@@ -54,7 +54,7 @@ test('selected-customer scope and database errors remain intact', async () => {
 })
 
 test('reference Actuals use the consuming page permission and retain customer filters', async () => {
-  for (const module of ['Forecast Input', 'Approvals']) {
+  for (const module of ['Forecasts', 'Approvals']) {
     const { client, calls } = clientFor([{ data: [{ actual_date: '2026-11-01', volume: 25 }], error: null }])
     const referenceClient = {
       from() { throw new Error('Reference reads must not require Actual module access') },

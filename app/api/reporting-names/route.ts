@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       // Resolve identities only from records visible to this caller. Admin names
       // do not depend on the unrelated Users-module SELECT policy.
       const query = module === 'Weekly Sales' ? client.rpc('get_weekly_sales_reporting')
-        : profile.role === 'Admin' ? client.from('sales_forecasts') : client.rpc('get_forecast_review_queue')
+        : profile.role === 'Admin' ? client.from('forecasts') : client.rpc('get_forecast_review_queue')
       const { data, error } = await query.select('id,user_id,submitted_by,endorsed_by').in('id',ids.slice(offset,offset+250))
       if (error || !Array.isArray(data)) throw new Error('Unable to verify visible forecast records.')
       for (const row of data) for (const id of [row.submitted_by ?? row.user_id,row.endorsed_by]) if (id) people.add(id)

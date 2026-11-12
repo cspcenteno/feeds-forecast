@@ -16,9 +16,9 @@ async function authorize(action: 'view' | 'add') {
   const { data: permissions, error: permissionError } = await supabaseAdmin.from('user_permissions')
     .select('module, can_view, can_add').eq('user_id', user.id)
   if (permissionError) throw new Error(permissionError.message)
-  const permission = permissions?.find((row) => row.module === 'Forecast Input') ?? permissions?.find((row) => row.module === 'Sales Input')
-  if (permission && (!permission.can_view || (action === 'add' && !permission.can_add))) {
-    return NextResponse.json({ error: 'Forecast Input permission denied.' }, { status: 403 })
+  const permission = permissions?.find((row) => row.module === 'Forecasts')
+  if (permission?.can_view !== true || (action === 'add' && permission.can_add !== true)) {
+    return NextResponse.json({ error: 'Forecast permission denied.' }, { status: 403 })
   }
   return null
 }
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const [users, regions, subregions, customers, products, forecasts, locks] = await Promise.all([
       loadUsers(), load('regions', 'id, name, code', true), load('subregions', 'id, name, region_id', true),
       load('customers', 'id, customer, region_id', true), load('products', 'id, code, name, category_id, weight', true),
-      load('sales_forecasts', 'id, user_id, year, week, region_id, subregion_id, customer_id, product_id'),
+      load('forecasts', 'id, user_id, year, week, region_id, subregion_id, customer_id, product_id'),
       loadForecastWeekStates(authenticatedClient, forecastImportPeriods(stagedRows)),
     ])
     const refs = { users, regions, subregions, customers, products, forecasts, locks } as unknown as ForecastImportReferences
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     if (invalid) return NextResponse.json({ error: `Staging row ${invalid.source.id}: ${invalid.issues.join(' ')}` }, { status: 409 })
     const ready = preview.filter((row) => row.status === 'Ready')
     if (ready.length) {
-      const { error: saveError } = await supabaseAdmin.from('sales_forecasts')
+      const { error: saveError } = await supabaseAdmin.from('forecasts')
         .insert(ready.map((row) => ({ ...row.payload, status: 'Draft' })))
       if (saveError) throw new Error(saveError.message)
       const ids = ready.map((row) => row.source.id)

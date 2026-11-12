@@ -1,11 +1,11 @@
 
 export const modules = [
   'Dashboard',
-  'Forecast Input',
+  'Forecasts',
   'Weekly Sales',
   'Approvals',
-  'Budget',
-  'Actual',
+  'Budgets',
+  'Actuals',
   'Categories',
   'Products',
   'Customers',
@@ -59,8 +59,9 @@ export function savedPermissions(rows: readonly {
   return permissions
 }
 
-export function defaultPermissions(role: string): PermissionMap {
+export function defaultPermissions(role: string, position = ''): PermissionMap {
   const p = emptyPermissions()
+  const salesPosition = position.trim().toUpperCase()
 
   const set = (module: ModuleName, actions: Action[]) => {
     actions.forEach((action) => {
@@ -70,7 +71,7 @@ export function defaultPermissions(role: string): PermissionMap {
 
   if (role === 'User') {
     set('Dashboard', ['view'])
-    set('Forecast Input', ['view', 'add', 'edit'])
+    set('Forecasts', ['view', 'add', 'edit', 'delete'])
     set('Weekly Sales', ['view'])
   } else if (role === 'Superuser') {
     ;(
@@ -82,21 +83,25 @@ export function defaultPermissions(role: string): PermissionMap {
     ).forEach((m) => set(m, ['view']))
 
     set('Customers', ['view', 'add', 'edit'])
-    set('Budget', ['view', 'add', 'edit'])
-    set('Actual', ['view', 'add', 'edit'])
+    set('Budgets', ['view', 'add', 'edit'])
+    set('Actuals', ['view', 'add', 'edit'])
     set('Week Locks', ['view', 'add', 'edit'])
+  } else if (role === 'Manager' && salesPosition === 'NSM') {
+    set('Dashboard', ['view'])
+    set('Weekly Sales', ['view'])
   } else if (role === 'Manager') {
     ;(
       [
         'Dashboard',
         'Weekly Sales',
         'Approvals',
-        'Budget',
-        'Actual',
+        'Budgets',
+        'Actuals',
       ] as ModuleName[]
     ).forEach((m) => set(m, ['view']))
 
     set('Approvals', ['view', 'edit'])
+    if (salesPosition === 'RSM') set('Forecasts', ['view', 'edit'])
   } else if (role === 'Admin') {
     modules.forEach((m) => set(m, ['view', 'add', 'edit', 'delete']))
   }

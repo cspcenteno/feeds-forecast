@@ -19,7 +19,7 @@ export async function loadActualRecords(
   supabase: ReturnType<typeof createClient>,
   years: number[],
   scope?: { regionId: number; customerId: number } | { regionIds: number[]; customerIds: number[] },
-  referenceModule?: 'Forecast Input' | 'Approvals',
+  referenceModule?: 'Forecasts' | 'Approvals',
 ) {
   const pageSize = 1000
   const records: ActualRecord[] = []

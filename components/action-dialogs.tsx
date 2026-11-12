@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
+import { ForecastConfirmationSummary } from '@/components/forecast-confirmation-summary'
 import { AlertTriangle, CheckCircle2, LoaderCircle, Send, X } from 'lucide-react'
 import { confirmationPresentation, createConfirmationController, type ConfirmationOptions, type ConfirmationTicket, type ConfirmationView } from '@/lib/action-confirmation'
 
@@ -39,7 +40,7 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
   const service = useMemo(() => ({ confirmAction, notify }), [confirmAction, notify])
   const presentation = confirmationPresentation(view?.options.message ?? '')
   const tone = view?.options.tone ?? presentation.tone
-  const hasSummary = Boolean(view?.options.details?.length || view?.options.items?.length)
+  const hasSummary = Boolean(view?.options.forecastSummary || view?.options.details?.length || view?.options.items?.length)
 
   return (
     <Context.Provider value={service}>
@@ -52,13 +53,13 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
         {view && <AlertDialog.Portal>
           <AlertDialog.Backdrop className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm" />
           <AlertDialog.Popup data-app-dialog initialFocus={cancelRef} finalFocus aria-busy={view.busy}
-            className="fixed top-1/2 left-1/2 z-[201] max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border bg-background shadow-xl">
-            <div className="border-b px-4 py-4 sm:px-6">
+            className="flex flex-col fixed top-1/2 left-1/2 z-[201] max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border bg-background shadow-xl">
+            <div className="shrink-0 border-b px-4 py-4 sm:px-6">
               <AlertDialog.Title data-dialog-title className="text-lg font-semibold tracking-tight">{view.options.title ?? presentation.title}</AlertDialog.Title>
               <AlertDialog.Description className="mt-1 text-sm leading-relaxed text-muted-foreground wrap-anywhere">{view.options.message}</AlertDialog.Description>
             </div>
-            {(hasSummary || presentation.irreversible) && <div className="p-4 sm:p-6">
-              {hasSummary && <div className="rounded-lg border bg-muted/30 p-4">
+            {(hasSummary || presentation.irreversible) && <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-6">
+              {view.options.forecastSummary ? <ForecastConfirmationSummary {...view.options.forecastSummary} /> : hasSummary && <div className="rounded-lg border bg-muted/30 p-4">
                 {view.options.details && <dl className="grid grid-cols-2 gap-4">
                   {view.options.details.map((detail) => <div key={detail.label} className="min-w-0">
                     <dt className="text-xs text-muted-foreground">{detail.label}</dt>
@@ -74,7 +75,7 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
               </div>}
               {presentation.irreversible && !/cannot be undone|permanent/i.test(view.options.message) && <p className={hasSummary ? 'mt-3 text-xs text-muted-foreground' : 'text-xs text-muted-foreground'}>This action cannot be undone.</p>}
             </div>}
-            <div className="flex flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
               <AlertDialog.Close ref={cancelRef} disabled={view.busy} data-action-tone="neutral" className="h-10 rounded-md border px-4 text-sm">Cancel</AlertDialog.Close>
               <button type="button" disabled={view.busy} onClick={() => controller.proceed()} data-action-tone={tone} data-action-fill="" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium">
                 {view.busy && <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}

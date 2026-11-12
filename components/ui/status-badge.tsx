@@ -1,4 +1,4 @@
-type StatusBadgeProps = { status: string }
+type StatusBadgeProps = { status: string; compact?: boolean }
 
 const tones: Record<string, string> = {
   active: 'positive', open: 'positive', approved: 'positive', ready: 'positive', created: 'positive',
@@ -15,6 +15,6 @@ const colors: Record<string, string> = {
   neutral: 'bg-muted text-muted-foreground',
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
-  return <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold leading-5 ${colors[tones[status.toLowerCase()] ?? 'neutral']}`}>{status}</span>
+export function StatusBadge({ status, compact = false }: StatusBadgeProps) {
+  return <span className={`inline-flex items-center whitespace-nowrap rounded-full font-semibold ${compact ? 'px-1.5 py-0.5 text-[10px] leading-4' : 'px-2 py-1 text-sm leading-5'} ${colors[tones[status.toLowerCase()] ?? 'neutral']}`}>{status}</span>
 }

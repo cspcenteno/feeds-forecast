@@ -4,14 +4,12 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { LoaderCircle } from 'lucide-react'
-import { createClient } from '@/lib/client'
+import { LoaderCircle, RefreshCw, ShieldLock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 import {
   emptyPermissions,
-  savedPermissions,
   modules,
-  disabledPermissions,
 } from '@/lib/authorization-rules'
 
 import type {
@@ -55,7 +53,7 @@ export function AuthorizationProvider({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = useMemo(() => createClient(), [])
+  const [loadError, setLoadError] = useState('')
   const pathname = usePathname()
   const router = useRouter()
   const [permissionRefresh, setPermissionRefresh] = useState(0)
@@ -87,75 +85,35 @@ export function AuthorizationProvider({
     let live = true
 
     void (async () => {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
-
-      if (authError || !user) {
-        if (live) router.replace('/login')
-        return
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('role, is_active, region_id, subregion_id')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (
-        profileError ||
-        !profile ||
-        !profile.is_active
-      ) {
-        if (live) router.replace('/login')
-        return
-      }
-
-      const role = profile.role ?? 'User'
-
-      const { data: saved, error: permissionError } = await supabase
-        .from('user_permissions')
-        .select('module, can_view, can_add, can_edit, can_delete')
-        .eq('user_id', user.id)
-
-      if (!live) return
-
-      const permissions = savedPermissions(permissionError ? [] : saved ?? [])
-
-      for (const moduleName of modules) {
-        for (const action of disabledPermissions[moduleName] ?? []) {
-          permissions[moduleName][action] = false
+      setLoadError('')
+      try {
+        const response = await fetch('/api/authorization', { cache: 'no-store' })
+        if (!live) return
+        if (response.status === 401 || response.status === 403) {
+          router.replace('/login')
+          return
         }
+        if (!response.ok) throw new Error('Unable to load your access permissions.')
+        const access = await response.json() as Omit<Authz, 'can' | 'loading'>
+        if (!live) return
+        setState({ ...access, loading: false })
+      } catch {
+        if (live) setLoadError('Unable to load your access permissions. Please try again.')
       }
-
-      setState({
-        loading: false,
-        role,
-        regionId:
-          profile.region_id == null
-            ? null
-            : Number(profile.region_id),
-        subregionId:
-          profile.subregion_id == null
-            ? null
-            : Number(profile.subregion_id),
-        permissions,
-      })
     })()
 
     return () => {
       live = false
     }
-  }, [pathname, permissionRefresh, router, supabase])
+  }, [pathname, permissionRefresh, router])
 
   const pathModule: Record<string, ModuleName> = {
     '/dashboard': 'Dashboard',
-    '/forecast-input': 'Forecast Input',
+    '/forecasts': 'Forecasts',
     '/weekly-sales': 'Weekly Sales',
     '/approvals': 'Approvals',
-    '/budget': 'Budget',
-    '/actual': 'Actual',
+    '/budgets': 'Budgets',
+    '/actuals': 'Actuals',
     '/categories': 'Categories',
     '/products': 'Products',
     '/customers': 'Customers',
@@ -180,11 +138,11 @@ export function AuthorizationProvider({
 
       const paths: Record<ModuleName, string> = {
         Dashboard: '/dashboard',
-        'Forecast Input': '/forecast-input',
+        'Forecasts': '/forecasts',
         'Weekly Sales': '/weekly-sales',
         Approvals: '/approvals',
-        Budget: '/budget',
-        Actual: '/actual',
+        Budgets: '/budgets',
+        Actuals: '/actuals',
         Categories: '/categories',
         Products: '/products',
         Customers: '/customers',
@@ -214,6 +172,17 @@ export function AuthorizationProvider({
     [state],
   )
 
+  if (loadError) {
+    return (
+      <div role="alert" className="p-6 text-sm text-muted-foreground">
+        <p>{loadError}</p>
+        <button type="button" className="mt-3 underline" onClick={() => setPermissionRefresh((current) => current + 1)}>
+          Try again
+        </button>
+      </div>
+    )
+  }
+
   if (state.loading) {
     return (
       <div role="status" aria-label="Loading your workspace" className="flex min-h-svh w-full flex-col items-center justify-center gap-5 bg-background p-6">
@@ -229,8 +198,24 @@ export function AuthorizationProvider({
     !state.permissions[currentModule].view
   ) {
     return (
-      <div className="p-6 text-sm text-muted-foreground">
-        You do not have view permission for this module.
+      <div className="flex min-h-svh w-full min-w-0 items-center justify-center bg-background p-4 sm:p-6">
+        <section aria-labelledby="access-restricted-title" className="w-full max-w-md rounded-2xl border bg-card p-6 text-center text-card-foreground shadow-sm sm:p-8">
+          <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-400">
+            <ShieldLock aria-hidden="true" className="size-6" />
+          </div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">{currentModule}</p>
+          <h1 id="access-restricted-title" className="text-xl font-semibold tracking-tight">Access restricted</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Your account doesn’t have access to this module. Contact your administrator to review your permissions.
+          </p>
+          <div className="mt-6 border-t pt-5">
+            <p className="mb-3 text-xs leading-5 text-muted-foreground">If your permissions were recently updated, refresh your access.</p>
+            <Button variant="outline" onClick={() => setPermissionRefresh((current) => current + 1)}>
+              <RefreshCw aria-hidden="true" className="size-4" />
+              Refresh access
+            </Button>
+          </div>
+        </section>
       </div>
     )
   }

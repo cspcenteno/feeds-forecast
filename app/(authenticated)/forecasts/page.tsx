@@ -1,11 +1,12 @@
 'use client'
 
 import { weeklyBudget } from '@/lib/weekly-budget'
+import { actionGroupCount } from '@/lib/action-group-count'
 import { referencePeriod } from '@/lib/reference-period'
 import { readForecastWorkspace, writeForecastWorkspace } from '@/lib/forecast-workspace'
 import { saveForecastDrafts } from '@/lib/save-forecast-drafts'
 import { findExistingForecast } from '@/lib/forecast-duplicates'
-import { savedStatusLabels, savedForecastMatchesStatus, canEditSavedForecastStatus } from '@/lib/saved-forecast-status'
+import { savedStatusLabels, savedForecastMatchesStatus, canEditSavedForecastStatus, canDeleteSavedForecastStatus } from '@/lib/saved-forecast-status'
 import { uniqueReturnNotices } from '@/lib/return-notices'
 
 import { sortRegions } from '@/lib/region-order'
@@ -26,6 +27,11 @@ import { SelectionField } from '@/components/ui/selection-field'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { TableActionButton } from '@/components/ui/table-action-button'
 import { Table } from '@/components/ui/table'
+import { ForecastEntryTable } from '@/components/forecast-entry-table'
+import { ForecastReturnNotice } from '@/components/forecast-return-notice'
+import { canReviseRsmForecast, rsmRevisionPayload } from '@/lib/rsm-returned-forecasts'
+import { savedCustomerGroupKey, savedKamGroupKey } from '@/lib/saved-forecast-kam-groups'
+import { RecordDialog } from '@/components/ui/record-dialog'
 import { useForecastAttention } from '@/lib/use-forecast-attention'
 import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
 import { LoadingSpinner, TableLoadingRow } from '@/components/ui/loading-spinner'
@@ -152,6 +158,7 @@ function isEditableForecast(item: SalesForecast) {
 }
 
 export default function SalesInputPage() {
+  const [forecastDialogOpen, setForecastDialogOpen] = useState(false)
   const attention = useForecastAttention()
   const { confirmAction } = useActionDialogs()
 
@@ -175,6 +182,8 @@ export default function SalesInputPage() {
   const [budgets, setBudgets] = useState<BudgetRecord[]>([])
   const [budgetLoadError, setBudgetLoadError] = usePopupError()
   const [forecasts, setForecasts] = useState<SalesForecast[]>([])
+  const [savedOwnerNames, setSavedOwnerNames] = useState<Record<string, string>>({})
+  const [collapsedKams, setCollapsedKams] = useState<Set<string>>(new Set())
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(
     new Set()
   )
@@ -185,6 +194,8 @@ export default function SalesInputPage() {
   const [role, setRole] = useState('')
   const [salesPosition, setSalesPosition] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const isRsmSavedViewer = role === 'Manager' && salesPosition.trim().toUpperCase() === 'RSM'
+  const groupSavedByKam = isAdmin || isRsmSavedViewer
 
   const [year, setYear] = useState(currentYear)
   const [week, setWeek] = useState(1)
@@ -235,7 +246,12 @@ export default function SalesInputPage() {
       // Re-check edited records against current ownership and status. Browser
       // restoration never replaces the existing server-side save checks.
       const editsStillValid = stored?.rows.every((row) => row.id === null
-        || forecasts.some((item) => item.id === row.id && item.user_id === userId && isEditableForecast(item)))
+        || forecasts.some((item) => item.id === row.id && (
+          (item.user_id === userId && isEditableForecast(item)) ||
+          (isAdmin && isEditableForecast(item)) ||
+          (canReviseRsmForecast(item, {
+            role, position: salesPosition, regionId: assignedRegionId, subregionId: assignedSubregionId,
+          })))))
       if (stored && editsStillValid) {
         setYear(stored.year)
         setWeek(stored.week)
@@ -251,7 +267,7 @@ export default function SalesInputPage() {
       setError('Your browser cannot retain unsaved work. Save a draft before leaving this page.')
     }
     setWorkspaceOwner(userId)
-  }, [initializing, forecastLoadError, userId, workspaceOwner, forecasts, setError])
+  }, [initializing, forecastLoadError, userId, workspaceOwner, forecasts, setError, role, salesPosition, assignedRegionId, assignedSubregionId, isAdmin])
 
   useEffect(() => {
     if (initializing || !userId || workspaceOwner !== userId || !selectedWeek || workspaceStorageFailed.current) return
@@ -275,7 +291,7 @@ export default function SalesInputPage() {
 
         if (!access) return
 
-        await Promise.all([loadInitialData(), loadForecasts(access.userId)])
+        await Promise.all([loadInitialData(), loadForecasts()])
 
     } catch (error) { setError(error instanceof Error ? error.message : 'Unable to load forecasts.') }
     finally { setSavedTableLoading(false); setInitializing(false) }
@@ -378,7 +394,7 @@ export default function SalesInputPage() {
       const { data, error } = await loadActualRecords(supabase, [year, year - 1], {
         regionId: Number(selectedRegionId),
         customerId: Number(selectedCustomerId),
-      }, 'Forecast Input')
+      }, 'Forecasts')
 
       if (cancelled) return
 
@@ -540,7 +556,7 @@ export default function SalesInputPage() {
     const loadedBudgets: BudgetRecord[] = []
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error } = await supabase
-        .rpc('get_monthly_reference_budget_rows', { p_module: 'Forecast Input' })
+        .rpc('get_monthly_reference_budget_rows', { p_module: 'Forecasts' })
         .select('id, year, month, region_id, subregion_id, customer_id, product_id, volume')
         .order('id')
         .range(from, from + PAGE_SIZE - 1)
@@ -569,14 +585,14 @@ export default function SalesInputPage() {
     return regions.filter((region) => region.id === assignedRegionId)
   }, [regions, canChooseRegion, assignedRegionId])
 
-  async function loadForecasts(ownerId: string) {
+  async function loadForecasts() {
     setSavedTableLoading(true)
     setForecastLoadError(false)
     try {
       setSavedError('')
 
       const baseQuery = supabase
-        .from('sales_forecasts')
+        .rpc('get_saved_forecasts')
         .select(`
           id,
           year,
@@ -593,7 +609,6 @@ export default function SalesInputPage() {
           remarks,
           returned_at
         `)
-        .eq('user_id', ownerId)
         .order('year', { ascending: false })
         .order('week', { ascending: false })
         .order('id', { ascending: false })
@@ -620,6 +635,16 @@ export default function SalesInputPage() {
         from += PAGE_SIZE
       }
 
+      const ownerNames: Record<string, string> = {}
+      // Resolve only owners of accessible saved records, including returned KAMs.
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        const { data, error } = await supabase.rpc('get_saved_forecast_owners')
+          .order('id').range(offset, offset + PAGE_SIZE - 1)
+        if (error) throw new Error('Unable to load forecast owner names. ' + error.message)
+        for (const owner of data ?? []) ownerNames[owner.id] = owner.full_name || 'Unnamed KAM'
+        if (!data || data.length < PAGE_SIZE) break
+      }
+      setSavedOwnerNames(ownerNames)
       setForecasts(allForecasts)
       window.dispatchEvent(new Event('forecast-workflow-changed'))
 
@@ -652,7 +677,7 @@ export default function SalesInputPage() {
       const { data, error } = await loadActualRecords(supabase, lookupYears, {
         regionIds: [...new Set(allForecasts.flatMap((item) => item.region_id == null ? [] : [item.region_id]))],
         customerIds: [...new Set(allForecasts.flatMap((item) => item.customer_id == null ? [] : [item.customer_id]))],
-      }, 'Forecast Input')
+      }, 'Forecasts')
       if (request !== savedActualRequest.current) return
       if (error) {
         setSavedActualsError(true)
@@ -728,8 +753,10 @@ export default function SalesInputPage() {
     return thursday.getUTCMonth() + 1
   }
 
+  const [scrollToLastRowRequest, setScrollToLastRowRequest] = useState(0)
+
   function addRow() {
-    if (!authorization.can('Forecast Input', 'add')) return
+    if (!canCreateForecast || ((editingSharedForecast || adminEditingExisting) && !canAddToExistingForecast)) return
 
     setRows((currentRows) => [
       ...currentRows,
@@ -743,6 +770,7 @@ export default function SalesInputPage() {
         status: 'Draft',
       },
     ])
+    setScrollToLastRowRequest((request) => request + 1)
   }
 
   function removeRow(tempId: string) {
@@ -931,10 +959,11 @@ export default function SalesInputPage() {
 
   function getSavedActualMonthly(
     item: SalesForecast,
-    previous = false
+    previous = false,
+    customerLevel = false
   ) {
     if (
-      !item.product_id ||
+      (!customerLevel && !item.product_id) ||
       !item.customer_id ||
       !item.region_id
     ) {
@@ -948,7 +977,7 @@ export default function SalesInputPage() {
         (actual) =>
           actual.customer_id === item.customer_id &&
           actual.region_id === item.region_id &&
-          actual.product_id === item.product_id &&
+          (customerLevel || actual.product_id === item.product_id) &&
           actual.year === period.year &&
           actual.month === period.month
       )
@@ -969,9 +998,9 @@ export default function SalesInputPage() {
     )
   }
 
-  function getSavedForecastMonthly(item: SalesForecast) {
+  function getSavedForecastMonthly(item: SalesForecast, customerLevel = false) {
     if (
-      !item.product_id ||
+      (!customerLevel && !item.product_id) ||
       !item.customer_id ||
       !item.region_id
     ) {
@@ -987,7 +1016,7 @@ export default function SalesInputPage() {
           forecast.year === item.year &&
           forecast.region_id === item.region_id &&
           forecast.customer_id === item.customer_id &&
-          forecast.product_id === item.product_id &&
+          (customerLevel || forecast.product_id === item.product_id) &&
           getMonthForWeek(forecast.year, forecast.week) === targetMonth
       )
       .reduce(
@@ -1092,9 +1121,9 @@ export default function SalesInputPage() {
   async function handleSave() {
     if (
       (rows.some((row) => row.id === null) &&
-        !authorization.can('Forecast Input', 'add')) ||
+        !canCreateForecast) ||
       (rows.some((row) => row.id !== null) &&
-        !authorization.can('Forecast Input', 'edit'))
+        !authorization.can('Forecasts', 'edit'))
     ) {
       return
     }
@@ -1150,7 +1179,7 @@ export default function SalesInputPage() {
         forecast: Number(row.forecast),
         volume: getRowVolume(row),
         status: 'Draft',
-        user_id: userId,
+        user_id: adminEditingExisting ? existingForecastOwner! : editingSharedForecast ? forecasts.find((item) => item.id === row.id)?.user_id ?? userId : userId,
       }))
 
     for (const [index, row] of payload.entries()) {
@@ -1162,7 +1191,21 @@ export default function SalesInputPage() {
       return
     }
 
-    const { error: saveError } = await saveForecastDrafts(supabase, payload)
+    const { error: saveError } = adminEditingExisting
+      ? await supabase.rpc('save_admin_customer_forecast', {
+          p_records: rsmRevisionPayload(forecasts, payload.filter((row) => row.id !== undefined).map((row) => ({
+            id: row.id!, product_id: row.product_id, forecast: row.forecast,
+          }))),
+          p_new_records: payload.filter((row) => row.id === undefined).map((row) => ({ product_id: row.product_id, forecast: row.forecast })),
+        })
+      : editingSharedForecast
+      ? await supabase.rpc(isAdmin ? 'revise_admin_saved_forecasts' : 'revise_rsm_returned_forecasts', {
+          p_records: rsmRevisionPayload(forecasts, payload.map((row) => ({
+            id: row.id!, product_id: row.product_id, forecast: row.forecast,
+          }))),
+          p_submit: false,
+        })
+      : await saveForecastDrafts(supabase, payload)
 
     if (saveError) {
       setPendingAction(null)
@@ -1171,7 +1214,7 @@ export default function SalesInputPage() {
     }
 
     const revised = rows.some((row) => row.status === 'Rejected')
-    setMessage(revised ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts back to your RSM.' : 'Forecasts saved successfully.')
+    setMessage(editingSharedForecast ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts for RSM review.' : revised ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts back to your RSM.' : 'Forecasts saved successfully.')
     if (revised) setSavedStatusFilter('Draft')
     setSelectedCustomerId('')
 
@@ -1188,88 +1231,23 @@ export default function SalesInputPage() {
     ])
 
     setPendingAction(null)
+    setForecastDialogOpen(false)
 
-    await loadForecasts(userId)
-  }
-
-  async function handleEdit(item: SalesForecast) {
-    if (!authorization.can('Forecast Input', 'edit')) return
-
-    if (!isEditableForecast(item)) {
-      setSavedError('Only draft or returned forecasts can be edited.')
-      return
-    }
-
-    if (role === 'Manager' && item.region_id !== assignedRegionId) {
-      setSavedError('You can only edit forecasts from your assigned region.')
-      return
-    }
-
-    if (item.user_id !== userId) {
-      setSavedError('You can only edit your own forecasts.')
-      return
-    }
-
-    const locked = await checkWeekLock(item.year, item.week, 'saved')
-
-    if (locked) {
-      setSavedError(
-        `Week ${item.week} - ${item.year} is locked. This forecast cannot be edited.`
-      )
-      return
-    }
-
-    setSavedError('')
-    setSavedMessage('')
-
-    setYear(item.year)
-    setWeek(item.week)
-    setSelectedMonth(getMonthForWeek(item.year, item.week))
-
-    setSelectedWeek(
-      `${item.year}-W${String(item.week).padStart(2, '0')}`
-    )
-
-    setSelectedRegionId(
-      item.region_id ? String(item.region_id) : ''
-    )
-
-    setSelectedSubregionId(
-      item.subregion_id ? String(item.subregion_id) : ''
-    )
-
-    setSelectedCustomerId(String(item.customer_id ?? ''))
-
-    const selectedProduct = products.find(
-      (product) => product.id === item.product_id
-    )
-
-    setRows([
-      {
-        tempId: crypto.randomUUID(),
-        id: item.id,
-        category_id: String(item.category_id ?? ''),
-        product_id: String(item.product_id ?? ''),
-        product_search: selectedProduct
-          ? `${selectedProduct.code} - ${selectedProduct.name}`
-          : '',
-        forecast: String(item.forecast ?? ''),
-        status: item.status,
-      },
-    ])
-
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    await loadForecasts()
   }
 
   async function handleEditCustomer(items: SalesForecast[]) {
-    if (!authorization.can('Forecast Input', 'edit') || items.length === 0) return
+    if (!authorization.can('Forecasts', 'edit') || items.length === 0) return
     const first = items[0]
     if (items.some((item) => item.region_id !== first.region_id || item.subregion_id !== first.subregion_id)) {
-      setSavedError('This customer has forecasts across multiple areas. Edit the products individually.')
+      setSavedError('This customer has forecasts across multiple areas and cannot be edited together.')
       return
     }
     for (const item of items) {
-      if (!isEditableForecast(item) || (role === 'Manager' && item.region_id !== assignedRegionId) || item.user_id !== userId) {
+      const rsmReturned = canReviseRsmForecast(item, {
+        role, position: salesPosition, regionId: assignedRegionId, subregionId: assignedSubregionId,
+      })
+      if (!(isAdmin && isEditableForecast(item)) && !rsmReturned && (groupSavedByKam || !isEditableForecast(item) || (role === 'Manager' && item.region_id !== assignedRegionId) || item.user_id !== userId)) {
         setSavedError('You can only edit eligible forecasts from your assigned area or account.')
         return
       }
@@ -1300,7 +1278,7 @@ export default function SalesInputPage() {
         status: item.status,
       }
     }))
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setForecastDialogOpen(true)
   }
 
   function canSubmitItem(item: SalesForecast) {
@@ -1313,8 +1291,14 @@ export default function SalesInputPage() {
   async function handleSubmitCustomer(items: SalesForecast[]) {
     let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
     try {
-    if (!canSubmitForecasts) return
-    const eligibleItems = items.filter(canSubmitItem)
+    const rsmResubmission = authorization.can('Forecasts', 'edit') && items.length > 0 && items.every((item) =>
+      item.status === 'Draft' && item.user_id !== userId && canReviseRsmForecast(item, {
+        role, position: salesPosition, regionId: assignedRegionId, subregionId: assignedSubregionId,
+      }))
+    const adminSubmission = isAdmin && authorization.can('Forecasts', 'edit') && items.length > 0 && items.every((item) => item.status === 'Draft')
+    if (isAdmin && !adminSubmission) return
+    if (!canSubmitForecasts && !rsmResubmission) return
+    const eligibleItems = adminSubmission ? items.filter((item) => item.status === 'Draft') : rsmResubmission ? items : items.filter(canSubmitItem)
     if (eligibleItems.length === 0) {
       setSavedError('There are no eligible forecasts for this customer.')
       return
@@ -1329,7 +1313,12 @@ export default function SalesInputPage() {
     setPendingAction('submit')
     setSavedError('')
     setSavedMessage('')
-    const { data, error } = await supabase.rpc('transition_forecast_review', {
+    const { data, error } = rsmResubmission || adminSubmission ? await supabase.rpc(adminSubmission ? 'revise_admin_saved_forecasts' : 'revise_rsm_returned_forecasts', {
+      p_records: rsmRevisionPayload(eligibleItems, eligibleItems.map((item) => ({
+        id: item.id, product_id: Number(item.product_id), forecast: Number(item.forecast),
+      }))),
+      p_submit: true,
+    }) : await supabase.rpc('transition_forecast_review', {
       p_ids: eligibleItems.map((item) => item.id),
       p_action: 'submit',
     })
@@ -1339,7 +1328,7 @@ export default function SalesInputPage() {
       return
     }
     setSavedMessage(`${Number(data)} forecast record(s) submitted for RSM review.`)
-    await loadForecasts(userId)
+    await loadForecasts()
 
     } finally { actionConfirmation?.finish() }
   }
@@ -1347,9 +1336,9 @@ export default function SalesInputPage() {
   async function handleDeleteMany(items: SalesForecast[], scope: 'customer' | 'product' = 'customer') {
     let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
     try {
-    if (!authorization.can('Forecast Input', 'delete') || items.length === 0) return
+    if (!authorization.can('Forecasts', 'delete') || items.length === 0) return
     for (const item of items) {
-      if (!isEditableForecast(item) || (role === 'Manager' && item.region_id !== assignedRegionId) || item.user_id !== userId) {
+      if (!canDeleteSavedForecastStatus(item.status) || (!isAdmin && ((role === 'Manager' && item.region_id !== assignedRegionId) || item.user_id !== userId))) {
         setSavedError('You can only delete eligible forecasts from your assigned area or account.')
         return
       }
@@ -1360,13 +1349,15 @@ export default function SalesInputPage() {
     }
     const confirmed = (actionConfirmation = await confirmAction({ message: `Remove ${items.length} forecast record(s) ${scope === 'customer' ? 'for this customer' : 'for this product'}?`, details: confirmationRecordDetails(items, 'Total volume (50kg)') }))
     if (!confirmed) return
-    const { error } = await supabase.from('sales_forecasts').delete().in('id', items.map((item) => item.id)).eq('user_id', userId)
+    const deletion = supabase.from('forecasts').delete().in('id', items.map((item) => item.id))
+    if (role !== 'Admin') deletion.eq('user_id', userId)
+    const { error } = isAdmin ? await supabase.rpc('delete_admin_saved_forecasts', { p_ids: items.map((item) => item.id) }) : await deletion
     if (error) {
       setSavedError(error.message)
       return
     }
     setSavedMessage(`${items.length} forecast record(s) removed.`)
-    await loadForecasts(userId)
+    await loadForecasts()
 
     } finally { actionConfirmation?.finish() }
   }
@@ -1448,15 +1439,15 @@ export default function SalesInputPage() {
 
     setPendingAction(null)
 
-    await loadForecasts(userId)
+    await loadForecasts()
 
     } finally { actionConfirmation?.finish() }
   }
 
   const visibleSavedForecasts = useMemo(() => forecasts.filter((item) =>
-    (!customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
+    (isAdmin || !customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
     savedForecastMatchesStatus(item, savedStatusFilter)
-  ), [forecasts, savedStatusFilter, customerAssignmentRestricted, customers])
+  ), [forecasts, savedStatusFilter, customerAssignmentRestricted, customers, isAdmin])
 
   // Group by week and customer, keeping each review status separate.
   const savedWeekGroups = useMemo<SavedWeekGroup[]>(() => {
@@ -1491,7 +1482,7 @@ export default function SalesInputPage() {
       }
 
       const weekGroup = weeks.get(weekKey)!
-      const customerKey = `${item.customer_id ?? 'no-customer'}-${item.status}`
+      const customerKey = savedCustomerGroupKey(item, groupSavedByKam)
 
       if (!weekGroup.customers.has(customerKey)) {
         weekGroup.customers.set(customerKey, {
@@ -1506,7 +1497,10 @@ export default function SalesInputPage() {
 
     return Array.from(weeks.values()).map((weekGroup) => ({
       ...weekGroup,
-      customers: Array.from(weekGroup.customers.values()).map(
+      customers: Array.from(weekGroup.customers.values()).sort((a, b) => groupSavedByKam
+        ? (savedOwnerNames[a.items[0].user_id] ?? a.items[0].user_id).localeCompare(savedOwnerNames[b.items[0].user_id] ?? b.items[0].user_id)
+          || a.items[0].user_id.localeCompare(b.items[0].user_id)
+        : 0).map(
         (customerGroup) => {
           const productMap = new Map<string, SalesForecast[]>()
 
@@ -1556,7 +1550,7 @@ export default function SalesInputPage() {
         }
       ),
     }))
-  }, [visibleSavedForecasts, forecasts, budgets, savedActualRecords])
+  }, [visibleSavedForecasts, forecasts, budgets, savedActualRecords, groupSavedByKam, savedOwnerNames])
 
   function toggleCustomer(key: string) {
     setExpandedCustomers((current) => {
@@ -1591,19 +1585,30 @@ export default function SalesInputPage() {
   }
 
   const canSubmitForecasts =
-    authorization.can('Forecast Input', 'edit') &&
+    authorization.can('Forecasts', 'edit') &&
     (isAdmin || (
       (salesPosition === 'KAM' || salesPosition === 'Supervisor') &&
       assignedRegionId !== null && assignedSubregionId !== null
     ))
   const eligibleSubmissionCount = forecasts.filter(canSubmitItem).length
+  const eligibleSubmissionCustomers = actionGroupCount(forecasts.filter(canSubmitItem), 'customer')
 
   const savedCustomers = savedWeekGroups.flatMap((group) => group.customers)
   const totalSavedCustomers = new Set(savedCustomers.map((customer) => customer.customer_id)).size
   const allSavedCustomersExpanded = savedCustomers.length > 0 &&
-    savedCustomers.every((customer) => expandedCustomers.has(customer.key))
+    savedCustomers.every((customer) => expandedCustomers.has(customer.key)) &&
+    (!groupSavedByKam || savedWeekGroups.every((weekGroup) => weekGroup.customers.every((customer) =>
+      !collapsedKams.has(savedKamGroupKey(weekGroup.key, customer.items[0].user_id)))))
 
   const isLocked = weekStatus === 'Locked'
+  const canCreateForecast = authorization.can('Forecasts', 'add')
+  const editingSharedForecast = rows.some((row) => row.id !== null &&
+    forecasts.some((item) => item.id === row.id && item.user_id !== userId))
+  const editingOriginals = rows.flatMap((row) => row.id === null ? [] : forecasts.filter((item) => item.id === row.id))
+  const adminEditingExisting = isAdmin && editingOriginals.length > 0
+  const existingForecastOwner = editingOriginals[0]?.user_id
+  const canAddToExistingForecast = adminEditingExisting && canCreateForecast && authorization.can('Forecasts', 'edit')
+    && editingOriginals.every((item) => item.user_id === existingForecastOwner && isEditableForecast(item))
 
   const isFormDisabled =
     initializing ||
@@ -1611,8 +1616,8 @@ export default function SalesInputPage() {
     isLocked ||
     checkingWeekLock ||
     loading ||
-    (!authorization.can('Forecast Input', 'add') &&
-      !authorization.can('Forecast Input', 'edit'))
+    (!authorization.can('Forecasts', 'add') &&
+      !authorization.can('Forecasts', 'edit'))
 
   function formatNumber(value: number) {
     return Number(value || 0).toLocaleString('en-PH', {
@@ -1621,9 +1626,9 @@ export default function SalesInputPage() {
   }
 
   const canShowActions =
-    authorization.can('Forecast Input', 'edit') ||
-    authorization.can('Forecast Input', 'delete')
-  const savedColumnCount = 10 + Number(canShowActions)
+    authorization.can('Forecasts', 'edit') ||
+    authorization.can('Forecasts', 'delete')
+  const savedColumnCount = 9 + Number(canShowActions) + Number(groupSavedByKam)
   const returnNotices = uniqueReturnNotices(rows.filter((row) => row.status === 'Rejected').map((row) => {
     const info = attention?.returned.find((record) => record.id === row.id)
     const saved = forecasts.find((record) => record.id === row.id)
@@ -1639,7 +1644,7 @@ export default function SalesInputPage() {
 
       {/* ADD FORECAST */}
 
-      {userId && role === 'Admin' && authorization.can('Forecast Input', 'add') && (
+      {userId && role === 'Admin' && authorization.can('Forecasts', 'add') && (
         <ForecastExcelImport
           key={userId}
           userId={userId}
@@ -1647,23 +1652,27 @@ export default function SalesInputPage() {
           scope={{ allRegions: canChooseRegion, regionId: assignedRegionId, subregionId: assignedSubregionId }}
           blocked={pendingAction !== null}
           onBusyChange={setImportBusy}
-          onImported={() => loadForecasts(userId)}
+          onImported={() => loadForecasts()}
         />
       )}
 
-      {authorization.can('Forecast Input', 'add') ||
-      authorization.can('Forecast Input', 'edit') ? (
-        <div className="rounded-xl border bg-card shadow-sm">
-          <div data-section-header="" className="border-b px-6 py-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {canCreateForecast ||
+      authorization.can('Forecasts', 'edit') ? (
+        <RecordDialog open={forecastDialogOpen} onClose={() => setForecastDialogOpen(false)}
+          title={rows.some((row) => row.id !== null) ? 'Edit Forecast' : 'Add Forecast'} busy={loading} wide maxWidth="75rem">
+        <div data-forecast-form className="app-tables min-w-0">
+
+          <div data-section-header="" className="border-b py-4 pr-10">
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
               <div>
                 <h2 data-section-title="" className="text-base font-semibold"><HeadingClipboardPlus className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
-                  Add Forecast
+                  {rows.some((row) => row.id !== null) ? 'Edit Forecast' : 'Add Forecast'}
                 </h2>
 
 
               </div>
 
+              <div className="flex flex-wrap items-center gap-3">
               <div
                 className={`w-fit rounded-full px-3 py-1 text-xs font-medium ${
                   checkingWeekLock
@@ -1676,20 +1685,14 @@ export default function SalesInputPage() {
                 Week {week} · {year} ·{' '}
                 {checkingWeekLock ? 'Checking...' : weekStatus}
               </div>
+              {forecastDialogOpen && returnNotices.length > 0 && <ForecastReturnNotice key={JSON.stringify(returnNotices)} notices={returnNotices} />}
+              </div>
             </div>
           </div>
 
-          <div className="p-6">
+          <div data-forecast-form-body className="py-6">
             <div className="mb-6 space-y-4">
-              {rows.some((row) => row.status === 'Rejected') && (
-                <div role="status" className="w-full max-w-lg space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                  {returnNotices.map((notice, index) => <div key={index}>
-                      <p className="font-medium">Returned by {notice.reviewer}{notice.returnedAt ? ` · ${new Date(notice.returnedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })}` : ''}</p>
-                      <p><span className="font-medium">Reason:</span> {notice.reason}</p>
-                    </div>)}
-                </div>
-              )}
-              <div className="app-field-row">
+              <div className="app-field-row forecast-entry-fields">
                 {/* WEEK */}
 
                 <div data-field-size="compact" className="space-y-2">
@@ -1701,7 +1704,7 @@ export default function SalesInputPage() {
                     type="week"
                     value={selectedWeek}
                     onChange={(e) => handleWeekChange(e.target.value)}
-                    disabled={loading}
+                    disabled={loading || editingSharedForecast || adminEditingExisting}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
@@ -1721,6 +1724,7 @@ export default function SalesInputPage() {
                     }}
                   disabled={
                       isFormDisabled ||
+                      adminEditingExisting ||
                       (role !== 'Admin' && role !== 'Superuser')
                     }
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -1747,7 +1751,7 @@ export default function SalesInputPage() {
                     onValueChange={(id) => {
                       setSelectedCustomerId(id)
                     }}
-                    disabled={isFormDisabled || !selectedRegionId}
+                    disabled={isFormDisabled || editingSharedForecast || adminEditingExisting || !selectedRegionId}
                     placeholder={selectedRegionId ? 'Select customer…' : 'Select a region first'}
                     className="w-full" aria-label="Customer" />
 
@@ -1758,14 +1762,15 @@ export default function SalesInputPage() {
 
             {/* FORECAST INPUT TABLE */}
 
-            <Table data-monthly-sales
-              className="min-w-[1000px] table-fixed"
+            <ForecastEntryTable data-monthly-sales data-forecast-entry
+              scrollToLastRowRequest={scrollToLastRowRequest}
+              className="w-full min-w-0 table-fixed"
               containerProps={{ className: "w-full overflow-x-auto rounded-lg border" }}
             >
                 <colgroup>{[
-                  'w-[5%]',
-                  'w-[5%]',
-                  'w-[30%]',
+                  'w-[64px]',
+                  'w-[40px]',
+                  'w-[288px]',
                   'w-[10%]',
                   'w-[10%]',
                   'w-[10%]',
@@ -1790,7 +1795,7 @@ export default function SalesInputPage() {
           className="border-l border-solid border-border bg-muted/50 px-2 py-2 text-left text-sm font-semibold text-muted-foreground"
         >
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <span>Monthly Sales Reference</span>
+            <span>Monthly Reference</span>
 
             <div className="flex items-center gap-2">
               <label
@@ -1847,10 +1852,10 @@ export default function SalesInputPage() {
         return (
           <tr key={row.tempId} className="border-b last:border-0">
             <td data-action-column="single" className="px-0 py-3 text-center">
-              <TableActionButton action="delete" data-action-tone="danger"
+              <TableActionButton action="delete" compact data-action-tone="danger"
                 type="button"
                 onClick={() => removeRow(row.tempId)}
-                disabled={isFormDisabled || !selectedCustomerId}
+                disabled={isFormDisabled || ((editingSharedForecast || adminEditingExisting) && row.id !== null) || !selectedCustomerId}
                 className="inline-flex size-4 items-center justify-center rounded-md border transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                 title="Remove row"
                />
@@ -1862,6 +1867,7 @@ export default function SalesInputPage() {
 
             <td className="px-1 py-3">
               <SearchableSelect value={row.product_id}
+                multiline inputHeightClassName="h-10"
                 options={products.map((product) => ({ value: String(product.id), label: `${product.code} - ${product.name}` }))}
                 onValueChange={(id) => updateRow(row.tempId, 'product_id', id)}
                 disabled={isFormDisabled || !selectedCustomerId}
@@ -1918,8 +1924,9 @@ export default function SalesInputPage() {
             onClick={addRow}
             disabled={
               isFormDisabled ||
+              ((editingSharedForecast || adminEditingExisting) && !canAddToExistingForecast) ||
               !selectedCustomerId ||
-              !authorization.can('Forecast Input', 'add')
+              !canCreateForecast
             }
             className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -1946,7 +1953,7 @@ export default function SalesInputPage() {
         <td className="bg-muted/30 px-1 py-4" />
       </tr>
     </tfoot>
-            </Table>
+            </ForecastEntryTable>
 
             <div data-action-toolbar="" className="mt-5 flex flex-wrap items-center gap-2">
               <button data-action-tone="primary" data-action-fill=""
@@ -1954,8 +1961,8 @@ export default function SalesInputPage() {
                 onClick={handleSave}
                 disabled={
                   isFormDisabled ||
-                  (!authorization.can('Forecast Input', 'add') &&
-                    !authorization.can('Forecast Input', 'edit'))
+                  (!authorization.can('Forecasts', 'add') &&
+                    !authorization.can('Forecasts', 'edit'))
                 }
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -1988,7 +1995,22 @@ export default function SalesInputPage() {
 
           </div>
         </div>
+        </RecordDialog>
       ) : null}
+
+      {canCreateForecast && (
+        <div className="flex justify-end">
+          <button type="button" data-action-tone="primary" data-action-fill=""
+            disabled={loading || initializing || workspaceOwner !== userId}
+            onClick={() => {
+              if (rows.some((row) => row.id !== null)) handleClear()
+              setForecastDialogOpen(true)
+            }}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+            <Plus className="size-4" aria-hidden="true" />Add Forecast
+          </button>
+        </div>
+      )}
 
       {/* SAVED FORECASTS */}
 
@@ -2016,7 +2038,7 @@ export default function SalesInputPage() {
                 ))}
               </SelectionField>
             </label>
-          {canSubmitForecasts &&
+          {!groupSavedByKam && canSubmitForecasts &&
             (!savedStatusFilter || savedStatusFilter === 'Draft') &&
             eligibleSubmissionCount > 0 && (
               <button data-action-tone="transfer" data-action-fill=""
@@ -2026,15 +2048,18 @@ export default function SalesInputPage() {
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="size-4" />
-                {pendingAction === 'submitAll' ? 'Submitting...' : 'Submit All'}
+                {pendingAction === 'submitAll' ? 'Submitting...' : eligibleSubmissionCustomers > 1 ? `Submit All (${eligibleSubmissionCustomers})` : 'Submit All'}
               </button>
             )}
           <button data-slot="expand-collapse-button"
             type="button"
             data-action-tone="neutral"
-            onClick={() => setExpandedCustomers(new Set(
-              allSavedCustomersExpanded ? [] : savedCustomers.map((customer) => customer.key)
-            ))}
+            onClick={() => {
+              setExpandedCustomers(new Set(allSavedCustomersExpanded ? [] : savedCustomers.map((customer) => customer.key)))
+              setCollapsedKams(new Set(allSavedCustomersExpanded && groupSavedByKam
+                ? savedWeekGroups.flatMap((weekGroup) => weekGroup.customers.map((customer) => savedKamGroupKey(weekGroup.key, customer.items[0].user_id)))
+                : []))
+            }}
             disabled={savedCustomers.length === 0}
             className="h-9 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
           ><ExpandCollapseIcon expanded={allSavedCustomersExpanded} />
@@ -2057,7 +2082,7 @@ export default function SalesInputPage() {
             <colgroup>
               {canShowActions && <col data-action-column="forecast" />}
               <col data-volume-column="status" className="w-[6%]" />
-              <col data-volume-column="area" className="w-[10%]" />
+              {groupSavedByKam && <col data-volume-column="area" />}
               {/* Flexible description columns absorb spare width instead of Action. */}
               <col data-volume-column="customer" />
               <col data-volume-column="product" />
@@ -2075,10 +2100,7 @@ export default function SalesInputPage() {
                 <th className="px-2 py-3 text-center font-medium">
                   Status
                 </th>
-
-                <th className="px-2 py-3 text-left font-medium">
-                  Area
-                </th>
+                {groupSavedByKam && <th className="px-2 py-3 text-left font-medium">Area</th>}
 
                 <th className="px-2 py-3 text-left font-medium">
                   Customer
@@ -2122,7 +2144,59 @@ export default function SalesInputPage() {
                       </td>
                     </tr>
 
-                    {weekGroup.customers.map((customerGroup) => {
+                    {weekGroup.customers.map((customerGroup, index) => {
+                      const ownerId = customerGroup.items[0].user_id
+                      const kamKey = savedKamGroupKey(weekGroup.key, ownerId)
+                      const kamExpanded = !collapsedKams.has(kamKey)
+                      const startsKam = groupSavedByKam && (index === 0 || weekGroup.customers[index - 1].items[0].user_id !== ownerId)
+                      const kamCustomers = startsKam ? weekGroup.customers.filter((group) => group.items[0].user_id === ownerId) : []
+                      const kamItems = kamCustomers.flatMap((group) => group.items)
+                      const kamAreas = [...new Set(kamItems.map((item) =>
+                        subregions.find((area) => area.id === item.subregion_id)?.name
+                        ?? regions.find((area) => area.id === item.region_id)?.name ?? '—'))]
+                      const kamScopes = [...new Map(kamItems.map((item) => [JSON.stringify([item.region_id, item.customer_id]), item])).values()]
+                      const kamBudget = kamScopes.reduce((total, item) => total + customerMonthlyBudgetReference(budgets, item.year,
+                        getMonthForWeek(item.year, item.week), item.region_id, null, item.customer_id), 0)
+                      const kamTotals = [
+                        kamItems.reduce((total, item) => total + Number(item.forecast || 0), 0),
+                        kamItems.reduce((total, item) => total + Number(item.volume || 0), 0),
+                        kamBudget,
+                        kamScopes.reduce((total, item) => total + getSavedActualMonthly(item, false, true), 0),
+                        kamScopes.reduce((total, item) => total + getSavedActualMonthly(item, true, true), 0),
+                        kamScopes.reduce((total, item) => total + getSavedForecastMonthly(item, true), 0),
+                      ]
+                      const kamHeading = startsKam ? <Fragment key={kamKey}><tr className="border-b bg-muted/60">
+                        <td colSpan={savedColumnCount} className="px-3 py-2">
+                          <button type="button" aria-expanded={kamExpanded} onClick={() => setCollapsedKams((current) => {
+                            const next = new Set(current)
+                            if (next.has(kamKey)) next.delete(kamKey)
+                            else next.add(kamKey)
+                            return next
+                          })} className="flex w-full items-center gap-2 text-left font-semibold">
+                            {kamExpanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
+                            <span>KAM: {savedOwnerNames[ownerId] ?? 'Unknown KAM'}</span>
+                          </button>
+                        </td>
+                      </tr>
+                        <tr className="border-b bg-muted/30 font-semibold">
+                          {canShowActions && <td data-action-column="forecast" className="px-2 py-2" />}
+                          <td className="px-2 py-2 text-center"><div className="flex flex-wrap items-center justify-center gap-1">
+                            {[...new Set(kamItems.map((item) => item.status))].map((status) => <StatusBadge key={status} status={savedStatusLabels[status as keyof typeof savedStatusLabels]} compact={new Set(kamItems.map((item) => item.status)).size > 1} />)}
+                          </div></td>
+                          <td className="px-2 py-2">{kamAreas.join(', ')}</td>
+                          <td className="px-2 py-2">{new Set(kamItems.map((item) => item.customer_id)).size} {new Set(kamItems.map((item) => item.customer_id)).size === 1 ? 'Customer' : 'Customers'}</td>
+                          <td className="px-2 py-2">{new Set(kamItems.map((item) => item.product_id)).size} {new Set(kamItems.map((item) => item.product_id)).size === 1 ? 'Product' : 'Products'}</td>
+                          {kamTotals.map((value, index) => <td key={index} className="px-2 py-2 text-right tabular-nums">
+                            {index === 2 && budgetReferencesLoading ? <LoadingSpinner label="budget reference" />
+                              : index === 2 && budgetLoadError ? '—'
+                              : (index === 3 || index === 4) && savedActualsLoading ? <LoadingSpinner label="actual reference" />
+                              : (index === 3 || index === 4) && savedActualsError ? '—'
+                              : index === 1 || index >= 3 ? <BudgetValueIndicator value={value} budget={budgetReferencesLoading || budgetLoadError ? null : index === 1 ? weeklyBudget(kamBudget, weekGroup.year, getMonthForWeek(weekGroup.year, weekGroup.week)) : kamBudget}>{formatNumber(value)}</BudgetValueIndicator>
+                              : formatNumber(value)}
+                          </td>)}
+                        </tr>
+                      </Fragment> : null
+                      if (groupSavedByKam && !kamExpanded) return kamHeading
                       const isExpanded = expandedCustomers.has(
                         customerGroup.key
                       )
@@ -2141,56 +2215,47 @@ export default function SalesInputPage() {
                         0
                       )
 
-                      // Reference values are summed once per unique product,
-                      // rather than once per saved record.
-                      const customerBudget = customerGroup.products.reduce(
-                        (total, item) => total + item.budget,
-                        0
-                      )
-
-                      const customerActualMonthly =
-                        customerGroup.products.reduce(
-                          (total, item) => total + item.actualMonthly,
-                          0
-                        )
-
-                      const customerActualPreviousMonth =
-                        customerGroup.products.reduce(
-                          (total, item) => total + item.actualPreviousMonth,
-                          0
-                        )
-
-                      const customerForecastMonthly =
-                        customerGroup.products.reduce(
-                          (total, item) => total + item.forecastMonthly,
-                          0
-                        )
-
+                      // Customer references include every product in the month,
+                      // independent of the saved rows currently visible below.
+                      const customerScopes = [...new Map(allItems.map((item) =>
+                        [item.region_id, item])).values()]
+                      const customerBudget = customerScopes.reduce((total, item) =>
+                        total + customerMonthlyBudgetReference(budgets, item.year,
+                          getMonthForWeek(item.year, item.week), item.region_id, null, item.customer_id), 0)
+                      const customerActualMonthly = customerScopes.reduce((total, item) =>
+                        total + getSavedActualMonthly(item, false, true), 0)
+                      const customerActualPreviousMonth = customerScopes.reduce((total, item) =>
+                        total + getSavedActualMonthly(item, true, true), 0)
+                      const customerForecastMonthly = customerScopes.reduce((total, item) =>
+                        total + getSavedForecastMonthly(item, true), 0)
 
                       const status = allItems[0].status as keyof typeof savedStatusLabels
                       const customerStatus = savedStatusLabels[status]
-                      const editable = isEditableForecast(allItems[0])
+                      const editable = allItems.every((item) => (isAdmin || item.user_id === userId) && isEditableForecast(item))
+                      const rsmCanRevise = authorization.can('Forecasts', 'edit') && allItems.every((item) =>
+                        isAdmin ? isEditableForecast(item) : canReviseRsmForecast(item, { role, position: salesPosition, regionId: assignedRegionId, subregionId: assignedSubregionId }))
 
                       const customerCanEdit =
-                        editable && authorization.can('Forecast Input', 'edit')
+                        !groupSavedByKam && editable && authorization.can('Forecasts', 'edit')
 
                       const customerCanDelete =
-                        editable && authorization.can('Forecast Input', 'delete')
+                        (isAdmin || !groupSavedByKam) && editable && allItems.every((item) => canDeleteSavedForecastStatus(item.status)) && authorization.can('Forecasts', 'delete')
                       const customerCanSubmit =
-                        canSubmitForecasts &&
-                        allItems.some(canSubmitItem)
+                        (!groupSavedByKam && canSubmitForecasts && allItems.some(canSubmitItem)) ||
+                        (rsmCanRevise && allItems.every((item) => item.status === 'Draft'))
 
                       return (
                         <Fragment key={customerGroup.key}>
+                          {kamHeading}
                           {/* CUSTOMER SUMMARY ROW */}
 
                           <tr className="border-b bg-background hover:bg-muted/30">
                             {canShowActions && (
                               <td data-action-column="forecast" className="px-2 py-3 text-center">
                                 <div className="flex flex-wrap items-center justify-center gap-1">
-                                  {customerCanEdit && <TableActionButton action="edit" data-action-tone="caution" type="button" onClick={() => handleEditCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Edit customer forecasts" />}
-                                  {customerCanDelete && <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Delete customer forecasts" />}
-                                  {customerCanSubmit && <TableActionButton action="submit" data-action-tone="transfer" type="button" onClick={() => handleSubmitCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Submit customer forecasts" />}
+                                  {(rsmCanRevise || customerCanEdit) && <TableActionButton action="edit" data-action-tone="caution" type="button" count={actionGroupCount(allItems, 'customer')} onClick={() => handleEditCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Edit customer forecasts" />}
+                                  {customerCanDelete && <TableActionButton action="delete" data-action-tone="danger" type="button" count={actionGroupCount(allItems, 'customer')} onClick={() => handleDeleteMany(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Delete customer forecasts" />}
+                                  {customerCanSubmit && <TableActionButton action="submit" data-action-tone="transfer" type="button" count={actionGroupCount(allItems, 'customer')} onClick={() => handleSubmitCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Submit customer forecasts" />}
                                 </div>
                               </td>
                             )}
@@ -2198,8 +2263,7 @@ export default function SalesInputPage() {
                             <td className="px-2 py-3 text-center">
                               <StatusBadge status={customerStatus} />
                             </td>
-
-                            <td className="px-2 py-3 text-center">{allItems.every((record) => record.subregion_id === null) ? '—' : null}</td>
+                            {groupSavedByKam && <td className="px-2 py-3" />}
 
                             <td className="px-2 py-3">
                               <button
@@ -2262,66 +2326,17 @@ export default function SalesInputPage() {
 
                           {isExpanded &&
                             customerGroup.products.map((productGroup) => {
-                              const singleItem =
-                                productGroup.items.length === 1
-                                  ? productGroup.items[0]
-                                  : null
-
                               return (
                                 <tr
                                   key={productGroup.key}
                                   className="border-b bg-muted/20 last:border-0 hover:bg-muted/40"
                                 >
-                                  {canShowActions && (
-                                    <td data-action-column="forecast" className="whitespace-nowrap px-2 py-2">
-                                      <div className="flex items-center justify-center gap-1">
-                                        {singleItem && (
-                                          <>
-                                          {customerCanEdit && (
-                                            <TableActionButton action="edit" data-action-tone="caution"
-                                              type="button"
-                                              onClick={() =>
-                                                handleEdit(singleItem)
-                                              }
-                                              disabled={
-                                                loading ||
-                                                singleItem.status ===
-                                                  'Approved'
-                                              }
-                                              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                                              title="Edit"
-                                             />
-                                          )}
-
-                                          {customerCanDelete && (
-                                            <TableActionButton action="delete" data-action-tone="danger"
-                                              type="button"
-                                              onClick={() => handleDeleteMany(productGroup.items, 'product')}
-                                              disabled={
-                                                loading ||
-                                                singleItem.status ===
-                                                  'Approved'
-                                              }
-                                              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                                              title="Remove product forecasts"
-                                             />
-                                          )}
-                                          </>
-                                        )}
-                                        {customerCanDelete && !singleItem && (
-                                          <TableActionButton action="delete" data-action-tone="danger" type="button" onClick={() => handleDeleteMany(productGroup.items, 'product')} disabled={loading} className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition hover:bg-muted disabled:opacity-40" title="Remove product forecasts" />
-                                        )}
-                                        </div>
-                                    </td>
-                                  )}
-
-                                  <td className="px-2 py-2" />
-
-                                  {/* Area is shown once on the customer row. */}
+                                  {canShowActions && <td data-action-column="forecast" className="px-2 py-2" />}
 
                                   <td className="px-2 py-2" />
 
                                   {/* Customer is shown once on the customer row. */}
+                                  {groupSavedByKam && <td className="px-2 py-2" />}
 
                                   <td className="px-2 py-2" />
 

@@ -13,11 +13,11 @@ import {
 
 const pageIcons: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
-  "/forecast-input": ClipboardPenLine,
+  "/forecasts": ClipboardPenLine,
   "/weekly-sales": CalendarDays,
   "/approvals": CheckCircle,
-  "/budget": Wallet,
-  "/actual": ChartColumn,
+  "/budgets": Wallet,
+  "/actuals": ChartColumn,
   "/categories": Tags,
   "/products": Package,
   "/customers": ContactRound,
@@ -38,11 +38,11 @@ export default function AuthenticatedLayout({
 
   const pageTitles: Record<string, string> = {
     "/dashboard": "Dashboard",
-    "/forecast-input": "Forecast Input",
+    "/forecasts": "Forecasts",
     "/weekly-sales": "Weekly Sales",
     "/approvals": "Approvals",
-    "/budget": "Budget",
-    "/actual": "Actual",
+    "/budgets": "Budgets",
+    "/actuals": "Actuals",
     "/categories": "Categories",
     "/products": "Products",
     "/customers": "Customers",

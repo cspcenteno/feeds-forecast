@@ -73,7 +73,7 @@ test('customer editing submits only changed rows in one atomic call with origina
   let sent
   const client={rpc:async(name,args)=>{sent={name,args};return {data:2,error:null}}}
   const draft={original:record,volume:'30.5',year:'2026',month:'',actualDate:record.actual_date}
-  const count=await persistCustomerVolumeUpdates(client,'Budget',[draft,{...draft,original:{...record,id:13,product_id:6},volume:'0'},{...draft,original:{...record,id:14},volume:'25'}])
+  const count=await persistCustomerVolumeUpdates(client,'Budgets',[draft,{...draft,original:{...record,id:13,product_id:6},volume:'0'},{...draft,original:{...record,id:14},volume:'25'}])
   assert.equal(count,2)
   assert.equal(sent.name,'update_customer_volume_records')
   assert.equal(sent.args.p_records.length,2)
@@ -86,14 +86,14 @@ test('customer editing submits only changed rows in one atomic call with origina
 test('unchanged customer records make no writes and invalid input stops before the RPC', async()=>{
   const client={rpc:async()=>{throw Error('Unexpected write')}}
   const draft={original:record,volume:'25',year:'2026',month:'',actualDate:record.actual_date}
-  assert.equal(await persistCustomerVolumeUpdates(client,'Budget',[draft]),0)
-  await assert.rejects(persistCustomerVolumeUpdates(client,'Actual',[{...draft,volume:'-1'}]),/valid volume/)
+  assert.equal(await persistCustomerVolumeUpdates(client,'Budgets',[draft]),0)
+  await assert.rejects(persistCustomerVolumeUpdates(client,'Actuals',[{...draft,volume:'-1'}]),/valid volume/)
 })
 
 test('Actual customer edits send dates and preserve database conflict messages',async()=>{
   let args
   const client={rpc:async(_name,input)=>{args=input;return {data:null,error:{message:'A record changed while you were editing'}}}}
-  await assert.rejects(persistCustomerVolumeUpdates(client,'Actual',[{original:record,volume:'26',year:'2026',month:'',actualDate:'2026-11-09'}]),/record changed/)
+  await assert.rejects(persistCustomerVolumeUpdates(client,'Actuals',[{original:record,volume:'26',year:'2026',month:'',actualDate:'2026-11-09'}]),/record changed/)
   assert.equal(args.p_records[0].actual_date,'2026-11-09')
   assert.equal(args.p_records[0].original.actual_date,'2026-11-08')
   assert.equal(Object.hasOwn(args.p_records[0],'year'),false)
@@ -104,7 +104,7 @@ test('shared customer/KAM and per-row product changes save even when volume is u
  let request
  const client={rpc:async(_name,args)=>{request=args;return {data:2,error:null}}}
  const row={original:record,volume:'25',year:'2026',month:'',actualDate:record.actual_date,customerId:8,regionId:2,kam:'New KAM'}
- await persistCustomerVolumeUpdates(client,'Budget',[{...row,productId:9,categoryId:10},{...row,original:{...record,id:13},productId:11,categoryId:12}])
+ await persistCustomerVolumeUpdates(client,'Budgets',[{...row,productId:9,categoryId:10},{...row,original:{...record,id:13},productId:11,categoryId:12}])
  assert.equal(request.p_records.length,2)
  assert.ok(request.p_records.every(r=>r.kam==='New KAM'&&r.customer_id===8&&r.region_id===2))
  assert.equal(request.p_records[0].product_id,9)

@@ -1,0 +1,379 @@
+(node:388) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/action-confirmation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ cancel resolves without authorizing an operation (0.5583ms)
+✔ confirmation stays busy until completion and blocks duplicate actions (0.2336ms)
+✔ an old completion cannot close a later confirmation (0.1586ms)
+✔ unmounting releases a pending confirmation without authorizing it (0.4538ms)
+✔ destructive, submission and import actions use their intended labels and colors (0.3082ms)
+✔ bulk confirmation shows record count and volume without nonfinite totals (10.7642ms)
+(node:23068) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/action-group-count.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ group action counts measure people or customers rather than product rows (0.4467ms)
+✔ legacy submitter fallback and unassigned groups count consistently (0.1101ms)
+(node:43368) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/actual-records.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ saved actual references constrain every year to forecast regions and customers (0.8681ms)
+✔ empty saved customer scope does not load all actuals (1.0462ms)
+✔ selected-customer scope and database errors remain intact (0.2276ms)
+✔ reference Actuals use the consuming page permission and retain customer filters (0.2744ms)
+▶ Admin additions preserve the original owner and enforce Add plus Edit permissions atomically
+  ✔ new rows inherit KAM ownership, scope and calculated volume, with the Admin recorded in audit (32.1869ms)
+  ✔ missing Add or Edit permission blocks the entire save, not just the new row (38.0695ms)
+  ✔ locked weeks and pending, endorsed or approved records block additions (37.6208ms)
+  ✔ duplicates, invalid quantities and inactive products roll back every row (62.5517ms)
+✔ Admin additions preserve the original owner and enforce Add plus Edit permissions atomically (1694.3627ms)
+(node:44796) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/asm-reporting.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ groups records under the active ASM assigned to their region (1.0654ms)
+✔ does not attribute an unassigned or ambiguous region to an arbitrary ASM (0.1806ms)
+✔ audit triggers capture changes and enforce read-only Admin access (1625.7838ms)
+(node:25452) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/authorization-rules.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ saved permissions never restore Manager module defaults for missing or denied grants (0.8831ms)
+✔ only explicit true grants count and unsupported module actions remain denied (0.1814ms)
+(node:14920) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/authorization-rules.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ all reported roles load saved grants scoped to the verified account (6.1677ms)
+✔ missing and denied grants never become role defaults (1.1815ms)
+✔ unsigned and inactive accounts cannot read grants (1.4718ms)
+✔ permission lookup failures are errors, not empty grants (0.5376ms)
+(node:16436) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/budget-comparison.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a valid zero stays below target when the budget is positive (0.9069ms)
+✔ missing values and failed numeric values are unavailable rather than zero (0.1637ms)
+✔ a missing or nonpositive budget leaves valid values unclassified (0.154ms)
+✔ thresholds preserve fractional volumes and legitimate negative adjustments (0.1489ms)
+✔ customer review references include missing products and exclude other customers (1473.5151ms)
+(node:35972) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/dashboard-comparisons.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ all three comparisons use their named baseline and measured volume (1.0569ms)
+✔ missing baselines show no percentage and preserve the actual gap (0.1233ms)
+✔ regional Actuals include regions without any approved forecasts or budgets (8.0333ms)
+✔ months with only Actuals or only budgets still produce complete rows (0.3479ms)
+✔ regional viewers can compare Actuals without forecasts but cannot see another region (0.2206ms)
+✔ supervisor dashboards are limited to their assigned subregion (0.2902ms)
+✔ supervisor dashboards cannot cross their region or use an unassigned region (1.6963ms)
+✔ KAM Actuals remain limited to their forecast customer/product keys (0.1292ms)
+✔ ASM can see other subregions in their region, RSM cannot (0.0855ms)
+(node:38688) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/dashboard-performance.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ performance granularity follows the sales position (0.6689ms)
+✔ subregional performance includes areas with Actuals but no forecasts (7.4193ms)
+✔ customer performance combines products and keeps customers separate (0.4691ms)
+✔ monthly budgets override annual fallback within each exact scope (0.5883ms)
+✔ subregional totals do not double-count generic and customer budgets (1.1411ms)
+✔ keeps unassigned dimensions and negative Actual adjustments visible (0.1593ms)
+✔ company overview keeps named areas separate instead of an All areas bucket (0.2155ms)
+✔ NSM sees regional performance and admins retain company visibility (0.0714ms)
+✔ KAM performance combines customer/product volumes without duplicating totals (0.2724ms)
+(node:3904) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/dashboard-sales-totals.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ customer summaries use full customer references once across listed products (2.6604ms)
+✔ higher summaries deduplicate each customer and include different customers independently (0.6057ms)
+(node:23604) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/authorization-rules.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ KAM defaults allow forecast entry and draft deletion without approval privileges (1.615ms)
+✔ RSM and ASM defaults differ only in returned forecast access (0.2101ms)
+✔ Superuser defaults remain focused on customer and volume management (0.1123ms)
+✔ Manager NSM defaults select only Dashboard and Weekly Sales View (0.1321ms)
+✔ Admin defaults enable supported actions while unsupported checkboxes stay disabled (0.1575ms)
+✔ position defaults never override explicit saved permissions or grant a different role privileges (3.4003ms)
+✔ KAM direct deletes allow only owned drafts and preserve returned records (1447.311ms)
+✔ shared notifications survive navigation and transient failures for all roles (14.7601ms)
+(node:31700) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/authorization-rules.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ returned notifications contain only the signed-in owner records and reviewer details (2.3728ms)
+✔ RSM receives returned forecasts from other owners only in the exact assigned area (2.0025ms)
+✔ RSM returned notifications require permissions and both assignment fields (2.8412ms)
+✔ RSM returned notifications paginate and count customers across all matching owners (1.4745ms)
+✔ RSM pending and ASM endorsed badges follow their assignments (1.9993ms)
+✔ permissions and missing assignments do not produce actionable badges (2.4485ms)
+✔ returned counts include every page and exclude new Drafts (1.9896ms)
+✔ opening a notice does not clear it; revised drafts remain until resubmission (1.3848ms)
+✔ temporary profile failures are retryable for every role (4.8019ms)
+✔ all roles retain only their applicable badges across repeated navigation requests (6.2593ms)
+✔ Admin counts require saved permission rows (0.5745ms)
+✔ Admin returned badges include all owners and areas, deduplicate customers and persist until resubmission (1.4381ms)
+✔ all roles receive no notification access when saved rows are absent (2.5874ms)
+✔ RSM count tolerates position casing and stays inside the assigned area (0.9917ms)
+✔ badges count distinct people and customers across products, weeks and pages (2.4275ms)
+(node:17712) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/forecast-customers.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ User KAM sees only exact assigned names with normalized case and spacing (1.3534ms)
+✔ missing and unmatched KAM names never expose unassigned or other customers (0.1513ms)
+✔ other roles and sales positions retain their existing customer scope (0.1335ms)
+(node:3316) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/forecast-duplicates.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ new rows match an already saved product in the same owner/customer/week scope (0.5022ms)
+✔ editing the same record is allowed (0.0812ms)
+✔ other products, weeks, customers, areas and users remain independent (0.1095ms)
+✔ forecast imports require explicit saved view and add grants even for Admin (3.1733ms)
+(node:20900) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/forecast-import.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ matches region codes and computes volume from quantity and product weight (2.2898ms)
+✔ rejects locked weeks and missing reference matches (0.4694ms)
+✔ keeps duplicate and imported records valid but ineligible for import (0.2128ms)
+✔ enforces assigned region and subregion and permits Admin scope (0.2025ms)
+✔ rejects negative, missing, and non-finite quantities while accepting zero (0.1779ms)
+✔ validates ISO week 53 against the selected year (0.0964ms)
+✔ rejects ambiguous customers and products without categories (0.328ms)
+✔ preserves null volume for products without weight, matching manual entry (0.1417ms)
+✔ accepts month date ranges including the partial first week of the year (0.5487ms)
+✔ date-range imports use the same duplicate and week-lock checks as numeric weeks (0.2298ms)
+✔ accepts volume instead of forecast and derives quantity without altering volume (0.1487ms)
+✔ volume-only input needs a valid positive product weight (0.1396ms)
+✔ requires supplied quantity and volume to agree with product weight (0.0708ms)
+✔ resolves KAM full names to the forecast owner (0.6535ms)
+✔ the seven-column Forecast format imports volume without requiring a customer (0.1501ms)
+✔ download templates preserve the requested column positions in Excel (19.4087ms)
+✔ same week and product are separate forecasts for different KAM owners (0.2212ms)
+✔ normalization does not bypass same-KAM duplicate checks (0.0824ms)
+✔ rejects unknown, inactive, and ambiguous KAM full names (0.1169ms)
+✔ missing week-lock status fails closed rather than treating the week as open (0.1816ms)
+(node:33188) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/region-order.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ saved forecast rows render without waiting for Actual references (34.4152ms)
+✔ basic lookups start together and do not wait for Budget references (11.1579ms)
+✔ older Actual reference responses cannot replace the latest data (8.0719ms)
+✔ saved forecast week checks do not change the Add Forecast lock notice (3.5265ms)
+✔ Approvals and Weekly Sales rows do not wait for monthly reference RPCs (59.5245ms)
+(node:17228) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/forecast-staging.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ raw staging values preserve invalid input without sending a temporary ID (0.6203ms)
+✔ database rows restore the numeric identity and nullable fields for validation (0.1474ms)
+✔ loads multiple staging pages using the database ID cursor (1.9497ms)
+✔ staging read errors are reported instead of returning an empty preview (0.4134ms)
+✔ edits target the persisted staging ID and reject silent permission failures (0.2058ms)
+✔ discard deletes only staging rows in bounded batches (0.303ms)
+(node:956) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/forecast-submission-confirmation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ submission review summarizes customers and distinct products in two rows (12.7747ms)
+▶ operational access and dashboard reporting use independent scopes
+  ✔ RSM and Supervisor read only their operational subregion (17.6021ms)
+  ✔ ASM reads its region and its queue contains only endorsed records (2.174ms)
+  ✔ unassigned or inactive managers receive no operational records (6.8136ms)
+  ✔ KAM sees own forecasts and Admin keeps global access (4.0271ms)
+  ✔ reference RPCs cannot expose other assignments by guessing forecast IDs (13.9145ms)
+  ✔ dashboard remains global for ASM, regional for RSM/Supervisor, and owned for KAM (55.8488ms)
+  ✔ all monthly reference RPCs return 40 for detailed imports and a region-only forecast (32.3688ms)
+  ✔ transition RPC rejects cross-subregion endorsements and cross-region approvals (10.7363ms)
+  ✔ dashboard customer references include unlisted products without changing product rows (24.7932ms)
+✔ operational access and dashboard reporting use independent scopes (1710.0074ms)
+﹣ automatic week-lock migration and database enforcement (0.7565ms) # SKIP
+(node:2448) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/forecast-weeks.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ ISO calendars validate week 53 and correctly cross year boundaries (2.5841ms)
+✔ current week uses the Philippine business date rather than host timezone (19.1013ms)
+✔ status RPC deduplicates weeks and accepts only complete explicit statuses (1.1456ms)
+✔ status errors and incomplete responses never fall back to Open (0.2958ms)
+(node:42420) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/forecast-workspace.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ unsaved selections and fractional quantities survive leaving and returning (1.134ms)
+✔ accounts cannot restore each other’s work (0.1316ms)
+✔ clearing a saved form removes the old unsaved copy and retains other accounts (0.1798ms)
+✔ a typed zero is retained; malformed or inconsistent storage is ignored (0.1703ms)
+✔ browser tabs use independent workspace stores (0.1151ms)
+(node:20152) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/grouped-table-keys.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ expand-all keys include each nested grouping level (1.5794ms)
+✔ empty groups do not prevent the expanded state from matching the visible groups (0.1326ms)
+✔ same group names under different parents have distinct safe keys (0.2543ms)
+(node:4996) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/kam-volume-scope.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ KAM-labelled imports are included without any approved forecast (1.6831ms)
+✔ explicit ownership beats a shared customer/product forecast key (1.566ms)
+✔ ambiguous names and unmatched labels never grant access (0.4189ms)
+✔ imports alone populate KAM performance and contribution totals (1.7535ms)
+(node:36704) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/monthly-budget-reference.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ region-only Admin forecasts include imported Budget subregions (0.6568ms)
+✔ generic totals are fallbacks and do not double-count details (0.126ms)
+✔ monthly overrides annual per subregion and all matching monthly rows are summed (0.0943ms)
+✔ wrong region, customer, product and month cannot contribute (0.0733ms)
+✔ customer totals include all its products without adding another customer or regional totals (0.1644ms)
+(node:29104) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/permission-default-preview.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ preview names both gained and removed permissions without changing the original selections (1.489ms)
+✔ matching defaults produce no changes and RSM-to-ASM removes returned forecast access (0.1986ms)
+✔ unsupported checkbox actions never appear in the preview (1.2647ms)
+✔ plural module migration preserves grants and legacy policy access and can be rerun (1682.5625ms)
+✔ weekly and approval references use the previous calendar month for product and full-customer totals (1614.5185ms)
+(node:42692) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/reference-period.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ previous month remains in the same year outside January (1.1846ms)
+✔ January references December of the preceding year (0.1108ms)
+✔ current month is unchanged (0.3499ms)
+✔ table rename preserves data, dependencies, RLS and grants and repairs function bodies (1547.1519ms)
+(node:34408) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/return-notices.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ products returned together produce one notice (0.9054ms)
+✔ different reasons, reviewers or return events remain visible (0.1265ms)
+(node:31668) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/rsm-returned-forecasts.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ RSM revision controls require the exact assigned area and a returned forecast (0.6521ms)
+✔ revision payload includes concurrency checks without transferring ownership (0.7954ms)
+▶ RSM returned corrections retain ownership, scope and the two-stage approval workflow
+  ✔ saving keeps KAM ownership and the return reason; resubmission enters Pending (28.179ms)
+  ✔ product edits recalculate category and volume on the server (4.8268ms)
+  ✔ other roles, missing assignments, inactive actors and denied permissions are blocked (11.6324ms)
+  ✔ both area fields, KAM ownership and returned state are required (28.1022ms)
+  ✔ locked weeks, stale edits, invalid products and quantities cannot be saved or resubmitted (12.4953ms)
+  ✔ batches are atomic, reject duplicate IDs and products, and cannot cross customers or weeks (15.3412ms)
+  ✔ Admin actions apply across owners and areas while preserving ownership and status guards (44.6787ms)
+✔ RSM returned corrections retain ownership, scope and the two-stage approval workflow (1629.3164ms)
+✔ saved forecasts expose only owned rows or returned KAM rows in the RSM area (1410.3282ms)
+(node:43832) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/sales-reference-records.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ approval Budget lookup reads later pages and finds the November value of 40 (5.2976ms)
+✔ no forecast scope does not fetch unrelated Budgets (1.4492ms)
+(node:22368) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/save-forecast-drafts.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ mixed new and edited forecasts request generated IDs for missing IDs (24.2251ms)
+✔ another new entry for the same product/week does not reuse an existing ID (1.5561ms)
+(node:20128) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/saved-forecast-kam-groups.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ RSM customer groups separate KAM owners and review statuses (0.5427ms)
+✔ KAM expansion keys remain distinct between weeks and owners (0.0999ms)
+✔ KAM names include only owners of accessible saved forecasts (1340.5322ms)
+(node:28580) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/saved-forecast-status.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Delete is available only for drafts, while returned forecasts remain editable (0.5119ms)
+✔ default shows active work and excludes approved history (0.1292ms)
+✔ Approved and All statuses include approved records (0.1004ms)
+✔ approved forecasts remain read-only and returned drafts stay discoverable (0.0673ms)
+(node:16632) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/saved-volume-records.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Budget editor sorts years and months chronologically without changing the source list (1.0402ms)
+✔ Actual editor orders dates from oldest to newest (6.9986ms)
+✔ budget duplicate keys keep KAM identity and normalize its name (0.2371ms)
+✔ saved volumes accept zero and decimals but reject empty, negative and nonfinite values (1.162ms)
+✔ budget periods retain annual support and reject invalid years or months (0.245ms)
+✔ actual dates reject calendar rollover rather than saving a different day (1.7947ms)
+✔ saved budget updates target one original snapshot and preserve null dimensions (0.4742ms)
+✔ actual updates filter by original date, and failed or unmatched updates never report success (0.3165ms)
+✔ customer editing submits only changed rows in one atomic call with original snapshots (0.3965ms)
+✔ unchanged customer records make no writes and invalid input stops before the RPC (0.2212ms)
+✔ Actual customer edits send dates and preserve database conflict messages (0.217ms)
+✔ shared customer/KAM and per-row product changes save even when volume is unchanged (0.1757ms)
+(node:21556) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/selection-options.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ selection options preserve numeric IDs, labels and empty filter values (2.0437ms)
+✔ mapped suggestions and fragments retain disabled choices and deduplicate values (0.7539ms)
+✔ fixed selections reject unknown or disabled values while grouping text remains unrestricted (1.3322ms)
+(node:19492) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/table-summary-level.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ each grouping level includes just its own unique count (1.5271ms)
+✔ empty identifiers do not invent people or entities (0.1461ms)
+✔ counts reflect only the supplied filtered rows (0.3858ms)
+(node:23584) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/users-import.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ role position choices auto-select single options and require an allowed Manager position (1.1458ms)
+✔ imports auto-pick singleton positions when blank and reject incompatible supplied positions (0.5355ms)
+✔ KAM and RSM accounts require an active subregion within their region (0.2651ms)
+✔ NSM permits no region while validating supplied geographic assignments (0.1394ms)
+✔ uses exactly the six file columns without account status (0.1171ms)
+✔ matches names and normalizes email, role, position and account status (0.1277ms)
+✔ applies the batch account status instead of a spreadsheet flag (0.3829ms)
+✔ skips existing accounts and case-insensitive duplicate emails (0.2231ms)
+✔ rejects unknown or ambiguous regions and cross-region subregions (0.1427ms)
+✔ supports an optional subregion for ASM and globally assigned Admin accounts (0.2493ms)
+✔ validates identity fields and rejects unsupported roles (0.192ms)
+✔ finds the header below title rows in a later worksheet (0.1669ms)
+✔ accepts common header labels, capitalization, newlines and reordered columns (0.145ms)
+✔ skips blank rows and repeated headers while retaining incomplete user records (0.1689ms)
+✔ distinguishes missing headers, partial headers and an empty template (0.5602ms)
+✔ reads formatted Excel cells and CSV using the same header detection (25.1242ms)
+▶ Budget and Actual infer missing subregions from KAM or customer
+  ✔ backfills both tables and preserves existing assignments and totals (8.2362ms)
+  ✔ matches normalized names or email within the row region (3.6207ms)
+  ✔ uses customer salesman only when the imported KAM is blank or unknown (1.8502ms)
+  ✔ never guesses ambiguous or invalid KAM assignments (3.1096ms)
+  ✔ future inserts and corrections persist the resolved subregion in both tables (6.5868ms)
+  ✔ internal KAM lookup is not exposed as an unrestricted user-directory RPC (2.4083ms)
+  ✔ automatic inference still respects the importing user row-level scope (7.0053ms)
+✔ Budget and Actual infer missing subregions from KAM or customer (1482.5025ms)
+(node:18956) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/LUZ/feed-sales-forecast/lib/weekly-budget.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\LUZ\feed-sales-forecast\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ weekly targets divide November 2026 budget across four reporting weeks (0.6099ms)
+✔ five-week months and leap years use their actual reporting week count (0.1004ms)
+✔ week assignment counts each reporting Thursday once across the year (0.4074ms)
+ℹ tests 223
+ℹ suites 0
+ℹ pass 222
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 14703.6285

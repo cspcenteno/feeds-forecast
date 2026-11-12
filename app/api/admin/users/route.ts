@@ -1,5 +1,6 @@
 
 import { NextResponse } from 'next/server'
+import { requiresUserSubregion, validRolePosition } from '@/lib/users-import'
 
 import { createClient } from '@/lib/server'
 import { supabaseAdmin } from '@/lib/admin'
@@ -230,7 +231,7 @@ async function validateRegion(
 
   if (regionError || !region) return { valid: false }
 
-  if (subregionId === null) return { valid: true }
+  if (subregionId === null) return { valid: !requiresUserSubregion(role, position) }
 
   if (!Number.isInteger(subregionId)) return { valid: false }
 
@@ -342,6 +343,7 @@ export async function POST(request: Request) {
       )
     }
 
+    if (!validRolePosition(role, position)) return NextResponse.json({ error: 'Select a sales position allowed for this role.' }, { status: 400 })
     if (position.length > 150) {
       return NextResponse.json(
         { error: 'Position must not exceed 150 characters.' },
@@ -514,6 +516,7 @@ export async function PATCH(request: Request) {
       )
     }
 
+    if (!validRolePosition(role, position)) return NextResponse.json({ error: 'Select a sales position allowed for this role.' }, { status: 400 })
     if (position.length > 150) {
       return NextResponse.json(
         { error: 'Position must not exceed 150 characters.' },

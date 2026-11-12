@@ -163,6 +163,24 @@ test('automatic week-lock migration and database enforcement', { skip: !PGlite }
       assert.equal(await isOpen(0), false)
       await assert.rejects(db.query("select public.manage_forecast_weeks('policy',p_ahead:=8,p_reason:='Change rule')"), /fixed/)
     })
+    await t.test('two weeks ahead onward is editable, including year rollover', async () => {
+      await db.exec(await readFile(new URL('../supabase/migrations/202611110001_open_second_future_week.sql', import.meta.url), 'utf8'))
+      await db.query('update public.week_locks set is_override=false')
+      for (const offset of [-1, 0, 1]) assert.equal(await isOpen(offset), false)
+      for (const offset of [2, 3, 10, 53]) assert.equal(await isOpen(offset), true)
+      const locked = await period(1)
+      const open = await period(2)
+      await assert.rejects(db.query("insert into public.sales_forecasts(year,week,status,user_id) values ($1,$2,'Draft',$3)", [locked.year, locked.week, user]), /locked/)
+      await db.query("insert into public.sales_forecasts(year,week,status,user_id) values ($1,$2,'Draft',$3)", [open.year, open.week, user])
+      const definition = (await db.query("select pg_get_functiondef('public.forecast_week_is_open(integer,integer)'::regprocedure) value")).rows[0].value
+      // Freeze business time to Week 46 and the last ISO week of 2026.
+      for (const [today, closed, opened] of [['2026-11-11', [2026,47], [2026,48]], ['2026-12-30', [2027,1], [2027,2]]]) {
+        await db.exec(definition.replaceAll("now() at time zone 'Asia/Manila'", "timestamp '" + today + "'"))
+        assert.equal((await db.query('select public.forecast_week_is_open($1,$2) value', closed)).rows[0].value, false)
+        assert.equal((await db.query('select public.forecast_week_is_open($1,$2) value', opened)).rows[0].value, true)
+      }
+      await db.exec(definition)
+    })
     await t.test('global automatic reset clears all years without a selected week', async () => {
       await db.exec(await readFile(new URL('../supabase/migrations/202611100010_global_automatic_week_reset.sql', import.meta.url), 'utf8'))
       await db.query("update public.week_locks set is_override=true,status='Open',override_expires_at=now()+interval '24 hours' where year=2020")

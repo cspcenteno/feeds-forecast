@@ -56,8 +56,9 @@ const menuItems = [
     icon: LayoutDashboard,
   },
   {
-    title: 'Forecast Input',
-    url: '/forecast-input',
+    title: 'Forecasts',
+    permissionModule: 'Forecasts',
+    url: '/forecasts',
     icon: ClipboardPenLine,
   },
   {
@@ -71,13 +72,13 @@ const menuItems = [
     icon: CheckCircle,
   },
   {
-    title: 'Budget',
-    url: '/budget',
+    title: 'Budgets',
+    url: '/budgets',
     icon: Wallet,
   },
   {
-    title: 'Actual',
-    url: '/actual',
+    title: 'Actuals',
+    url: '/actuals',
     icon: ChartColumn,
   },
 ]
@@ -327,7 +328,7 @@ export function AppSidebar() {
     router.refresh()
   }
 
-  const visibleMenuItems = menuItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
+  const visibleMenuItems = menuItems.filter((item) => authorization.can((item.permissionModule ?? item.title) as import('@/lib/authorization').ModuleName, 'view'))
   const visibleMasterDataItems = masterDataItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
   const visibleAdminItems = adminItems.filter((item) => authorization.can(item.title as import('@/lib/authorization').ModuleName, 'view'))
   const canAccessMasterData = visibleMasterDataItems.length > 0
@@ -384,14 +385,14 @@ export function AppSidebar() {
                     >
                       <item.icon />
                       <span>{item.title}</span>
-                      {attention && (item.url === '/forecast-input' ? attention.returned.length : item.url === '/approvals' ? attention.pending + attention.endorsed : 0) > 0 && (
-                        <span data-slot="forecast-attention-badge" className={'ml-auto flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:right-0 ' + (item.url === '/forecast-input'
+                      {attention && (item.url === '/forecasts' ? attention.returnedCustomers : item.url === '/approvals' ? attention.pending + attention.endorsed : 0) > 0 && (
+                        <span data-slot="forecast-attention-badge" className={'ml-auto flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:right-0 ' + (item.url === '/forecasts'
                           ? 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200'
                           : attention.pending > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
                             : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200')}
-                          title={item.url === '/forecast-input' ? `${attention.returned.length} returned for revision` : `${attention.pending} awaiting endorsement · ${attention.endorsed} awaiting approval`}
-                          aria-label={item.url === '/forecast-input' ? `${attention.returned.length} returned forecasts` : `${attention.pending + attention.endorsed} forecasts awaiting review`}>
-                          {item.url === '/forecast-input' ? attention.returned.length : attention.pending + attention.endorsed}
+                          title={item.url === '/forecasts' ? `${attention.returnedCustomers} customers returned for revision` : `${attention.pending} KAMs awaiting endorsement · ${attention.endorsed} RSMs awaiting approval`}
+                          aria-label={item.url === '/forecasts' ? `${attention.returnedCustomers} customers with returned forecasts` : `${attention.pending + attention.endorsed} review groups awaiting review`}>
+                          {item.url === '/forecasts' ? attention.returnedCustomers : attention.pending + attention.endorsed}
                         </span>
                       )}
                     </SidebarMenuButton>

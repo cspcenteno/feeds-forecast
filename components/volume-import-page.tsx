@@ -236,13 +236,14 @@ function getImportStatusLabel(status: ImportPreview['status']) {
   }
 }
 
-export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actual' }) {
+export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actuals' }) {
   const { confirmAction } = useActionDialogs()
 
-  const isActual = moduleName === 'Actual'
+  const isActual = moduleName === 'Actuals'
   const label = moduleName.toLowerCase()
   const savedTitle = isActual ? 'Saved Actuals' : 'Saved Budgets'
-  const volumeLabel = moduleName + ' (Vol.)'
+  const metricLabel = isActual ? 'Actual' : 'Budget'
+  const volumeLabel = metricLabel + ' (Vol.)'
   const savedTable = isActual ? 'actuals' : 'budgets'
   const stagingTable = isActual ? 'actual_import_staging' : 'budget_import_staging'
 
@@ -2095,7 +2096,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budget' | 'Actua
                 )}
 
                 <th className="px-3 py-3 text-left font-medium">
-                  {moduleName} Structure
+                  {metricLabel} Structure
                 </th>
 
                 <th className="px-3 py-3 text-left font-medium">

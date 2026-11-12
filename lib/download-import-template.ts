@@ -1,8 +1,8 @@
 import * as XLSX from 'xlsx'
 import { actualTemplateColumns, budgetTemplateColumns, forecastTemplateColumns } from '@/lib/import-template-columns'
 
-export function downloadImportTemplate(moduleName: 'Forecast' | 'Budget' | 'Actual') {
-  const columns = moduleName === 'Forecast' ? forecastTemplateColumns : moduleName === 'Actual' ? actualTemplateColumns : budgetTemplateColumns
+export function downloadImportTemplate(moduleName: 'Forecasts' | 'Budgets' | 'Actuals') {
+  const columns = moduleName === 'Forecasts' ? forecastTemplateColumns : moduleName === 'Actuals' ? actualTemplateColumns : budgetTemplateColumns
   const workbook = XLSX.utils.book_new()
   const sheet = XLSX.utils.aoa_to_sheet([columns.map((column) => column === 'kam' ? 'KAM / Salesman' : column)])
   sheet['!cols'] = columns.map((column) => ({ wch: column === 'product_name' || column === 'customer' ? 32 : column === 'week' ? 24 : 18 }))

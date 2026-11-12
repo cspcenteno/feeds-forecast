@@ -145,5 +145,27 @@ test('operational access and dashboard reporting use independent scopes', { skip
       await assert.rejects(db.query("select transition_forecast_review(array[3]::bigint[],'approve')"), /outside your assignment/)
       assert.equal((await db.query("select transition_forecast_review(array[1]::bigint[],'approve') as count")).rows[0].count, 1)
     })
+    await t.test('dashboard customer references include unlisted products without changing product rows', async () => {
+      await db.exec(`reset role;
+        insert into products values (3,'P3','Unlisted product');
+        insert into budgets values (20,2026,11,1,11,1,3,533);
+        insert into actuals values (20,'2026-10-01',1,11,1,1,390),(21,'2026-10-31',1,11,1,3,140),
+          (22,'2026-11-02',1,11,1,3,7),(23,'2025-11-02',1,11,1,1,777),
+          (24,'2026-10-01',2,21,1,3,999),(25,'2026-10-01',1,11,99,3,999);`)
+      await migration('202611120009_dashboard_customer_monthly_references.sql')
+      await migration('202611120009_dashboard_customer_monthly_references.sql')
+      await as(1)
+      const rows = (await dashboard()).details.filter(row => row.region_id === 1 && row.customer_id === 1)
+      assert.ok(rows.length > 0)
+      assert.equal(rows.some(row => row.product_id === 3),false)
+      for (const row of rows) {
+        assert.equal(Number(row.customer_budget),673)
+        assert.equal(Number(row.customer_actual),22)
+        assert.equal(Number(row.customer_prior_actual),530)
+      }
+      const product = rows.find(row => row.product_id === 1)
+      assert.equal(Number(product.budget),100)
+      assert.equal(Number(product.prior_actual),390)
+    })
   } finally { await db.close() }
 })

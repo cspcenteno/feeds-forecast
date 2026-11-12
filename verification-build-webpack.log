@@ -1,0 +1,61 @@
+
+> feed-sales-forecast@0.1.0 build
+> next build --webpack
+
+▲ Next.js 16.3.5 (webpack)
+- Environments: .env.local
+⚠ Warning: Next.js ignored package-lock.json in C:\Users\LUZ because it is outside the current Git repository (C:\Users\LUZ\feed-sales-forecast).
+ To use this directory, set `outputFileTracingRoot` in your Next.js config.
+
+✓ Running next.config.ts took 24ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.3s
+  Running TypeScript ...
+  Finished TypeScript in 9.7s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/33) ...
+  Generating static pages using 7 workers (8/33) 
+  Generating static pages using 7 workers (16/33) 
+  Generating static pages using 7 workers (24/33) 
+✓ Generating static pages using 7 workers (33/33) in 1833ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /actuals
+├ ƒ /api/account/change-password
+├ ƒ /api/admin/forecast-import
+├ ƒ /api/admin/users
+├ ƒ /api/authorization
+├ ƒ /api/dashboard
+├ ƒ /api/forecast-attention
+├ ƒ /api/forecast-customers
+├ ƒ /api/reporting-asms
+├ ƒ /api/reporting-names
+├ ƒ /api/salesperson-names
+├ ○ /apple-icon.png
+├ ○ /approvals
+├ ○ /audit-logs
+├ ○ /budgets
+├ ○ /categories
+├ ○ /change-password
+├ ○ /customers
+├ ○ /dashboard
+├ ○ /forecasts
+├ ○ /icon.png
+├ ○ /locks
+├ ○ /login
+├ ○ /products
+├ ○ /regions
+├ ○ /signup
+├ ○ /subregions
+├ ○ /users
+└ ○ /weekly-sales
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

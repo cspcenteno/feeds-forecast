@@ -124,7 +124,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
       load('subregions', 'id, name, region_id', { active: true }),
       load('customers', 'id, customer, region_id', { active: true }),
       load('products', 'id, code, name, category_id, weight', { active: true }),
-      load('sales_forecasts', 'id, user_id, year, week, region_id, subregion_id, customer_id, product_id'),
+      load('forecasts', 'id, user_id, year, week, region_id, subregion_id, customer_id, product_id'),
       loadForecastWeekStates(supabase, forecastImportPeriods(sourceRows)),
     ])
     const loaded = { users, regions, subregions, customers, products, forecasts, locks } as unknown as ForecastImportReferences
@@ -159,7 +159,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
 
   async function upload(file: File) {
     await run(async () => {
-      if (!authorization.can('Forecast Input', 'add')) throw new Error('You do not have permission to import forecasts.')
+      if (!authorization.can('Forecasts', 'add')) throw new Error('You do not have permission to import forecasts.')
       if (!/\.(xlsx|xls|csv)$/i.test(file.name)) throw new Error('Choose an Excel (.xlsx, .xls) or CSV file.')
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
@@ -207,7 +207,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
     await run(async () => {
     let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
     try {
-      if (!authorization.can('Forecast Input', 'add')) throw new Error('You do not have permission to import forecasts.')
+      if (!authorization.can('Forecasts', 'add')) throw new Error('You do not have permission to import forecasts.')
       // Recheck locks and existing forecasts immediately before saving.
       const latest = await refreshPreview()
       const eligible = validateForecastImport(latest.rows, latest.references, scope).filter((row) => row.status === 'Ready')
@@ -259,7 +259,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
 
   async function saveUploadedRow(row: ForecastImportRow) {
     await run(async () => {
-      if (!authorization.can('Forecast Input', 'edit')) throw new Error('You do not have permission to edit uploaded forecasts.')
+      if (!authorization.can('Forecasts', 'edit')) throw new Error('You do not have permission to edit uploaded forecasts.')
       try {
         await updateForecastStaging(supabase, row)
         setEditing(null)
@@ -275,7 +275,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
     try {
     if (!(actionConfirmation = await confirmAction({ message: `Discard ${ids.length} uploaded staging row(s)? Saved forecasts will be kept.` }))) return
     await run(async () => {
-      if (!authorization.can('Forecast Input', 'delete')) throw new Error('You do not have permission to discard uploaded forecasts.')
+      if (!authorization.can('Forecasts', 'delete')) throw new Error('You do not have permission to discard uploaded forecasts.')
       try {
         await deleteForecastStaging(supabase, ids)
         setEditing((current) => current && ids.includes(current.id) ? null : current)
@@ -301,8 +301,8 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             event.target.value = ''
             if (file) void upload(file)
           }} />
-          <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecast')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
-          <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || !authorization.can('Forecast Input', 'add')} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
+          <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
+          <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || !authorization.can('Forecasts', 'add')} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
           <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
           <button data-slot="show-hide-button" data-action-tone="neutral" type="button" aria-expanded={show} onClick={() => {
             setShow(!show)
@@ -317,10 +317,10 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
           </div>
           <div className="flex justify-end">
             <div data-action-toolbar="" className="flex shrink-0 flex-wrap items-center gap-2">
-              <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || !referencesReady || !stagingReady || !ready.length || !authorization.can('Forecast Input', 'add')} onClick={() => void importReady()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+              <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || !referencesReady || !stagingReady || !ready.length || !authorization.can('Forecasts', 'add')} onClick={() => void importReady()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
                 <Upload className="size-4" />Import {ready.length} Record(s)
               </button>
-              {authorization.can('Forecast Input', 'delete') && <button data-action-tone="danger" type="button" disabled={disabled || !stagingReady || !rows.length} onClick={() => void discardUploadedRows(rows.map((row) => row.id))} className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50">
+              {authorization.can('Forecasts', 'delete') && <button data-action-tone="danger" type="button" disabled={disabled || !stagingReady || !rows.length} onClick={() => void discardUploadedRows(rows.map((row) => row.id))} className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50">
                 <Trash2 className="size-4" aria-hidden="true" />Discard {rows.length} Record(s)
               </button>}
             <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !rows.length}
@@ -349,8 +349,8 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
               const grouped = preview.filter((row) => (row.issues.length > 0) === (group === 'Invalid'))
               const renderRows = (items: typeof preview) => items.map((row) => <tr key={row.source.id} className="border-b">
                   <td data-action-column="standard" className="px-3 py-3 align-top"><div className="flex flex-nowrap gap-1.5">
-                    {authorization.can('Forecast Input', 'edit') && <TableActionButton action="edit" type="button" disabled={disabled} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs" />}
-                    {authorization.can('Forecast Input', 'delete') && <TableActionButton action="discard" type="button" disabled={disabled} onClick={() => void discardUploadedRows([row.source.id])} className="rounded-md border px-2 py-1 text-xs" />}
+                    {authorization.can('Forecasts', 'edit') && <TableActionButton action="edit" type="button" disabled={disabled} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs" />}
+                    {authorization.can('Forecasts', 'delete') && <TableActionButton action="discard" type="button" disabled={disabled} onClick={() => void discardUploadedRows([row.source.id])} className="rounded-md border px-2 py-1 text-xs" />}
                   </div></td>
                   <td className={`px-3 py-3 align-top text-sm leading-5 wrap-anywhere ${row.issues.length ? 'text-destructive' : ''}`}>
                     <StatusBadge status={row.status} />

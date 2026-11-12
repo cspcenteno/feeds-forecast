@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 
 export type ForecastAttention = {
   returned: { id: number; remarks: string | null; returned_by: string | null; returned_at: string | null; reviewer: string }[]
+  returnedCustomers: number
   pending: number
   endorsed: number
 }

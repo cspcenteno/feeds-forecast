@@ -12,3 +12,7 @@ export function savedForecastMatchesStatus(item: { status: string; returned_at: 
 export function canEditSavedForecastStatus(status: string) {
   return status === 'Draft' || status === 'Rejected'
 }
+
+export function canDeleteSavedForecastStatus(status: string) {
+  return status === 'Draft'
+}

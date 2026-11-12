@@ -1,8 +1,10 @@
 'use client'
 
 import { summaryForLevel } from '@/lib/table-summary-level'
+import { Gauge } from 'lucide-react'
+import { dashboardSalesTotals } from '@/lib/dashboard-sales-totals'
 
-import { LayoutDashboard as HeadingLayoutDashboard, ChartNoAxesCombined as HeadingChartNoAxesCombined, ChartColumn as HeadingChartColumn, ChartPie as HeadingChartPie, Lightbulb as HeadingLightbulb, CalendarDays as HeadingCalendarDays } from 'lucide-react'
+import { ChartNoAxesCombined as HeadingChartNoAxesCombined, ChartColumn as HeadingChartColumn, ChartPie as HeadingChartPie, Lightbulb as HeadingLightbulb, CalendarDays as HeadingCalendarDays } from 'lucide-react'
 
 import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
 import Link from 'next/link'
@@ -16,7 +18,6 @@ import {
 import { Table } from '@/components/ui/table'
 import { SortableHeader } from '@/components/ui/sortable-header'
 import { BudgetValueIndicator } from '@/components/ui/budget-value-indicator'
-import { weeklyBudget } from '@/lib/weekly-budget'
 import { usePopupError } from '@/components/action-dialogs'
 import { budgetComparison } from '@/lib/budget-comparison'
 import { compareRegionNames } from '@/lib/region-order'
@@ -47,6 +48,10 @@ type SalesDetail = {
   budget: number
   actual: number
   prior_actual: number
+  customer_budget?: number
+  customer_actual?: number
+  customer_prior_actual?: number
+  customer_forecast?: number
 }
 
 type DashboardData = {
@@ -94,29 +99,6 @@ function formatPercent(value: number | null) {
   return value === null ? '—' : number.format(value) + '%'
 }
 
-function volumeTotals(rows: SalesDetail[]) {
-  const budgets = new Map<number, number>()
-  const actuals = new Map<string, SalesDetail>()
-  let quantity = 0
-  let volume = 0
-
-  for (const row of rows) {
-    quantity += Number(row.quantity)
-    volume += Number(row.volume)
-    if (row.budget_id !== null) budgets.set(row.budget_id, Number(row.budget))
-    actuals.set(JSON.stringify([row.region_id, row.customer_id, row.product_id]), row)
-  }
-
-  let actual = 0
-  let priorActual = 0
-  for (const row of actuals.values()) {
-    actual += Number(row.actual)
-    priorActual += Number(row.prior_actual)
-  }
-
-  return [quantity, volume, [...budgets.values()].reduce((sum, budget) => sum + budget, 0), actual, priorActual, volume]
-}
-
 function buildSalesGroups(data: DashboardData) {
   const levels: ((row: SalesDetail) => [string | number | null, string])[] = []
   if (data.showAsm) levels.push((row) => [row.asm_id ?? 'unassigned-asm', 'ASM: ' + (row.asm_name || 'Unassigned')])
@@ -151,7 +133,7 @@ function buildSalesGroups(data: DashboardData) {
         key,
         label: entry.label,
         area: isAsm || isRsm || isScopedTopRow ? [...new Set(entry.rows.map((row) => (isAsm ? row.region : row.subregion) || '—'))].join(', ') : '',
-        metrics: volumeTotals(entry.rows),
+        metrics: dashboardSalesTotals(entry.rows, depth < levels.length - 1),
         children: depth + 1 < levels.length ? group(entry.rows, depth + 1, key) : [],
       }
     }).sort((a, b) => a.label.localeCompare(b.label))
@@ -318,8 +300,8 @@ export default function DashboardPage() {
           {group.metrics.map((value, index) => <td key={index} className="px-1.5 py-2 text-right tabular-nums wrap-anywhere sm:px-2">{
             index === 1 || index >= 3
               ? <BudgetValueIndicator value={value}
-                  budgetLabel={index === 1 ? 'weekly budget' : 'monthly budget'}
-                  budget={index === 1 ? weeklyBudget(group.metrics[2], Number(month.slice(0, 4)), Number(month.slice(5, 7))) : group.metrics[2]}>
+                  budgetLabel="monthly budget"
+                  budget={group.metrics[2]}>
                   {number.format(value)}
                 </BudgetValueIndicator>
               : number.format(value)
@@ -332,17 +314,17 @@ export default function DashboardPage() {
 
   return (
     <div className="sales-dashboard space-y-4 rounded-xl bg-slate-100/70 p-3 dark:bg-slate-950 dark:text-slate-100">
-      {attention && (attention.returned.length > 0 || attention.pending > 0 || attention.endorsed > 0) && (
+      {attention && (attention.returnedCustomers > 0 || attention.pending > 0 || attention.endorsed > 0) && (
         <div aria-label="Forecasts needing attention" className="flex flex-wrap gap-3">
-          {attention.returned.length > 0 && <Link href="/forecast-input?status=Returned#saved-forecasts" className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200 dark:hover:bg-rose-900/50">{attention.returned.length} forecast{attention.returned.length === 1 ? '' : 's'} returned for revision →</Link>}
-          {attention.pending > 0 && <Link href="/approvals?stage=Pending" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200 dark:hover:bg-amber-900/50">{attention.pending} submission{attention.pending === 1 ? '' : 's'} awaiting endorsement →</Link>}
-          {attention.endorsed > 0 && <Link href="/approvals?stage=Endorsed" className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/50">{attention.endorsed} endorsed submission{attention.endorsed === 1 ? '' : 's'} awaiting approval →</Link>}
+          {attention.returnedCustomers > 0 && <Link href="/forecasts?status=Returned#saved-forecasts" className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800 transition-colors hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200 dark:hover:bg-rose-900/50">{attention.returnedCustomers} customer{attention.returnedCustomers === 1 ? '' : 's'} returned for revision →</Link>}
+          {attention.pending > 0 && <Link href="/approvals?stage=Pending" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200 dark:hover:bg-amber-900/50">{attention.pending} KAM{attention.pending === 1 ? '' : 's'} awaiting endorsement →</Link>}
+          {attention.endorsed > 0 && <Link href="/approvals?stage=Endorsed" className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 transition-colors hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/50">{attention.endorsed} RSM{attention.endorsed === 1 ? '' : 's'} awaiting approval →</Link>}
         </div>
       )}
       <header className="rounded-lg border border-t-4 border-t-emerald-500 bg-card px-4 py-3 shadow-sm dark:border-slate-600 dark:border-t-emerald-400 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 items-center gap-3">
-            <h2 data-section-title="" className="text-base leading-6 font-semibold"><HeadingLayoutDashboard className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Sales Performance Dashboard</h2>
+            <h2 data-section-title="" className="text-base leading-6 font-semibold"><Gauge className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Sales Performance Dashboard</h2>
           </div>
           <div className="flex max-w-full items-center gap-2">
             <input aria-label="Month" type="month" value={month} onChange={(event) => {

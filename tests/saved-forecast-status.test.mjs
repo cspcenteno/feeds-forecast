@@ -1,8 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { savedForecastMatchesStatus, canEditSavedForecastStatus } from '../lib/saved-forecast-status.ts'
+import { savedForecastMatchesStatus, canEditSavedForecastStatus, canDeleteSavedForecastStatus } from '../lib/saved-forecast-status.ts'
 
 const row = (status) => ({ status, returned_at: null })
+
+test('Delete is available only for drafts, while returned forecasts remain editable', () => {
+  assert.equal(canDeleteSavedForecastStatus('Draft'),true)
+  for (const status of ['Rejected','Pending','Endorsed','Approved']) assert.equal(canDeleteSavedForecastStatus(status),false)
+  assert.equal(canEditSavedForecastStatus('Rejected'),true)
+})
 
 test('default shows active work and excludes approved history', () => {
   for (const status of ['Draft', 'Pending', 'Endorsed', 'Rejected']) assert.equal(savedForecastMatchesStatus(row(status), ''), true)

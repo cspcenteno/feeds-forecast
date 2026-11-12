@@ -510,6 +510,10 @@ col[data-volume-column="person"] { width: 144px; min-width: 144px; max-width: 14
     width: max(80px, calc((var(--volume-visible-width) - 464px - var(--volume-action-width) - var(--volume-person-width) - var(--volume-date-width)) / 2));
   }
   [data-volume-layout] col[data-volume-column="date"] { width: 90px; }
+  table[data-volume-layout="forecast"]:not(:has(col[data-volume-column="area"])) col:is([data-volume-column="customer"], [data-volume-column="product"]) {
+    /* Share the removed 144px Area column equally between Customer and Product. */
+    width: max(80px, calc((var(--volume-visible-width) - 320px - var(--volume-action-width) - var(--volume-person-width) - var(--volume-date-width)) / 2));
+  }
   [data-volume-layout] col[data-volume-column="number"] { width: 112px; }
   [data-volume-layout] td:not([colspan]) { overflow-wrap: anywhere; }
 }
@@ -1250,6 +1254,60 @@ button[data-slot="expand-collapse-button"] {
   padding-inline: 0;
 }
 
+/* User details and actions stay visible while the permissions list scrolls. */
+[data-record-dialog] #user-editor > [data-section-header] {
+  padding-bottom: 0.75rem;
+}
+[data-record-dialog] #user-editor > .app-field-row {
+  gap: 0.75rem 1rem;
+  padding-block: 0.75rem;
+}
+#user-editor [data-user-permissions] {
+  gap: 0.5rem;
+  padding-block: 0.75rem;
+}
+#user-editor [data-user-permissions] table :is(th, td) {
+  padding-block: 0.375rem;
+}
+#user-editor > [data-action-toolbar] {
+  padding-block: 0.75rem;
+}
+
+@media (min-width: 768px) and (min-height: 600px) {
+  [data-record-dialog]:has(#user-editor) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 1rem;
+  }
+  [data-record-dialog]:has(#user-editor) > fieldset,
+  #user-editor,
+  #user-editor [data-user-permissions],
+  #user-editor-permissions {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #user-editor > :not([data-user-permissions]),
+  #user-editor [data-user-permissions] > :not(#user-editor-permissions),
+  #user-editor-permissions > :not([data-slot="table-container"]) {
+    flex-shrink: 0;
+  }
+  #user-editor-permissions > [data-slot="table-container"] {
+    min-height: 0;
+    flex-shrink: 1;
+  }
+  [data-record-dialog] #user-editor > .app-field-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  [data-record-dialog] #user-editor > .app-field-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 767px) {
   [data-app-dialog] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea) {
     font-size: 1rem;
@@ -1259,3 +1317,107 @@ button[data-slot="expand-collapse-button"] {
     height: 2.75rem;
   }
 }
+
+@media (min-width: 640px) {
+  [data-record-dialog] .app-field-row.forecast-entry-fields {
+    grid-template-columns: minmax(11rem, 14rem) minmax(10rem, 12rem) minmax(0, 1fr);
+  }
+}
+
+button[data-slot="table-action-button"][data-compact-action] {
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0;
+}
+button[data-slot="table-action-button"][data-compact-action] [data-action-label] {
+  display: none;
+}
+
+[data-multiline-selection]:not(:focus-within) input {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+}
+[data-multiline-selection]:focus-within [data-selected-label] {
+  display: none;
+}
+
+/* Scroll narrow entry forms instead of squeezing headers and editable fields. */
+table[data-forecast-entry] {
+  width: 100%;
+  min-width: 1120px;
+}
+table[data-forecast-entry] [data-action-column="single"] {
+  --action-column-width: 80px;
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+}
+table[data-forecast-entry] col:nth-child(2) { width: 48px; }
+table[data-forecast-entry] col:nth-child(3) { width: auto; }
+table[data-forecast-entry] col[data-volume-column="number"] { width: 120px; }
+
+table[data-forecast-entry] > tfoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: var(--card);
+  box-shadow: 0 -1px var(--border);
+}
+
+/* Keep the editor compact; let its row viewport absorb limited screen height. */
+[data-forecast-form] > [data-section-header] {
+  padding-block: 0.5rem;
+  padding-right: 2.5rem;
+}
+[data-forecast-form] [data-section-title] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0;
+}
+[data-forecast-form] [data-section-title] > svg {
+  margin-right: 0;
+}
+[data-forecast-form] button[data-return-reason-trigger] {
+  min-height: 2rem;
+  padding-block: 0.25rem;
+}
+[data-forecast-form-body] {
+  padding-block: 0.75rem 0;
+}
+[data-forecast-form-body] > .mb-6 {
+  margin-bottom: 0.75rem;
+}
+[data-forecast-form-body] > [data-action-toolbar] {
+  margin-top: 0.75rem;
+}
+table[data-forecast-entry] > tfoot > tr > td {
+  padding-block: 0.625rem;
+}
+
+@media (min-width: 768px) and (min-height: 600px) {
+  [data-record-dialog]:has([data-forecast-form]) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 1rem;
+  }
+  [data-record-dialog]:has([data-forecast-form]) > fieldset,
+  [data-forecast-form],
+  [data-forecast-form-body] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  [data-forecast-form] > [data-section-header],
+  [data-forecast-form-body] > :not([data-slot="table-container"]) {
+    flex-shrink: 0;
+  }
+  [data-forecast-form-body] > [data-slot="table-container"] {
+    min-height: 0;
+    flex-shrink: 1;
+  }
+}
+
