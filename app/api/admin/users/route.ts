@@ -16,6 +16,8 @@ type PermissionInput = {
   can_view: boolean
   can_add: boolean
   can_edit: boolean
+  can_import: boolean
+  can_export: boolean
   can_delete: boolean
 }
 
@@ -76,6 +78,8 @@ const permissionFields = [
   'can_view',
   'can_add',
   'can_edit',
+  'can_import',
+  'can_export',
   'can_delete',
 ] as const
 
@@ -118,6 +122,8 @@ function normalizePermissions(
       can_view: item.can_view,
       can_add: item.can_add,
       can_edit: item.can_edit,
+      can_import: item.can_import,
+      can_export: item.can_export,
       can_delete: item.can_delete,
     }
 
@@ -126,6 +132,8 @@ function normalizePermissions(
         | 'view'
         | 'add'
         | 'edit'
+        | 'import'
+        | 'export'
         | 'delete'
 
       const unavailable = (
@@ -137,6 +145,7 @@ function normalizePermissions(
       }
     }
 
+    if (!result.can_view) { result.can_export = false; result.can_import = false }
     normalized.push(result)
   }
 
@@ -191,11 +200,11 @@ async function getActiveAdmin() {
 
 async function canManageModule(
   userId: string,
-  action: 'can_add' | 'can_edit' | 'can_delete',
+  action: 'can_add' | 'can_edit' | 'can_delete' | 'can_import',
 ) {
   const { data, error } = await supabaseAdmin
     .from('user_permissions')
-    .select('can_add, can_edit, can_delete, is_default')
+    .select('can_add, can_edit, can_delete, can_import, is_default')
     .eq('user_id', userId)
     .eq('module', 'Users')
 
@@ -284,6 +293,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
+
+    if (body.importRequest === true && !(await canManageModule(auth.user.id, 'can_import'))) {
+      return NextResponse.json({ error: 'You do not have Users import permission.' }, { status: 403 })
+    }
 
     const fullName =
       typeof body.fullName === 'string' ? body.fullName.trim() : ''
@@ -421,6 +434,8 @@ export async function POST(request: Request) {
       can_view: permission.can_view,
       can_add: permission.can_add,
       can_edit: permission.can_edit,
+      can_import: permission.can_import,
+      can_export: permission.can_export,
       can_delete: permission.can_delete,
       is_default: false,
       updated_at: new Date().toISOString(),
@@ -640,6 +655,8 @@ export async function PATCH(request: Request) {
       can_view: permission.can_view,
       can_add: permission.can_add,
       can_edit: permission.can_edit,
+      can_import: permission.can_import,
+      can_export: permission.can_export,
       can_delete: permission.can_delete,
       is_default: false,
       updated_at: new Date().toISOString(),

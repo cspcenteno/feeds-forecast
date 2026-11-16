@@ -29,6 +29,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   RefreshCw,
+  Download,
   Undo2,
   X,
   ChevronDown,
@@ -163,6 +164,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   const [regions, setRegions] = useState<Region[]>([])
   const [subregions, setSubregions] = useState<Subregion[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [asmNames, setAsmNames] = useState<Record<number, string>>({})
   const [customers, setCustomers] = useState<Customer[]>([])
 
   const [submittedUsers, setSubmittedUsers] =
@@ -188,6 +190,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   // -----------------------------------------
 
   const [selectedMonth, setSelectedMonth] = useState('')
+  const [fromWeek, setFromWeek] = useState('')
+  const [toWeek, setToWeek] = useState('')
   const [selectedRegion, setSelectedRegion] = useState('all')
 
   // -----------------------------------------
@@ -219,6 +223,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   const [referencesError, setReferencesError] = useState(false)
   const referenceRequest = useRef(0)
   const [processing, setProcessing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
 
@@ -573,7 +578,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     const isSuperuser = role === 'Superuser'
     const ownWeeklyRecords = profile.position === 'KAM' || (role === 'User' && !['NSM', 'ASM', 'RSM', 'Supervisor', 'SV'].includes(profile.position ?? ''))
     const supervisor = isSuperuser && profile.position === 'Supervisor'
-    const restrictSubregion = weekly ? !isAdmin && ['RSM', 'Supervisor', 'SV'].includes(profile.position ?? '') : supervisor || (role === 'Manager' && profile.position === 'RSM')
+    const restrictSubregion = role === 'Manager' && profile.position === 'RSM'
     const restrictRegion = weekly ? !isAdmin && profile.position !== 'NSM' : role === 'Manager' || supervisor
 
     setUserRole(role)
@@ -738,11 +743,12 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         : item
     )
 
-    if (weekly && (role === 'Admin' || profile.position === 'NSM')) {
+    if (weekly) {
       const response = await fetch('/api/reporting-asms', { cache: 'no-store' })
       const result = await response.json()
       if (!response.ok) { setError(result.error || 'Unable to load ASM assignments.'); return }
       salesData = salesData.map((item) => ({ ...item, ...asmForRegion(item.region_id, result.users) }))
+      setAsmNames(Object.fromEntries(((regionsResult.data ?? []) as Region[]).map((region) => [region.id, asmForRegion(region.id, result.users).asm_name])))
     }
     setSales(salesData)
     window.dispatchEvent(new Event('forecast-workflow-changed'))
@@ -955,9 +961,10 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
   const filteredSales = useMemo(() => {
     return sales.filter((item) => {
-      const matchesMonth =
-        !selectedMonth ||
-        getSalesMonth(item) === selectedMonth
+      const week = `${item.year}-W${String(item.week).padStart(2, '0')}`
+      const matchesPeriod = weekly
+        ? (!fromWeek || week >= fromWeek) && (!toWeek || week <= toWeek)
+        : !selectedMonth || getSalesMonth(item) === selectedMonth
 
       const matchesRegion =
         selectedRegion === 'all' ||
@@ -967,9 +974,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         ? item.status === 'Pending' || item.status === 'Endorsed' || item.status === 'Rejected'
         : item.status === stage)
 
-      return matchesMonth && matchesRegion && matchesStage
+      return matchesPeriod && matchesRegion && matchesStage
     })
-  }, [sales, selectedMonth, selectedRegion, weekly, stage, isRsmReview])
+  }, [sales, selectedMonth, fromWeek, toWeek, selectedRegion, weekly, stage, isRsmReview])
 
   // -----------------------------------------
   // GROUPING
@@ -1460,11 +1467,38 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
             <div className="flex flex-wrap items-end justify-between gap-4 px-6 py-4">
               <div className="min-w-0 max-w-full">
-                {/* MONTH AND REGION */}
+                {/* PERIOD AND REGION */}
 
                 <div className="app-field-row">
 
-                  <div data-field-size="compact" className="space-y-1.5">
+                  {weekly ? <>
+                    <div data-field-size="compact" className="space-y-1.5">
+                      <label htmlFor="weekly-sales-from-week" className="block text-xs font-medium text-muted-foreground">
+                        From week
+                      </label>
+                      <input id="weekly-sales-from-week" type="week" value={fromWeek}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setFromWeek(value)
+                          if (value && toWeek && value > toWeek) setToWeek(value)
+                        }}
+                        className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div data-field-size="compact" className="space-y-1.5">
+                      <label htmlFor="weekly-sales-to-week" className="block text-xs font-medium text-muted-foreground">
+                        To week
+                      </label>
+                      <input id="weekly-sales-to-week" type="week" value={toWeek}
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setToWeek(value)
+                          if (value && fromWeek && value < fromWeek) setFromWeek(value)
+                        }}
+                        className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                  </> : <div data-field-size="compact" className="space-y-1.5">
                     <label className="block text-xs font-medium text-muted-foreground">
                       Month
                     </label>
@@ -1477,7 +1511,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                       }
                       className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                     />
-                  </div>
+                  </div>}
 
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-muted-foreground">
@@ -1530,6 +1564,28 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   )
                 })}
 
+                {weekly && authorization.can('Weekly Sales', 'view') && authorization.can('Weekly Sales', 'export') && <button type="button" data-action-tone="transfer"
+                  onClick={async () => {
+                    setExporting(true)
+                    try {
+                      // Recheck saved grants at download time, including changes
+                      // made by an administrator while this page was open.
+                      const response = await fetch('/api/authorization', { cache: 'no-store' })
+                      const access = await response.json()
+                      if (!response.ok || !access.permissions?.['Weekly Sales']?.view || !access.permissions?.['Weekly Sales']?.export) {
+                        throw new Error('Weekly Sales View and Export permissions are required to download this report.')
+                      }
+                      const { downloadWeeklySalesExport } = await import('@/lib/weekly-sales-export')
+                      downloadWeeklySalesExport({ sales: filteredSales, regions: regions.filter((region) => selectedRegion === 'all' || region.id === Number(selectedRegion)), subregions, products, users: submittedUsers, fromWeek, toWeek, asmNames })
+                    } catch (error) {
+                      setError(error instanceof Error ? error.message : 'Unable to export Weekly Sales.')
+                    } finally {
+                      setExporting(false)
+                    }
+                  }} disabled={loading || exporting || (filteredSales.length === 0 && !(fromWeek && toWeek && regions.length))}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                  <Download className="size-4" aria-hidden="true" />{exporting ? 'Exporting…' : 'Export'}
+                </button>}
                 {weekly && <button type="button" data-action-tone="neutral" onClick={loadData} disabled={loading}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
                   <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />Refresh
@@ -1592,7 +1648,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   Area
                 </th>
 
-                {groupByEndorser && <th data-fixed-column="person" className="px-2 py-3 text-left font-medium">{weeklyAsmLevel || isAsmReview ? 'Sales Team' : 'KAM / Salesman'}</th>}
+                {groupByEndorser && <th data-fixed-column="person" className="px-2 py-3 text-left font-medium">Sales Team</th>}
 
                 <th className="px-2 py-3 text-left font-medium">
                   Customer

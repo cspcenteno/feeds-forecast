@@ -55,7 +55,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
   const [progress, setProgress] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
   const working = useRef(false)
-  const disabled = busy || blocked || !authorization.can('Users', 'add')
+  const disabled = busy || blocked || (!authorization.can('Users', 'add') || !authorization.can('Users', 'import'))
   const preview = useMemo(() => validateUserImport(rows, refs, isActive), [rows, refs, isActive])
   const ready = preview.filter((row) => row.status === 'Ready' && outcomes[row.source.id]?.status !== 'Created')
 
@@ -130,9 +130,9 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
           const roleDefaults = defaultPermissions(row.values.role!, row.values.position)
           const response = await fetch('/api/admin/users', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...row.values, temporaryPassword, permissions: modules.map((module) => ({
+            body: JSON.stringify({ ...row.values, temporaryPassword, importRequest: true, permissions: modules.map((module) => ({
               module, can_view: roleDefaults[module].view, can_add: roleDefaults[module].add,
-              can_edit: roleDefaults[module].edit, can_delete: roleDefaults[module].delete,
+              can_edit: roleDefaults[module].edit, can_import: roleDefaults[module].import, can_export: roleDefaults[module].export, can_delete: roleDefaults[module].delete,
             })) }),
           })
           const result = await response.json()

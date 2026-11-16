@@ -28,8 +28,11 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback((message: string, options?: { success?: boolean }) => {
     if (!message.trim()) return
-    const notice = { id: ++noticeId.current, message, success: options?.success ?? /successfully/i.test(message) }
-    setNotices((current) => [...current.slice(-2), notice])
+    const notice = { id: ++noticeId.current, message: message.trim(), success: options?.success ?? /successfully/i.test(message) }
+    // Concurrent loaders can report the same issue; keep one visible notice.
+    setNotices((current) => current.some((item) => item.message === notice.message && item.success === notice.success)
+      ? current
+      : [...current.slice(-2), notice])
     const timer = setTimeout(() => {
       setNotices((current) => current.filter((item) => item.id !== notice.id))
       noticeTimers.current = noticeTimers.current.filter((item) => item !== timer)

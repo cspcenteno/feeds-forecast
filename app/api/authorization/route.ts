@@ -18,7 +18,7 @@ export async function GET() {
     if (!profile?.is_active) return NextResponse.json({ error: 'An active account is required.' }, { status: 403, headers })
 
     const { data: rows, error: permissionError } = await supabaseAdmin.from('user_permissions')
-      .select('module, can_view, can_add, can_edit, can_delete').eq('user_id', user.id)
+      .select('module, can_view, can_add, can_edit, can_import, can_export, can_delete').eq('user_id', user.id)
     if (permissionError) throw new Error('Unable to load permissions. Please try again.')
     return NextResponse.json({
       role: profile.role,

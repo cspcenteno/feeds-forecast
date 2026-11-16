@@ -1,6 +1,8 @@
 
 'use client'
 
+import { TableSearch, useTableSearch } from '@/components/ui/table-search'
+
 import { summaryForLevel } from '@/lib/table-summary-level'
 
 import { usePopupError } from '@/components/action-dialogs'
@@ -253,7 +255,9 @@ export default function SubregionsPage() {
     getData()
   }, [])
 
-  const { sortedRows: sortedSubregions, sortHeader } = useTableSort(subregions, {
+  const { search, setSearch, filteredRows } = useTableSearch(subregions, (row) => [row.code, row.name, regions.find((region) => region.id === row.region_id)?.name, row.is_active ? 'Active' : 'Inactive'])
+
+  const { sortedRows: sortedSubregions, sortHeader } = useTableSort(filteredRows, {
     created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
@@ -385,7 +389,7 @@ export default function SubregionsPage() {
       {/* Subregions Table */}
       <TableGroupProvider groupKeys={sortedSubregions.map((subregion) => String(subregion.region_id))}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Subregions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Subregion</button>}<TableGroupToggle disabled={initialLoading} /></div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search subregions" />{authorization.can('Subregions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Subregion</button>}<TableGroupToggle disabled={initialLoading} /></div>
 
         <div className="overflow-x-auto">
           <Table summary={summaryForLevel(sortedSubregions.length, 'regions', sortedSubregions.map((row) => row.region_id))} className="min-w-[640px] table-fixed wrap-anywhere">
@@ -410,7 +414,7 @@ export default function SubregionsPage() {
             <TableBody>
               {initialLoading ? (
                 <TableLoadingRow columns={authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? 5 : 4} label="subregions" />
-              ) : subregions.length > 0 ? (
+              ) : sortedSubregions.length > 0 ? (
                 <GroupedTableRows rows={sortedSubregions}
                   columnCount={authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? 5 : 4}
                   getGroup={(subregion) => ({ key: String(subregion.region_id), label: 'Region: ' + (regions.find((region) => region.id === subregion.region_id)?.name || 'Unknown region') })}>
@@ -451,7 +455,7 @@ export default function SubregionsPage() {
                     colSpan={authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    No subregions to display.
+                    {search.trim() ? 'No subregions match your search.' : 'No subregions to display.'}
                   </TableCell>
                 </TableRow>
               )}

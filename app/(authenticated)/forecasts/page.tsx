@@ -1654,7 +1654,7 @@ export default function SalesInputPage() {
 
       {/* ADD FORECAST */}
 
-      {userId && role === 'Admin' && authorization.can('Forecasts', 'add') && (
+      {userId && role === 'Admin' && authorization.can('Forecasts', 'add') && authorization.can('Forecasts', 'import') && (
         <ForecastExcelImport
           key={userId}
           userId={userId}

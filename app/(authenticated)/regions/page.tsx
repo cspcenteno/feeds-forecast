@@ -1,5 +1,7 @@
 'use client'
 
+import { TableSearch, useTableSearch } from '@/components/ui/table-search'
+
 import { usePopupError } from '@/components/action-dialogs'
 
 import { sortRegions } from '@/lib/region-order'
@@ -206,7 +208,9 @@ export default function RegionsPage() {
     getRegions()
   }, [])
 
-  const { sortedRows: sortedRegions, sortHeader } = useTableSort(regions, {
+  const { search, setSearch, filteredRows } = useTableSearch(regions, (row) => [row.code, row.name, row.is_active ? 'Active' : 'Inactive'])
+
+  const { sortedRows: sortedRegions, sortHeader } = useTableSort(filteredRows, {
     created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
@@ -305,7 +309,7 @@ export default function RegionsPage() {
 
       {/* Table */}
       <section className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Regions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Region</button>}</div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search regions" />{authorization.can('Regions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Region</button>}</div>
 
         <div className="overflow-x-auto">
           <Table summary={{ records: sortedRegions.length }} saved aria-busy={tableLoading}>
@@ -323,7 +327,7 @@ export default function RegionsPage() {
             <TableBody>
               {tableLoading ? (
                 <TableLoadingRow columns={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 5 : 4} label="regions" />
-              ) : regions.length > 0 ? (
+              ) : sortedRegions.length > 0 ? (
                 sortedRegions.map((region) => (
                   <TableRow key={region.id}>
                     {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableCell data-action-column="standard">
@@ -359,7 +363,7 @@ export default function RegionsPage() {
                     colSpan={authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    No regions to display.
+                    {search.trim() ? 'No regions match your search.' : 'No regions to display.'}
                   </TableCell>
                 </TableRow>
               )}

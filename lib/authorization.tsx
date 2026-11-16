@@ -4,7 +4,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { LoaderCircle, RefreshCw, ShieldLock } from 'lucide-react'
+import { LoaderCircle, RefreshCw, ShieldAlert, ShieldLock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 import {
@@ -177,11 +177,21 @@ export function AuthorizationProvider({
 
   if (loadError) {
     return (
-      <div role="alert" className="p-6 text-sm text-muted-foreground">
-        <p>{loadError}</p>
-        <button type="button" className="mt-3 underline" onClick={() => setPermissionRefresh((current) => current + 1)}>
-          Try again
-        </button>
+      <div className="flex min-h-svh w-full min-w-0 items-center justify-center bg-background p-4 sm:p-6">
+        <section role="alert" aria-labelledby="access-error-title" aria-describedby="access-error-description" className="w-full max-w-md rounded-2xl border bg-card p-6 text-center text-card-foreground shadow-sm sm:p-8">
+          <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-400">
+            <ShieldAlert aria-hidden="true" className="size-6" />
+          </div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Workspace access</p>
+          <h1 id="access-error-title" className="text-xl font-semibold tracking-tight">Unable to load permissions</h1>
+          <p id="access-error-description" className="mt-3 text-sm leading-6 text-muted-foreground">{loadError}</p>
+          <div className="mt-6 border-t pt-5">
+            <Button type="button" variant="outline" onClick={() => setPermissionRefresh((current) => current + 1)}>
+              <RefreshCw aria-hidden="true" className="size-4" />
+              Try again
+            </Button>
+          </div>
+        </section>
       </div>
     )
   }

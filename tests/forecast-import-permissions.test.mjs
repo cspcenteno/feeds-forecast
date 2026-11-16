@@ -25,12 +25,14 @@ async function run(rows) {
   return module.exports.POST({ json: async () => ({}) })
 }
 
-test('forecast imports require explicit saved view and add grants even for Admin', async () => {
+test('forecast imports require explicit saved view, add and import grants even for Admin', async () => {
   for (const rows of [[], [{ module: 'Sales Input', can_view: true, can_add: true }],
     [{ module: 'Forecasts', can_view: false, can_add: true }],
-    [{ module: 'Forecasts', can_view: true, can_add: false }]]) {
+    [{ module: 'Forecasts', can_view: true, can_add: false, can_import: true }],
+    [{ module: 'Forecasts', can_view: true, can_add: true }],
+    [{ module: 'Forecasts', can_view: true, can_add: true, can_import: false }]]) {
     assert.equal((await run(rows)).status, 403)
   }
   // A granted request proceeds to payload validation.
-  assert.equal((await run([{ module: 'Forecasts', can_view: true, can_add: true }])).status, 400)
+  assert.equal((await run([{ module: 'Forecasts', can_view: true, can_add: true, can_import: true }])).status, 400)
 })

@@ -14,10 +14,10 @@ async function authorize(action: 'view' | 'add') {
   if (profileError) throw new Error(profileError.message)
   if (!profile?.is_active || profile.role !== 'Admin') return NextResponse.json({ error: 'Only active Admins can import forecasts.' }, { status: 403 })
   const { data: permissions, error: permissionError } = await supabaseAdmin.from('user_permissions')
-    .select('module, can_view, can_add').eq('user_id', user.id)
+    .select('module, can_view, can_add, can_import').eq('user_id', user.id)
   if (permissionError) throw new Error(permissionError.message)
   const permission = permissions?.find((row) => row.module === 'Forecasts')
-  if (permission?.can_view !== true || (action === 'add' && permission.can_add !== true)) {
+  if (permission?.can_view !== true || permission.can_import !== true || (action === 'add' && permission.can_add !== true)) {
     return NextResponse.json({ error: 'Forecast permission denied.' }, { status: 403 })
   }
   return null

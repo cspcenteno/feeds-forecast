@@ -1,5 +1,7 @@
 'use client'
 
+import { TableSearch, useTableSearch } from '@/components/ui/table-search'
+
 import { summaryForLevel } from '@/lib/table-summary-level'
 
 import { usePopupError } from '@/components/action-dialogs'
@@ -183,7 +185,9 @@ export default function CustomersPage() {
     } finally { actionConfirmation?.finish() }
   }
 
-  const { sortedRows: sortedCustomers, sortHeader } = useTableSort(customers, {
+  const { search, setSearch, filteredRows } = useTableSearch(customers, (row) => [row.customer, row.salesman, row.segment, regions.find((region) => String(region.id) === String(row.region_id))?.name, row.is_active ? 'Active' : 'Inactive'])
+
+  const { sortedRows: sortedCustomers, sortHeader } = useTableSort(filteredRows, {
     customer: (row) => row.customer,
     salesman: (row) => row.salesman,
     region: (row) => regions.find((region) => String(region.id) === String(row.region_id))?.name ?? null,
@@ -250,7 +254,7 @@ export default function CustomersPage() {
 
       <TableGroupProvider groupKeys={sortedCustomers.map((item) => item.salesman?.trim() || '')}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Customers', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Customer</button>}<TableGroupToggle disabled={tableLoading} /></div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search customers" />{authorization.can('Customers', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Customer</button>}<TableGroupToggle disabled={tableLoading} /></div>
         <Table summary={summaryForLevel(sortedCustomers.length, 'kams', sortedCustomers.map((row) => row.salesman?.trim()))} aria-busy={tableLoading}
           className="min-w-[1200px] table-fixed wrap-anywhere"
           containerProps={{ className: "max-h-[min(32rem,65vh)] overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Customers table" }}
@@ -276,8 +280,8 @@ export default function CustomersPage() {
             <tbody>
               {tableLoading ? (
                 <TableLoadingRow columns={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} label="customers" />
-              ) : customers.length === 0 ? (
-                <tr><td colSpan={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">No customers to display.</td></tr>
+              ) : sortedCustomers.length === 0 ? (
+                <tr><td colSpan={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">{search.trim() ? 'No customers match your search.' : 'No customers to display.'}</td></tr>
               ) : <GroupedTableRows rows={sortedCustomers}
                 columnCount={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6}
                 getGroup={(item) => ({ key: item.salesman?.trim() || '', label: 'KAM: ' + (item.salesman?.trim() || 'Unassigned') })}>

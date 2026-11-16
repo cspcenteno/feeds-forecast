@@ -24,7 +24,6 @@ import { UsersExcelImport } from '@/components/users-excel-import'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Trash2,
   RefreshCw,
   Plus,
   Search,
@@ -70,6 +69,8 @@ type PermissionField =
   | 'can_view'
   | 'can_add'
   | 'can_edit'
+  | 'can_import'
+  | 'can_export'
   | 'can_delete'
 
 type ModulePermission = {
@@ -77,6 +78,8 @@ type ModulePermission = {
   can_view: boolean
   can_add: boolean
   can_edit: boolean
+  can_import: boolean
+  can_export: boolean
   can_delete: boolean
 }
 
@@ -87,6 +90,8 @@ const permissionFields: {
   { field: 'can_view', label: 'View' },
   { field: 'can_add', label: 'Add' },
   { field: 'can_edit', label: 'Edit' },
+  { field: 'can_import', label: 'Import' },
+  { field: 'can_export', label: 'Export' },
   { field: 'can_delete', label: 'Delete' },
 ]
 
@@ -96,6 +101,8 @@ function createDefaultPermissions(): ModulePermission[] {
     can_view: false,
     can_add: false,
     can_edit: false,
+    can_import: false,
+    can_export: false,
     can_delete: false,
   }))
 }
@@ -120,6 +127,7 @@ function normalizePermission(
     }
   }
 
+  if (!normalized.can_view) { normalized.can_export = false; normalized.can_import = false }
   return normalized
 }
 
@@ -132,6 +140,8 @@ function getDefaultPermissions(role: string, position = ''): ModulePermission[] 
       can_view: shared[module].view,
       can_add: shared[module].add,
       can_edit: shared[module].edit,
+      can_import: shared[module].import,
+      can_export: shared[module].export,
       can_delete: shared[module].delete,
     }),
   )
@@ -335,6 +345,8 @@ export default function UsersPage() {
         can_view,
         can_add,
         can_edit,
+        can_import,
+        can_export,
         can_delete,
         is_default
       `)
@@ -367,12 +379,16 @@ export default function UsersPage() {
           can_view: saved.can_view,
           can_add: saved.can_add,
           can_edit: saved.can_edit,
+          can_import: saved.can_import,
+          can_export: saved.can_export,
           can_delete: saved.can_delete,
         } : {
           module,
           can_view: false,
           can_add: false,
           can_edit: false,
+          can_import: false,
+          can_export: false,
           can_delete: false,
         })
       },
@@ -528,6 +544,7 @@ export default function UsersPage() {
           ? normalizePermission({
               ...permission,
               [field]: checked,
+              ...((field === 'can_export' || field === 'can_import') && checked ? { can_view: true } : {}),
             })
           : permission,
       ),
@@ -584,6 +601,7 @@ export default function UsersPage() {
           ? normalizePermission({
               ...permission,
               [field]: checked,
+              ...((field === 'can_export' || field === 'can_import') && checked ? { can_view: true } : {}),
             })
           : permission,
       ),
@@ -700,6 +718,8 @@ export default function UsersPage() {
             can_view: permission.can_view,
             can_add: permission.can_add,
             can_edit: permission.can_edit,
+            can_import: permission.can_import,
+            can_export: permission.can_export,
             can_delete: permission.can_delete,
           })),
         }),
@@ -804,6 +824,8 @@ export default function UsersPage() {
             can_view: permission.can_view,
             can_add: permission.can_add,
             can_edit: permission.can_edit,
+            can_import: permission.can_import,
+            can_export: permission.can_export,
             can_delete: permission.can_delete,
           })),
         }),
@@ -883,14 +905,16 @@ export default function UsersPage() {
   }
 
 
-  async function handleDelete() {
+  async function handleDelete(targetUser: User) {
     let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
     try {
-    if (!selectedUser) return
+    if (deleting || !authorization.can('Users', 'delete')) return
 
-    const confirmed = (actionConfirmation = await confirmAction({ message: `Are you sure you want to delete ${
-        selectedUser.full_name || selectedUser.email
-      }?` }))
+    const confirmed = (actionConfirmation = await confirmAction({
+      title: 'Delete this user?', confirmLabel: 'Delete User', tone: 'danger',
+      message: 'This permanently deletes the user account and sign-in access.',
+      details: [{ label: 'User', value: targetUser.full_name || targetUser.email }, { label: 'Email', value: targetUser.email }],
+    }))
 
     if (!confirmed) return
 
@@ -899,7 +923,7 @@ export default function UsersPage() {
     try {
       const response = await fetch('/api/admin/users', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: selectedUser.id }),
+        body: JSON.stringify({ userId: targetUser.id }),
       })
       const result = await response.json()
       if (!response.ok) {
@@ -909,10 +933,12 @@ export default function UsersPage() {
       }
 
       setUsers((currentUsers) =>
-        currentUsers.filter((user) => user.id !== selectedUser.id),
+        currentUsers.filter((user) => user.id !== targetUser.id),
       )
 
-      clearSelection()
+      if (selectedUser?.id === targetUser.id) clearSelection()
+    } catch {
+      notify('Unable to delete the account. Please try again.')
     } finally {
       setDeleting(false)
     }
@@ -972,7 +998,7 @@ export default function UsersPage() {
     }
   }
 
-  const formBusy = loading || importBusy || resettingPassword || updatingNewDefaults || applyingRoleDefaults || (selectedUser ? saving || deleting : creatingUser)
+  const formBusy = loading || deleting || importBusy || resettingPassword || updatingNewDefaults || applyingRoleDefaults || (selectedUser ? saving : creatingUser)
   const permissionsBusy = formBusy || Boolean(selectedUser && (loadingPermissions || permissionLoadError))
   const formPermissions = selectedUser ? permissions : newPermissions
   const allFormPermissionsEnabled = formPermissions.every((permission) =>
@@ -1005,7 +1031,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      {isAdmin && authorization.can('Users', 'add') && <UsersExcelImport
+      {isAdmin && authorization.can('Users', 'add') && authorization.can('Users', 'import') && <UsersExcelImport
         blocked={loading || saving || deleting || creatingUser || refreshing || resettingPassword}
         onBusyChange={setImportBusy}
         onCreated={loadUsers}
@@ -1369,17 +1395,6 @@ export default function UsersPage() {
                 {resettingPassword ? 'Resetting…' : 'Reset Password'}
               </button>
             )}
-            {selectedUser && authorization.can('Users', 'delete') && (
-              <button data-action-tone="danger"
-                type="button"
-                onClick={handleDelete}
-                disabled={formBusy}
-                className="ml-auto inline-flex items-center gap-2 rounded-md border border-destructive px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
-              >
-                <Trash2 className="size-4" />
-                {deleting ? 'Deleting...' : 'Delete User'}
-              </button>
-            )}
           </div>
         </div>
         </RecordDialog>
@@ -1462,14 +1477,21 @@ export default function UsersPage() {
                     }`}
                   >
                     {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <td data-action-column="standard" className="px-4 py-3">
-                      {authorization.can('Users', 'edit') ? (
+                      <div className="flex items-center gap-2">
+                      {authorization.can('Users', 'edit') && (
                       <TableActionButton action="edit" data-action-tone="caution"
                         type="button"
                         onClick={() => selectUser(user)}
                         disabled={formBusy || loadingPermissions}
                         className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
                        />
-                      ) : <span className="text-sm text-muted-foreground">No Action</span>}
+                      )}
+                      {authorization.can('Users', 'delete') && <TableActionButton action="delete"
+                        onClick={() => handleDelete(user)} disabled={formBusy || loadingPermissions}
+                        aria-label={`Delete ${user.full_name || user.email}`}
+                      />}
+                      {!authorization.can('Users', 'edit') && !authorization.can('Users', 'delete') && <span className="text-sm text-muted-foreground">No Action</span>}
+                      </div>
                     </td>}
                     <td className="px-4 py-3"><StatusBadge status={user.is_active ? 'Active' : 'Pending'} /></td>
                     <td className="px-6 py-3">{user.full_name || '—'}</td>

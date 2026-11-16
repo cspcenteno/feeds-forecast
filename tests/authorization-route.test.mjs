@@ -61,3 +61,12 @@ test('permission lookup failures are errors, not empty grants', async () => {
   assert.equal(response.status, 500)
   assert.equal(response.body.permissions, undefined)
 })
+
+test('authorization returns the current explicit Export grant without granting Edit', async () => {
+  for (const canExport of [true, false]) {
+    const { response } = await run({ rows: [{ module: 'Weekly Sales', can_view: true, can_export: canExport, can_edit: false }] })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.permissions['Weekly Sales'].export, canExport)
+    assert.equal(response.body.permissions['Weekly Sales'].edit, false)
+  }
+})

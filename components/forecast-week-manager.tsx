@@ -35,7 +35,7 @@ export function ForecastWeekManager() {
   const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
   const working = useRef(false)
-  const canManage = authorization.role === 'Admin' && authorization.can('Week Locks', 'edit')
+  const canManage = ['Admin', 'Superuser'].includes(authorization.role) && authorization.can('Week Locks', 'edit')
 
   const load = useCallback(async () => {
     setLoading(true)

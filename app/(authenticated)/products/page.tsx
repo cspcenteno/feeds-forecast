@@ -1,5 +1,7 @@
 'use client'
 
+import { TableSearch, useTableSearch } from '@/components/ui/table-search'
+
 import { summaryForLevel } from '@/lib/table-summary-level'
 
 import { usePopupError } from '@/components/action-dialogs'
@@ -284,12 +286,14 @@ export default function ProductsPage() {
     return product[key] ?? ''
   }
 
-  const sortedProducts = sort ? [...products].sort((a, b) => {
+  const { search, setSearch, filteredRows } = useTableSearch(products, (row) => [row.code, row.name, categoryLabel(row.category_id), row.product_line, row.species, row.weight, row.is_active ? 'Active' : 'Inactive'])
+
+  const sortedProducts = sort ? [...filteredRows].sort((a, b) => {
     const first = sortValue(a, sort.key)
     const second = sortValue(b, sort.key)
     const comparison = first.localeCompare(second, undefined, { numeric: true, sensitivity: 'base' })
     return (sort.descending ? -comparison : comparison) || a.id - b.id
-  }) : products
+  }) : filteredRows
 
   return (
     <main className="space-y-4">
@@ -444,7 +448,7 @@ export default function ProductsPage() {
       {/* Table */}
       <TableGroupProvider groupKeys={sortedProducts.map((product) => String(product.category_id))}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Products', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Product</button>}<TableGroupToggle disabled={tableLoading} /></div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search products" />{authorization.can('Products', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Product</button>}<TableGroupToggle disabled={tableLoading} /></div>
 
         <div className="overflow-x-auto">
           <Table summary={summaryForLevel(sortedProducts.length, 'categories', sortedProducts.map((row) => row.category_id))} saved aria-busy={tableLoading} className="table-fixed">
@@ -513,7 +517,7 @@ export default function ProductsPage() {
               )}</GroupedTableRows> : (
                 <TableRow>
                   <TableCell colSpan={columnCount} className="h-24 text-center text-muted-foreground">
-                    No products to display.
+                    {search.trim() ? 'No products match your search.' : 'No products to display.'}
                   </TableCell>
                 </TableRow>
               )}

@@ -1,5 +1,7 @@
 'use client'
 
+import { TableSearch, useTableSearch } from '@/components/ui/table-search'
+
 import { usePopupError } from '@/components/action-dialogs'
 
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -210,7 +212,9 @@ export default function CategoriesPage() {
     getCategories()
   }, [])
 
-  const { sortedRows: sortedCategories, sortHeader } = useTableSort(categories, {
+  const { search, setSearch, filteredRows } = useTableSearch(categories, (row) => [row.code, row.name, row.description, row.is_active ? 'Active' : 'Inactive'])
+
+  const { sortedRows: sortedCategories, sortHeader } = useTableSort(filteredRows, {
     created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
@@ -328,7 +332,7 @@ export default function CategoriesPage() {
 
       {/* Table */}
       <section className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3">{authorization.can('Categories', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Category</button>}</div>
+        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search categories" />{authorization.can('Categories', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Category</button>}</div>
 
         <div className="overflow-x-auto">
           <Table summary={{ records: sortedCategories.length }} className="w-full min-w-[1120px] table-fixed" aria-busy={tableLoading}
@@ -357,7 +361,7 @@ export default function CategoriesPage() {
             <TableBody>
               {tableLoading ? (
                 <TableLoadingRow columns={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 6 : 5} label="categories" />
-              ) : categories.length > 0 ? (
+              ) : sortedCategories.length > 0 ? (
                 sortedCategories.map((category) => (
                   <TableRow key={category.id}>
                     {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableCell data-action-column="standard">
@@ -397,7 +401,7 @@ export default function CategoriesPage() {
                     colSpan={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 6 : 5}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    No categories to display.
+                    {search.trim() ? 'No categories match your search.' : 'No categories to display.'}
                   </TableCell>
                 </TableRow>
               )}

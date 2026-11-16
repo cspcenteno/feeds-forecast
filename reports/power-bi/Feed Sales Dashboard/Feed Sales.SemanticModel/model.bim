@@ -1,0 +1,345 @@
+{
+  "name": "Feed Sales Dashboard",
+  "compatibilityLevel": 1567,
+  "model": {
+    "culture": "en-US",
+    "defaultPowerBIDataSourceVersion": "powerBI_V3",
+    "expressions": [
+      {
+        "name": "DatabaseServer",
+        "kind": "m",
+        "expression": "\"db.mjmwgmbsjuiepzofikwp.supabase.co\" meta [IsParameterQuery=true, Type=\"Text\", IsParameterQueryRequired=true]"
+      },
+      {
+        "name": "DatabaseName",
+        "kind": "m",
+        "expression": "\"postgres\" meta [IsParameterQuery=true, Type=\"Text\", IsParameterQueryRequired=true]"
+      }
+    ],
+    "tables": [
+      {
+        "name": "Sales",
+        "columns": [
+          {
+            "name": "MonthDate",
+            "dataType": "dateTime",
+            "sourceColumn": "MonthDate",
+            "formatString": "yyyy-MM-dd",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "Region",
+            "dataType": "string",
+            "sourceColumn": "Region",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "Area",
+            "dataType": "string",
+            "sourceColumn": "Area",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "ASM",
+            "dataType": "string",
+            "sourceColumn": "ASM",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "RSM",
+            "dataType": "string",
+            "sourceColumn": "RSM",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "KAM",
+            "dataType": "string",
+            "sourceColumn": "KAM",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "Customer",
+            "dataType": "string",
+            "sourceColumn": "Customer",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "Product",
+            "dataType": "string",
+            "sourceColumn": "Product",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "RecordType",
+            "dataType": "string",
+            "sourceColumn": "RecordType",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "Quantity",
+            "dataType": "double",
+            "sourceColumn": "Quantity",
+            "formatString": "#,0.00;(#,0.00);–",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "Volume",
+            "dataType": "double",
+            "sourceColumn": "Volume",
+            "formatString": "#,0.00;(#,0.00);–",
+            "summarizeBy": "sum"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "Sales",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(DatabaseServer, DatabaseName, [Query = \"with months as (",
+                "  select distinct year, m as month from public.budgets cross join generate_series(1,12) m",
+                "), monthly_budgets as (",
+                "  select make_date(b.year, m.month, 1) as month_date,",
+                "    b.region_id, b.subregion_id, b.customer_id, b.product_id,",
+                "    case when count(*) filter (where b.month is not null) > 0",
+                "      then sum(coalesce(b.volume,0)) filter (where b.month is not null)",
+                "      else sum(coalesce(b.volume,0)) / 12.0 end as volume",
+                "  from public.budgets b join months m on m.year=b.year and (b.month=m.month or b.month is null)",
+                "  group by b.year,m.month,b.region_id,b.subregion_id,b.customer_id,b.product_id",
+                "), facts as (",
+                "  select b.month_date,b.region_id,b.subregion_id,b.customer_id,b.product_id,",
+                "    'Budget' as record_type,0::numeric as quantity,b.volume",
+                "  from monthly_budgets b where b.customer_id is not null or not exists (",
+                "    select 1 from monthly_budgets d where d.month_date=b.month_date",
+                "      and d.region_id=b.region_id and d.product_id=b.product_id",
+                "      and d.subregion_id is not distinct from b.subregion_id and d.customer_id is not null)",
+                "  union all",
+                "  select date_trunc('month',date_trunc('week',make_date(f.year,1,4)::timestamp)",
+                "      + (f.week-1)*interval '7 days'+interval '3 days')::date,",
+                "    f.region_id,f.subregion_id,f.customer_id,f.product_id,'Forecast',coalesce(f.forecast,0),coalesce(f.volume,0)",
+                "  from public.sales_forecasts f where f.status='Approved'",
+                "  union all",
+                "  select date_trunc('month',a.actual_date)::date,a.region_id,a.subregion_id,a.customer_id,a.product_id,",
+                "    'Actual',0::numeric,coalesce(a.volume,0) from public.actuals a where a.actual_date is not null",
+                ")",
+                "select f.month_date as \"\"MonthDate\"\",coalesce(r.name,'Unassigned') as \"\"Region\"\",",
+                "  coalesce(s.name,'Unassigned') as \"\"Area\"\",",
+                "  coalesce(asm.full_name,'Unassigned ASM') as \"\"ASM\"\",",
+                "  coalesce(rsm.full_name,'Unassigned RSM') as \"\"RSM\"\",",
+                "  coalesce(nullif(trim(c.salesman),''),'Unassigned KAM') as \"\"KAM\"\",",
+                "  coalesce(c.customer,'Area budget') as \"\"Customer\"\",",
+                "  coalesce(concat_ws(' - ',p.code,p.name),'Unassigned product') as \"\"Product\"\",",
+                "  f.record_type as \"\"RecordType\"\",f.quantity as \"\"Quantity\"\",f.volume as \"\"Volume\"\"",
+                "from facts f left join public.regions r on r.id=f.region_id",
+                "left join public.subregions s on s.id=f.subregion_id",
+                "left join public.customers c on c.id=f.customer_id left join public.products p on p.id=f.product_id",
+                "left join lateral (select min(u.full_name) as full_name from public.users u",
+                "  where u.is_active and u.role='Manager' and u.position='ASM' and u.region_id=f.region_id) asm on true",
+                "left join lateral (select min(u.full_name) as full_name from public.users u",
+                "  where u.is_active and u.role='Manager' and u.position='RSM' and u.region_id=f.region_id and u.subregion_id=f.subregion_id) rsm on true\", CreateNavigationProperties = false]),",
+                "    Typed = Table.TransformColumnTypes(Source, {{\"MonthDate\", type date}, {\"Quantity\", type number}, {\"Volume\", type number}})",
+                "in",
+                "    Typed"
+              ]
+            }
+          }
+        ],
+        "measures": [
+          {
+            "name": "Budget Volume",
+            "expression": "COALESCE(CALCULATE(SUM(Sales[Volume]), Sales[RecordType] = \"Budget\"), 0)",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Forecast Volume",
+            "expression": "COALESCE(CALCULATE(SUM(Sales[Volume]), Sales[RecordType] = \"Forecast\"), 0)",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Actual Volume",
+            "expression": "COALESCE(CALCULATE(SUM(Sales[Volume]), Sales[RecordType] = \"Actual\"), 0)",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Forecast Quantity",
+            "expression": "COALESCE(CALCULATE(SUM(Sales[Quantity]), Sales[RecordType] = \"Forecast\"), 0)",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Prior Year Actual",
+            "expression": "VAR Months = SELECTCOLUMNS(VALUES('Month'[MonthDate]), \"Previous\", EDATE('Month'[MonthDate], -12)) RETURN CALCULATE([Actual Volume], REMOVEFILTERS('Month'), TREATAS(Months, 'Month'[MonthDate]))",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Baseline Volume",
+            "expression": "SWITCH(SELECTEDVALUE(Comparison[Comparison], \"Budget vs Forecast\"), \"Forecast vs Actual\", [Forecast Volume], [Budget Volume])",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Measured Volume",
+            "expression": "SWITCH(SELECTEDVALUE(Comparison[Comparison], \"Budget vs Forecast\"), \"Budget vs Forecast\", [Forecast Volume], [Actual Volume])",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Variance",
+            "expression": "[Measured Volume] - [Baseline Volume]",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Achievement %",
+            "expression": "DIVIDE([Measured Volume], [Baseline Volume])",
+            "formatString": "0.0%;(0.0%);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Forecast vs Budget %",
+            "expression": "DIVIDE([Forecast Volume],[Budget Volume])",
+            "formatString": "0.0%",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Actual vs Forecast %",
+            "expression": "DIVIDE([Actual Volume],[Forecast Volume])",
+            "formatString": "0.0%",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Actual vs Budget %",
+            "expression": "DIVIDE([Actual Volume],[Budget Volume])",
+            "formatString": "0.0%",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Contribution Volume",
+            "expression": "SWITCH(SELECTEDVALUE(Metric[Metric], \"Actual\"), \"Budget\", [Budget Volume], \"Forecast\", [Forecast Volume], [Actual Volume])",
+            "formatString": "#,0.00;(#,0.00);–",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Comparison Title",
+            "expression": "SELECTEDVALUE(Comparison[Comparison], \"Budget vs Forecast\") & \" by Region (bags)\"",
+            "formatString": "@",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Leading Region",
+            "expression": "VAR Regions = ADDCOLUMNS(VALUES(Sales[Region]), \"Amount\", [Measured Volume]) RETURN CONCATENATEX(TOPN(1, Regions, [Amount], DESC, Sales[Region], ASC), Sales[Region], \", \")",
+            "formatString": "@",
+            "displayFolder": "Dashboard"
+          },
+          {
+            "name": "Monthly Highlight",
+            "expression": "VAR Gap = [Variance] RETURN SELECTEDVALUE(Comparison[Comparison], \"Budget vs Forecast\") & UNICHAR(10) & IF(ISBLANK([Achievement %]), \"No positive baseline\", FORMAT([Achievement %], \"0.0%\") & \" achievement\") & UNICHAR(10) & FORMAT(Gap, \"+#,0.00;-#,0.00;0\") & \" bags variance\"",
+            "formatString": "@",
+            "displayFolder": "Dashboard"
+          }
+        ]
+      },
+      {
+        "name": "Month",
+        "columns": [
+          {
+            "name": "MonthDate",
+            "dataType": "dateTime",
+            "sourceColumn": "MonthDate",
+            "formatString": "yyyy-MM-dd",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "Month",
+            "dataType": "string",
+            "sourceColumn": "Month",
+            "summarizeBy": "none"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "Month",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                " Dates = List.Transform({0..251}, each Date.AddMonths(#date(2020,1,1), _)),",
+                " Rows = List.Transform(Dates, each {_, Date.ToText(_, \"yyyy-MM\")}),",
+                " Result = #table(type table [MonthDate=date, Month=text], Rows)",
+                "in Result"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Comparison",
+        "columns": [
+          {
+            "name": "Comparison",
+            "dataType": "string",
+            "sourceColumn": "Comparison",
+            "summarizeBy": "none"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "Comparison",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "#table(type table [Comparison=text], {{\"Budget vs Forecast\"},{\"Actual vs Budget\"},{\"Forecast vs Actual\"}})"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Metric",
+        "columns": [
+          {
+            "name": "Metric",
+            "dataType": "string",
+            "sourceColumn": "Metric",
+            "summarizeBy": "none"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "Metric",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "#table(type table [Metric=text], {{\"Budget\"},{\"Forecast\"},{\"Actual\"}})"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "name": "17b65dee-9d96-45d6-9cea-b7dda3edd0fe",
+        "fromTable": "Sales",
+        "fromColumn": "MonthDate",
+        "toTable": "Month",
+        "toColumn": "MonthDate"
+      }
+    ],
+    "annotations": [
+      {
+        "name": "__PBI_TimeIntelligenceEnabled",
+        "value": "0"
+      }
+    ]
+  }
+}

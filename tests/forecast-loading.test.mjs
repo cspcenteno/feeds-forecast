@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 import { sortRegions } from '../lib/region-order.ts'
+import { asmForRegion } from '../lib/asm-reporting.ts'
 
 const source = await readFile(new URL('../app/(authenticated)/forecasts/page.tsx', import.meta.url), 'utf8')
 const tree = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -101,9 +102,12 @@ test('saved forecast week checks do not change the Add Forecast lock notice', as
 test('Approvals and Weekly Sales rows do not wait for monthly reference RPCs', async () => {
   const salesSource = await readFile(new URL('../components/sales-submissions-page.tsx', import.meta.url), 'utf8')
   const salesTree = ts.createSourceFile('sales.tsx', salesSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-  for (const weekly of [false,true]) {
+  for (const [weekly, profile] of [
+    [false, { role: 'Manager', position: 'RSM', is_active: true, region_id: 1, subregion_id: 2 }],
+    [true, { role: 'Manager', position: 'RSM', is_active: true, region_id: 1, subregion_id: 2 }],
+    [true, { role: 'Superuser', position: 'Supervisor', is_active: true, region_id: 1, subregion_id: null }],
+  ]) {
     let records, referenceLoading
-    const profile = { role: 'Manager', position: 'RSM', is_active: true, region_id: 1, subregion_id: 2 }
     const record = { id: 1, year: 2026, week: 45, region_id: 1, subregion_id: 2, customer_id: 3, submitted_by: 'kam' }
     function query(data, deferred = false) {
       const q = { select: () => q, eq: () => q, in: () => q, order: () => q, range: () => q, abortSignal: () => q,
@@ -113,7 +117,7 @@ test('Approvals and Weekly Sales rows do not wait for monthly reference RPCs', a
     }
     const setters = Object.fromEntries([...new Set(salesSource.match(/\bset[A-Z]\w+/g))].map((name) => [name,noop]))
     const load = loadFunction('fetchSalesData', {
-      ...setters, weekly, sortRegions, referenceRequest: { current: 0 },
+      ...setters, weekly, sortRegions, asmForRegion, referenceRequest: { current: 0 },
       setSales: (value) => { records = value }, setReferencesLoading: (value) => { referenceLoading = value },
       window: { dispatchEvent: noop }, Event, AbortSignal,
       fetch: async () => ({ ok: true, json: async () => ({ users: [] }) }),
@@ -126,7 +130,7 @@ test('Approvals and Weekly Sales rows do not wait for monthly reference RPCs', a
       },
     }, salesTree)
     await promptly(load())
-    assert.deepEqual(records, [record])
+    assert.deepEqual(records, [weekly ? { ...record, ...asmForRegion(record.region_id, []) } : record])
     assert.equal(referenceLoading, true)
   }
 })

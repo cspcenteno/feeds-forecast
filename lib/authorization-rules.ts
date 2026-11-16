@@ -17,22 +17,33 @@ export const modules = [
 ] as const
 
 export type ModuleName = (typeof modules)[number]
-export type Action = 'view' | 'add' | 'edit' | 'delete'
+export type Action = 'view' | 'add' | 'edit' | 'import' | 'export' | 'delete'
 export type PermissionMap = Record<ModuleName, Record<Action, boolean>>
+
+export const importModules: readonly ModuleName[] = ['Forecasts', 'Actuals', 'Budgets', 'Users']
 
 export const disabledPermissions: Partial<Record<ModuleName, Action[]>> = {
   'Audit Logs': ['add', 'edit', 'delete'],
   Dashboard: ['add', 'edit', 'delete'],
   'Weekly Sales': ['add', 'edit', 'delete'],
   Approvals: ['add', 'delete'],
-  'Week Locks': ['delete'],
+  'Week Locks': ['add', 'delete'],
+}
+
+for (const moduleName of modules) {
+  if (!importModules.includes(moduleName)) {
+    disabledPermissions[moduleName] = [...(disabledPermissions[moduleName] ?? []), 'import']
+  }
+  if (moduleName !== 'Weekly Sales') {
+    disabledPermissions[moduleName] = [...(disabledPermissions[moduleName] ?? []), 'export']
+  }
 }
 
 export function emptyPermissions(): PermissionMap {
   return Object.fromEntries(
     modules.map((module) => [
       module,
-      { view: false, add: false, edit: false, delete: false },
+      { view: false, add: false, edit: false, import: false, export: false, delete: false },
     ]),
   ) as PermissionMap
 }
@@ -43,6 +54,8 @@ export function savedPermissions(rows: readonly {
   can_add: boolean | null
   can_edit: boolean | null
   can_delete: boolean | null
+  can_import?: boolean | null
+  can_export?: boolean | null
 }[]): PermissionMap {
   const permissions = emptyPermissions()
   for (const row of rows) {
@@ -53,6 +66,8 @@ export function savedPermissions(rows: readonly {
       add: row.can_add === true,
       edit: row.can_edit === true,
       delete: row.can_delete === true,
+      import: row.can_view === true && row.can_import === true,
+      export: row.can_view === true && row.can_export === true,
     }
     for (const action of disabledPermissions[moduleName] ?? []) permissions[moduleName][action] = false
   }
@@ -84,7 +99,7 @@ export function defaultPermissions(role: string, position = ''): PermissionMap {
 
     set('Customers', ['view', 'add', 'edit'])
     set('Budgets', ['view', 'add', 'edit'])
-    set('Actuals', ['view', 'add', 'edit'])
+    set('Actuals', ['view', 'add', 'edit', 'import'])
     set('Week Locks', ['view', 'add', 'edit'])
   } else if (role === 'Manager' && salesPosition === 'NSM') {
     set('Dashboard', ['view'])
@@ -103,9 +118,10 @@ export function defaultPermissions(role: string, position = ''): PermissionMap {
     set('Approvals', ['view', 'edit'])
     if (salesPosition === 'RSM') set('Forecasts', ['view', 'edit'])
   } else if (role === 'Admin') {
-    modules.forEach((m) => set(m, ['view', 'add', 'edit', 'delete']))
+    modules.forEach((m) => set(m, ['view', 'add', 'edit', 'import', 'delete']))
   }
 
+  p['Weekly Sales'].export = p['Weekly Sales'].view && (role === 'Superuser' || role === 'Admin')
   for (const moduleName of modules) {
     for (const action of disabledPermissions[moduleName] ?? []) {
       p[moduleName][action] = false

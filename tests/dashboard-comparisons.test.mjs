@@ -39,10 +39,10 @@ test('regional viewers can compare Actuals without forecasts but cannot see anot
   assert.equal(actualInDashboardScope(actual, { ...viewer, scope: 'rsm', regionId: null }, keys), false)
 })
 
-test('supervisor dashboards are limited to their assigned subregion', () => {
+test('supervisor dashboards include all subregions without a subregion assignment', () => {
   assert.equal(actualInDashboardScope(actual, { ...viewer, isSupervisor: true }, keys), true)
-  assert.equal(actualInDashboardScope({ ...actual, subregion_id: 9 }, { ...viewer, isSupervisor: true }, keys), false)
-  assert.equal(actualInDashboardScope(actual, { ...viewer, isSupervisor: true, subregionId: null }, keys), false)
+  assert.equal(actualInDashboardScope({ ...actual, subregion_id: 9 }, { ...viewer, isSupervisor: true }, keys), true)
+  assert.equal(actualInDashboardScope(actual, { ...viewer, isSupervisor: true, subregionId: null }, keys), true)
 })
 
 test('supervisor dashboards cannot cross their region or use an unassigned region', () => {

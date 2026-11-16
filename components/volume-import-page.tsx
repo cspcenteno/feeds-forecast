@@ -1,6 +1,8 @@
 
 'use client'
 
+import { canReadAllVolumeRegions } from '@/lib/volume-visibility'
+
 import { summaryForLevel } from '@/lib/table-summary-level'
 
 import { usePopupError } from '@/components/action-dialogs'
@@ -265,14 +267,10 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
 
   const [role, setRole] = useState('')
   const [position, setPosition] = useState('')
-  const isSupervisor = role === 'Superuser' && position === 'Supervisor'
-  const canReadAllRegions = role === 'Admin' || (role === 'Superuser' && !isSupervisor) ||
-    (role === 'Manager' && position === 'ASM')
+  const isSupervisor = role === 'Superuser' && ['SUPERVISOR', 'SV'].includes(position.trim().toUpperCase())
+  const canReadAllRegions = canReadAllVolumeRegions(role, position)
   const canWriteAllRegions = role === 'Admin' || (role === 'Superuser' && !isSupervisor)
   const [assignedRegionId, setAssignedRegionId] = useState<number | null>(null)
-  const [assignedSubregionId, setAssignedSubregionId] = useState<number | null>(
-    null
-  )
 
   const [filterYear, setFilterYear] = useState(String(currentYear))
   const [filterMonth, setFilterMonth] = useState('')
@@ -380,13 +378,13 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     const profileRegionId = profile.region_id
       ? Number(profile.region_id)
       : null
-    const profileSubregionId =
-      profile.subregion_id == null ? null : Number(profile.subregion_id)
 
     setRole(profileRole)
     setPosition(profile.position ?? '')
     setAssignedRegionId(profileRegionId)
-    setAssignedSubregionId(profileSubregionId)
+    setFilterRegionId(canReadAllVolumeRegions(profileRole, profile.position ?? '')
+      ? ''
+      : String(profileRegionId ?? ''))
 
     return true
   }
@@ -604,7 +602,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
 
     if (!file || importBusy) return
 
-    if (!authorization.can(moduleName, 'add')) {
+    if ((!authorization.can(moduleName, 'add') || !authorization.can(moduleName, 'import'))) {
       setError('You do not have permission to upload ' + label + ' records.')
       event.target.value = ''
       return
@@ -911,12 +909,6 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         return false
       }
 
-      if (
-        isSupervisor &&
-        (assignedSubregionId === null || item.subregion_id !== assignedSubregionId)
-      ) {
-        return false
-      }
 
       return true
     })
@@ -931,9 +923,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     customers,
     isActual,
     canReadAllRegions,
-    isSupervisor,
     assignedRegionId,
-    assignedSubregionId,
   ])
 
   const previewRecords = stagingRecords
@@ -1450,9 +1440,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
     try {
     if (importBusy || loadingSavedRecords || !savedRecordsComplete || stagingError || !stagingLoaded) return
-    if (!authorization.can(moduleName, 'add')) return
-    if (isSupervisor && assignedSubregionId === null) {
-      setError('Your account needs an assigned subregion to import records.')
+    if ((!authorization.can(moduleName, 'add') || !authorization.can(moduleName, 'import'))) return
+    if (isSupervisor && assignedRegionId === null) {
+      setError('Your account needs an assigned region to import records.')
       return
     }
     if (readyImportCount === 0) return
@@ -1474,7 +1464,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         ? { actual_date: item.actualDate }
         : { year: item.year!, month: item.month! }),
       region_id: item.region!.id,
-      subregion_id: isSupervisor ? assignedSubregionId : null,
+      subregion_id: null,
       customer_id: item.customer!.id,
       category_id: item.product!.category_id,
       product_id: item.product!.id,
@@ -1487,7 +1477,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       try {
         for (let start = 0; start < payload.length; start += 100) {
           const batch = payload.slice(start, start + 100)
-          const { error: importError } = await supabase.from(savedTable).insert(batch)
+          const { error: importError } = await supabase.rpc('import_volume_records', { p_module: moduleName, p_records: batch })
             .abortSignal(AbortSignal.timeout(SAVED_RECORDS_TIMEOUT_MS))
           if (importError) throw new Error(importError.message)
           importedCount += batch.length
@@ -1612,7 +1602,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
   }
 
   const canShowActions = authorization.can(moduleName, 'edit') || authorization.can(moduleName, 'delete')
-  const canManageImport = authorization.can(moduleName, 'add') || canShowActions
+  const canManageImport = authorization.can(moduleName, 'import') && (authorization.can(moduleName, 'add') || canShowActions)
   const savedActionColumn = authorization.can(moduleName, 'edit') && authorization.can(moduleName, 'delete') ? 'standard' : 'single'
 
   return (
@@ -1662,7 +1652,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               onClick={() => fileInputRef.current?.click()}
               disabled={
                 importBusy ||
-                !authorization.can(moduleName, 'add')
+                (!authorization.can(moduleName, 'add') || !authorization.can(moduleName, 'import'))
               }
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -1764,7 +1754,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                     Boolean(stagingError) ||
                     !stagingLoaded ||
                     readyImportCount === 0 ||
-                    !authorization.can(moduleName, 'add')
+                    (!authorization.can(moduleName, 'add') || !authorization.can(moduleName, 'import'))
                   }
                   className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -2026,13 +2016,15 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             </label>
 
             <SelectionField value={filterRegionId}
+                  disabled={initializing || !canReadAllRegions}
+                  placeholder={initializing ? 'Loading region…' : 'No assigned region'}
                   onValueChange={(selectionValue) => {
                 setFilterRegionId(selectionValue)
                 setFilterCustomer('')
               }}
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                   aria-label="Region">
-              <option value="">All Regions</option>
+              {canReadAllRegions && <option value="">All Regions</option>}
 
               {availableRegions.map((region) => (
                 <option key={region.id} value={region.id}>
