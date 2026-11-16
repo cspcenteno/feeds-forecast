@@ -1,3 +1,4 @@
+import { dashboardTypeOrDefault } from '@/lib/dashboard-settings'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/server'
 import { supabaseAdmin } from '@/lib/admin'
@@ -20,16 +21,20 @@ export async function GET(request: Request) {
     const client = await createClient()
     const { data: { user }, error: authError } = await client.auth.getUser()
     if (authError || !user) return NextResponse.json({ error: 'Sign in to view the dashboard.' }, { status: 401 })
+    const { data: profile, error: profileError } = await supabaseAdmin.from('users')
+      .select('*').eq('id', user.id).maybeSingle()
+    if (profileError) throw new Error(profileError.message)
+    if (!profile?.is_active) return NextResponse.json({ error: 'Your account is inactive.' }, { status: 403 })
+    if (dashboardTypeOrDefault(profile.dashboard_type) === 'powerbi') {
+      return NextResponse.json({ error: 'System Dashboard is not enabled for your account.' }, { status: 403 })
+    }
+
     // The existing RPC verifies Dashboard permission and computes the viewer's
     // scope. Keep those permissions for the independent Actual aggregation too.
     const { data: dashboardData, error: dashboardError } = await client.rpc('get_monthly_sales_dashboard', { p_month: month + '-01' })
     if (dashboardError) throw new Error(dashboardError.message)
     if (!dashboardData) return NextResponse.json({ error: 'Dashboard data is unavailable for this account.' }, { status: 403 })
     const dashboard = dashboardData as Dashboard
-    const { data: profile, error: profileError } = await supabaseAdmin.from('users')
-      .select('role, position, is_active, region_id, subregion_id').eq('id', user.id).maybeSingle()
-    if (profileError) throw new Error(profileError.message)
-    if (!profile?.is_active) return NextResponse.json({ error: 'Your account is inactive.' }, { status: 403 })
     const level = dashboardLevel(profile)
     const isSupervisor = profile.role === 'Superuser' && ['SV', 'SUPERVISOR'].includes(String(profile.position ?? '').trim().toUpperCase())
     if (isSupervisor) dashboard.details = dashboard.details.filter((row) => profile.region_id != null && row.region_id === profile.region_id)

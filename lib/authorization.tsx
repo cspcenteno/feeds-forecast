@@ -1,6 +1,8 @@
 
 'use client'
 
+import type { DashboardType } from '@/lib/dashboard-settings'
+
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -36,6 +38,8 @@ type Authz = {
   position: string | null
   regionId: number | null
   subregionId: number | null
+  dashboardType: DashboardType
+  powerBiEmbedUrl: string | null
   permissions: PermissionMap
   can: (module: ModuleName, action: Action) => boolean
 }
@@ -46,6 +50,8 @@ const Context = createContext<Authz>({
   position: null,
   regionId: null,
   subregionId: null,
+  dashboardType: 'system',
+  powerBiEmbedUrl: null,
   permissions: emptyPermissions(),
   can: () => false,
 })
@@ -66,6 +72,8 @@ export function AuthorizationProvider({
     position: null,
     regionId: null,
     subregionId: null,
+    dashboardType: 'system',
+    powerBiEmbedUrl: null,
     permissions: emptyPermissions(),
   })
 

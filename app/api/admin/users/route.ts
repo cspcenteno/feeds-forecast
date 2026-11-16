@@ -1,3 +1,4 @@
+import { isDashboardType } from '@/lib/dashboard-settings'
 
 import { NextResponse } from 'next/server'
 import { requiresUserSubregion, validRolePosition } from '@/lib/users-import'
@@ -293,6 +294,9 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
+    if (body.dashboardType !== undefined && !isDashboardType(body.dashboardType)) {
+      return NextResponse.json({ error: 'Select a valid dashboard type.' }, { status: 400 })
+    }
 
     if (body.importRequest === true && !(await canManageModule(auth.user.id, 'can_import'))) {
       return NextResponse.json({ error: 'You do not have Users import permission.' }, { status: 403 })
@@ -415,6 +419,7 @@ export async function POST(request: Request) {
         region_id: regionId,
         subregion_id: subregionId,
         is_active: isActive,
+        ...(body.dashboardType !== undefined ? { dashboard_type: body.dashboardType } : {}),
         must_change_password: true,
       })
 
@@ -473,6 +478,7 @@ export async function POST(request: Request) {
           region_id: regionId,
           subregion_id: subregionId,
           is_active: isActive,
+          ...(body.dashboardType !== undefined ? { dashboard_type: body.dashboardType } : {}),
         },
       },
       { status: 201 },
@@ -507,6 +513,9 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json()
+    if (body.dashboardType !== undefined && !isDashboardType(body.dashboardType)) {
+      return NextResponse.json({ error: 'Select a valid dashboard type.' }, { status: 400 })
+    }
 
     const userId =
       typeof body.userId === 'string' ? body.userId.trim() : ''
@@ -623,19 +632,10 @@ export async function PATCH(request: Request) {
         region_id: regionId,
         subregion_id: subregionId,
         is_active: isActive,
+        ...(body.dashboardType !== undefined ? { dashboard_type: body.dashboardType } : {}),
       })
       .eq('id', userId)
-      .select(`
-        id,
-        email,
-        full_name,
-        role,
-        region_id,
-        subregion_id,
-        position,
-        is_active,
-        created_at
-      `)
+      .select('*')
       .maybeSingle()
 
     if (updateError) {

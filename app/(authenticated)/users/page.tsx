@@ -1,6 +1,8 @@
 
 'use client'
 
+import { dashboardTypes, dashboardTypeLabels, dashboardTypeOrDefault, type DashboardType } from '@/lib/dashboard-settings'
+
 import { sortRegions } from '@/lib/region-order'
 import { permissionDefaultPreview } from '@/lib/permission-default-preview'
 import { requiresUserSubregion, positionsForRole, positionForRole, validRolePosition } from '@/lib/users-import'
@@ -49,6 +51,7 @@ type User = {
   subregion_id: number | null
   position: string | null
   is_active: boolean
+  dashboard_type?: DashboardType
   created_at: string
 }
 
@@ -179,6 +182,7 @@ export default function UsersPage() {
   const [regionId, setRegionId] = useState<number | null>(null)
   const [subregionId, setSubregionId] = useState<number | null>(null)
   const [isActive, setIsActive] = useState(false)
+  const [dashboardType, setDashboardType] = useState<DashboardType>('system')
 
   // Create User state
 
@@ -187,6 +191,7 @@ export default function UsersPage() {
   const [newEmail, setNewEmail] = useState('')
   const [newTemporaryPassword, setNewTemporaryPassword] = useState('')
   const [newIsActive, setNewIsActive] = useState(true)
+  const [newDashboardType, setNewDashboardType] = useState<DashboardType>('system')
   const [newRole, setNewRole] = useState<string>('User')
   const [newRegionId, setNewRegionId] = useState<number | null>(null)
   const [newSubregionId, setNewSubregionId] = useState<number | null>(null)
@@ -255,17 +260,7 @@ export default function UsersPage() {
     while (true) {
       const query = supabase
         .from('users')
-        .select(`
-          id,
-          email,
-          full_name,
-          role,
-          region_id,
-          subregion_id,
-          position,
-          is_active,
-          created_at
-        `)
+        .select('*')
         .order('id').limit(500)
       if (lastId !== null) query.gt('id', lastId)
       const { data, error } = await query.abortSignal(AbortSignal.timeout(45000))
@@ -410,6 +405,7 @@ export default function UsersPage() {
     setRegionId(user.position === 'NSM' ? null : user.region_id)
     setSubregionId(user.position === 'NSM' ? null : user.subregion_id)
     setIsActive(user.is_active)
+    setDashboardType(dashboardTypeOrDefault(user.dashboard_type))
 
     await loadUserPermissions(user.id)
   }
@@ -444,6 +440,7 @@ export default function UsersPage() {
     setRegionId(null)
     setSubregionId(null)
     setIsActive(false)
+    setDashboardType('system')
     setPermissions(createDefaultPermissions())
     setLoadingPermissions(false)
     setPermissionLoadError(false)
@@ -455,6 +452,7 @@ export default function UsersPage() {
     setNewEmail('')
     setNewTemporaryPassword('')
     setNewIsActive(true)
+    setNewDashboardType('system')
     setNewRole('User')
     setNewRegionId(null)
     setNewSubregionId(null)
@@ -709,6 +707,7 @@ export default function UsersPage() {
           email: newEmail.trim().toLowerCase(),
           temporaryPassword: newTemporaryPassword,
           isActive: newIsActive,
+          dashboardType: newDashboardType,
           role: newRole,
           regionId: newRole === 'Admin' ? null : newRegionId,
           subregionId: newRole === 'Admin' ? null : newSubregionId,
@@ -819,6 +818,7 @@ export default function UsersPage() {
           regionId: role === 'Admin' ? null : regionId,
           subregionId: role === 'Admin' ? null : subregionId,
           isActive,
+          dashboardType,
           permissions: normalizedPermissions.map((permission) => ({
             module: permission.module,
             can_view: permission.can_view,
@@ -856,6 +856,7 @@ export default function UsersPage() {
           setRegionId(updatedUser.region_id)
           setSubregionId(updatedUser.subregion_id)
           setIsActive(updatedUser.is_active)
+          setDashboardType(dashboardTypeOrDefault(updatedUser.dashboard_type))
         }
 
         notify(result.error || 'Unable to save changes.')
@@ -887,6 +888,7 @@ export default function UsersPage() {
       setRegionId(updatedUser.region_id)
       setSubregionId(updatedUser.subregion_id)
       setIsActive(updatedUser.is_active)
+      setDashboardType(dashboardTypeOrDefault(updatedUser.dashboard_type))
 
       setPermissions(normalizedPermissions)
       setPermissionLoadError(false)
@@ -1208,11 +1210,22 @@ export default function UsersPage() {
                 </SelectionField>
               )}
             </div>
+            <div data-user-dashboard-fields className="flex items-start gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <label htmlFor="userDashboardType" className="text-sm font-medium">Dashboard Type</label>
+              <SelectionField id="userDashboardType"
+                value={selectedUser ? dashboardType : newDashboardType}
+                onValueChange={(value) => (selectedUser ? setDashboardType : setNewDashboardType)(dashboardTypeOrDefault(value))}
+                disabled={formBusy} aria-label="Dashboard Type" className="w-full">
+                {dashboardTypes.map((type) => <option key={type} value={type}>{dashboardTypeLabels[type]}</option>)}
+              </SelectionField>
+              </div>
             <ActiveField
                 checked={selectedUser ? isActive : newIsActive}
                 onChange={(event) => (selectedUser ? setIsActive : setNewIsActive)(event.target.checked)}
                 disabled={formBusy}
               />
+            </div>
           </div>
 
           {/* Create User Permissions */}

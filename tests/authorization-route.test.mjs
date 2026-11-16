@@ -1,3 +1,5 @@
+import { dashboardTypeOrDefault } from '../lib/dashboard-settings.ts'
+import { powerBiEmbedUrl } from '../lib/powerbi-report.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -9,16 +11,18 @@ const source = ts.transpileModule(await readFile(new URL('../app/api/authorizati
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText
 
-async function run({ role = 'User', active = true, signedIn = true, fail = false, rows = [] } = {}) {
+async function run({ role = 'User', active = true, signedIn = true, fail = false, rows = [], dashboardType } = {}) {
   const reads = []
   const module = { exports: {} }
   vm.runInNewContext(source, { exports: module.exports, require(name) {
     if (name === 'next/server') return { NextResponse: { json: (body, options) => ({ body, ...options, status: options?.status ?? 200 }) } }
     if (name === '@/lib/server') return { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: signedIn ? { id: 'viewer' } : null } }) } }) }
+    if (name === '@/lib/dashboard-settings') return { dashboardTypeOrDefault }
+    if (name === '@/lib/powerbi-report') return { powerBiEmbedUrl }
     if (name === '@/lib/authorization-rules') return { savedPermissions }
     if (name === '@/lib/admin') return { supabaseAdmin: { from(table) {
       reads.push(table)
-      const result = { data: table === 'users' ? { role, is_active: active, region_id: 1, subregion_id: 2 } : rows,
+      const result = { data: table === 'users' ? { role, is_active: active, region_id: 1, subregion_id: 2, dashboard_type: dashboardType } : rows,
         error: fail && table === 'user_permissions' ? { message: 'Database unavailable' } : null }
       return { select() { return this }, eq(field, id) {
         assert.equal(field, table === 'users' ? 'id' : 'user_id')
@@ -68,5 +72,16 @@ test('authorization returns the current explicit Export grant without granting E
     assert.equal(response.status, 200)
     assert.equal(response.body.permissions['Weekly Sales'].export, canExport)
     assert.equal(response.body.permissions['Weekly Sales'].edit, false)
+  }
+})
+
+
+test('dashboard settings default safely and return the embed only for allowed viewers', async () => {
+  for (const dashboardType of [undefined, 'invalid', 'system', 'powerbi', 'both']) {
+    for (const view of [false, true]) {
+      const { response } = await run({ dashboardType, rows: [{module:'Dashboard',can_view:view}] })
+      assert.equal(response.body.dashboardType, dashboardTypeOrDefault(dashboardType))
+      assert.equal(response.body.powerBiEmbedUrl, view && ['powerbi','both'].includes(dashboardType) ? powerBiEmbedUrl() : null)
+    }
   }
 })
