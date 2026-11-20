@@ -50,7 +50,7 @@ import { createClient } from '@/lib/client'
 import { loadActualRecords, type ActualRecord } from '@/lib/actual-records'
 import { useAuthorization } from '@/lib/authorization'
 import { loadForecastWeekStates } from '@/lib/forecast-week-locks'
-import { currentWeekInput, salesWeekRange } from '@/lib/forecast-weeks'
+import { currentWeekInput, salesWeekRange, weekDateRangeLabel } from '@/lib/forecast-weeks'
 
 type Region = {
   id: number
@@ -1694,6 +1694,7 @@ export default function SalesInputPage() {
                 <div data-field-size="compact" className="space-y-2">
                   <label className="text-sm font-medium">
                     Week
+                    {weekDateRangeLabel(selectedWeek) && <span className="ml-2 text-xs font-normal text-muted-foreground">({weekDateRangeLabel(selectedWeek)})</span>}
                   </label>
 
                   <input
@@ -2022,7 +2023,7 @@ export default function SalesInputPage() {
         <div data-filter-toolbar="" className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b px-6 py-4">
           <div data-saved-forecast-filters="" className="app-field-row min-w-0 w-full md:w-auto">
             <div data-field-size="compact" className="space-y-1.5">
-              <label htmlFor="saved-forecast-from-week" className="block text-xs font-medium text-muted-foreground">From week</label>
+              <label htmlFor="saved-forecast-from-week" className="block text-xs font-medium text-muted-foreground">From week {weekDateRangeLabel(savedFromWeek) && <span className="text-xs font-normal">({weekDateRangeLabel(savedFromWeek)})</span>}</label>
               <input id="saved-forecast-from-week" type="week" value={savedFromWeek} onChange={event => {
                 const value = event.target.value
                 setSavedFromWeek(value)
@@ -2031,7 +2032,7 @@ export default function SalesInputPage() {
                 className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <div data-field-size="compact" className="space-y-1.5">
-              <label htmlFor="saved-forecast-to-week" className="block text-xs font-medium text-muted-foreground">To week</label>
+              <label htmlFor="saved-forecast-to-week" className="block text-xs font-medium text-muted-foreground">To week {weekDateRangeLabel(savedToWeek) && <span className="text-xs font-normal">({weekDateRangeLabel(savedToWeek)})</span>}</label>
               <input id="saved-forecast-to-week" type="week" value={savedToWeek} onChange={event => {
                 const value = event.target.value
                 setSavedToWeek(value)

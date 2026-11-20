@@ -15,7 +15,7 @@ import { rsmAssignmentKey, rsmForSubregion } from '@/lib/rsm-reporting'
 import { actionGroupCount } from '@/lib/action-group-count'
 
 import { weeklyBudget } from '@/lib/weekly-budget'
-import { salesWeekRange } from '@/lib/forecast-weeks'
+import { salesWeekRange, weekDateRangeLabel } from '@/lib/forecast-weeks'
 
 import { sortRegions } from '@/lib/region-order'
 
@@ -1148,6 +1148,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     <div data-field-size="compact" className="space-y-1.5">
                       <label htmlFor="weekly-sales-from-week" className="block text-xs font-medium text-muted-foreground">
                         From week
+                        {weekDateRangeLabel(fromWeek) && <span className="ml-1 text-xs font-normal">({weekDateRangeLabel(fromWeek)})</span>}
                       </label>
                       <input id="weekly-sales-from-week" type="week" value={fromWeek}
                         onChange={(event) => {
@@ -1161,6 +1162,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     <div data-field-size="compact" className="space-y-1.5">
                       <label htmlFor="weekly-sales-to-week" className="block text-xs font-medium text-muted-foreground">
                         To week
+                        {weekDateRangeLabel(toWeek) && <span className="ml-1 text-xs font-normal">({weekDateRangeLabel(toWeek)})</span>}
                       </label>
                       <input id="weekly-sales-to-week" type="week" value={toWeek}
                         onChange={(event) => {

@@ -13,7 +13,7 @@ import { useActionDialogs } from '@/components/action-dialogs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
-import { currentWeekInput, weekInputDate } from '@/lib/forecast-weeks'
+import { currentWeekInput, weekInputDate, weekDateRangeLabel } from '@/lib/forecast-weeks'
 import { Table } from '@/components/ui/table'
 import { TableLoadingRow } from '@/components/ui/loading-spinner'
 
@@ -83,12 +83,13 @@ export function ForecastWeekManager() {
       </div>
 
       {canManage && <div className="p-6"><div className="max-w-3xl space-y-4">
-        <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
-          <label className="min-w-0 space-y-1.5 text-sm font-medium">Week
+        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
+          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Week
+            {weekDateRangeLabel(selectedWeek) && <span className="ml-2 text-xs font-normal text-muted-foreground">({weekDateRangeLabel(selectedWeek)})</span>}</span>
             <input type="week" disabled={busy} value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)} className={input} />
           </label>
-          <label className="min-w-0 space-y-1.5 text-sm font-medium">Reason
-            <input disabled={busy} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required for Reopen or Lock week" className={input} />
+          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Reason</span>
+            <input data-week-lock-reason="" disabled={busy} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required for Reopen or Lock week" className={input} />
           </label>
         </div>
         <div className="space-y-3">

@@ -15,6 +15,18 @@ export function weekInputDate(value: string) {
   return isoWeekStart(Number(match[1]), Number(match[2]))
 }
 
+export function weekDateRangeLabel(value: string) {
+  if (!value) return ''
+  try {
+    const start = new Date(weekInputDate(value) + 'T00:00:00Z')
+    const end = new Date(start)
+    end.setUTCDate(end.getUTCDate() + 6)
+    const month = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+    if (start.getUTCFullYear() !== end.getUTCFullYear()) return `${month(start)} ${start.getUTCDate()}, ${start.getUTCFullYear()}–${month(end)} ${end.getUTCDate()}, ${end.getUTCFullYear()}`
+    return `${month(start)} ${start.getUTCDate()}–${start.getUTCMonth() === end.getUTCMonth() ? '' : month(end) + ' '}${end.getUTCDate()}`
+  } catch { return '' }
+}
+
 export function currentWeekInput(now = new Date()) {
   const localDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
   const date = new Date(localDate + 'T00:00:00Z')

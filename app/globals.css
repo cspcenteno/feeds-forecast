@@ -1591,8 +1591,10 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   [data-week-lock-actions] > div:last-child { flex: 1; min-width: 0; }
   [data-week-lock-actions] > div:last-child > button { width: 100%; white-space: nowrap; }
   [data-week-lock-actions] button[data-week-lock-icon] {
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    min-height: 2.5rem;
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -1607,7 +1609,8 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   [data-import-account-fields] > div { min-width: 0; width: 100%; }
   [data-action-toolbar][data-user-account-actions] {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.75rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.5rem;
+    gap: 0.75rem 0.5rem;
     width: 100%;
   }
   [data-user-account-actions] > label { grid-column: 1 / -1; width: 100%; }
@@ -1617,10 +1620,13 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
     white-space: nowrap;
     padding-inline: 0.5rem;
     justify-content: center;
+    height: 2.5rem;
+    min-height: 2.5rem;
+    padding-block: 0;
   }
   [data-action-toolbar][data-user-account-actions] > button:last-of-type {
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 2.5rem;
+    height: 2.5rem;
     padding: 0;
   }
   [data-audit-filters] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 0.5rem; }
@@ -1630,19 +1636,25 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
     overflow: visible;
     gap: 0.75rem;
   }
-  [data-customer-toolbar] > div:first-child { width: 100%; min-width: 0; }
+  [data-customer-toolbar] > div:first-child { grid-column: 1 / -1; width: 100%; min-width: 0; }
   [data-customer-toolbar] > [data-action-toolbar] { display: contents; }
   [data-customer-toolbar] > [data-action-toolbar] > [role="search"] {
-    grid-column: 2;
-    grid-row: 1;
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
     min-width: 0;
     align-self: end;
   }
-  [data-customer-toolbar] > [data-action-toolbar] > button { grid-row: 2; }
+  [data-customer-toolbar] > [data-action-toolbar] > button {
+    grid-row: 3;
+    height: 2.5rem;
+    min-height: 2.5rem;
+    padding-block: 0;
+    align-self: center;
+  }
   [data-customer-toolbar] > [data-action-toolbar] > button:not([data-slot="expand-collapse-button"]) {
     grid-column: 1 / -1;
-    margin-right: 3.5rem;
+    margin-right: 3.25rem;
   }
   [data-customer-toolbar] > [data-action-toolbar] > button[data-slot="expand-collapse-button"] {
     grid-column: 2;
@@ -1781,12 +1793,12 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
 
 @media (max-width: 767px) {
   :root button[data-slot="expand-collapse-button"][data-slot] {
-    flex: 0 0 2.75rem;
-    width: 2.75rem;
-    min-width: 2.75rem;
-    max-width: 2.75rem;
-    height: 2.75rem;
-    min-height: 2.75rem;
+    flex: 0 0 2.5rem;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    max-width: 2.5rem;
+    height: 2.5rem;
+    min-height: 2.5rem;
     padding: 0;
     gap: 0;
   }
@@ -1945,6 +1957,9 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
 
 @media (max-width: 767px) {
   :root body input:is([role="combobox"], [type="week"], [type="month"], [type="date"]),
+  :root body input[type="search"],
+  :root body input[data-week-lock-reason],
+  :root body input[aria-label="Schedule year"],
   :root body select {
     font-size: 0.875rem !important;
     line-height: 1.25rem;
@@ -1962,6 +1977,40 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   :root body button[data-slot="expand-collapse-button"] {
     font-size: 0.875rem;
     line-height: 1.25rem;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-action-toolbar][data-mobile-two-row-toolbar] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem 0.5rem;
+  }
+  [data-mobile-two-row-toolbar] > [role="search"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: none;
+  }
+  [data-action-toolbar][data-mobile-two-row-toolbar] > button {
+    width: 100%;
+    grid-row: 2;
+  }
+  [data-mobile-two-row-toolbar]:not(:has(> button[data-slot="expand-collapse-button"])) > button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  :root button[data-action-tone][aria-label^="Refresh"],
+  :root [data-import-dialog-header] button:has([data-import-icon-label]):last-child {
+    flex: 0 0 2.5rem;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    max-width: 2.5rem;
+    height: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0;
+    justify-content: center;
   }
 }
 
