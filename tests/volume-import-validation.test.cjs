@@ -66,7 +66,7 @@ test('Actuals retains Invalid checks for bad dates, region/customer/product matc
 test('unmatched KAMs stay in Actuals preview as Invalid without preventing valid rows', () => {
   const result = preview(true, [base, { ...base, id: 2, kam: 'Unknown salesperson', region: null }, { ...base, id: 3, kam: 'Unknown salesperson' }])
   assert.deepEqual(Array.from(result, row => row.status), ['Ready', 'Invalid', 'Invalid'])
-  assert.match(result[1].issues.join('; '), /Salesperson assignment not found/)
+  assert.match(result[1].issues.join('; '), /Salesman assignment not found/)
   assert.equal(result[1].source.kam, 'Unknown salesperson')
 })
 
@@ -76,7 +76,7 @@ test('Actuals derives a missing region when a KAM becomes available and still re
   assert.equal(row.source.region, 'LUZON')
   const missing = preview(true, [{ ...base, kam: null }])[0]
   assert.equal(missing.status, 'Invalid')
-  assert.ok(missing.issues.includes('Missing salesperson (KAM/RSM/ASM)'))
+  assert.ok(missing.issues.includes('Missing salesman (KAM/RSM/ASM)'))
 })
 
 test('Actuals accepts RSM and ASM salespeople and derives their regions', () => {

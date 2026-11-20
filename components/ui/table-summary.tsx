@@ -2,7 +2,7 @@ export type TableSummaryCounts = { records: number; customers?: number; products
 
 export function TableSummary({ records, customers, products, kams, rsms, asms, salespeople, regions, subregions, categories, end, endRef }: TableSummaryCounts & { end?: import('react').ReactNode; endRef?: import('react').Ref<HTMLDivElement> }) {
   const counts = [
-    [records, 'record', 'records'], [asms, 'ASM', 'ASMs'], [rsms, 'RSM', 'RSMs'], [kams, 'KAM', 'KAMs'], [salespeople, 'salesperson', 'salespeople'],
+    [records, 'record', 'records'], [asms, 'ASM', 'ASMs'], [rsms, 'RSM', 'RSMs'], [kams, 'KAM', 'KAMs'], [salespeople, 'salesman', 'salesmen'],
     [regions, 'region', 'regions'], [subregions, 'subregion', 'subregions'], [categories, 'category', 'categories'],
     [customers, 'customer', 'customers'], [products, 'product', 'products'],
   ] as const

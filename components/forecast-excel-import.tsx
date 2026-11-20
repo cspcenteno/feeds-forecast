@@ -335,14 +335,14 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             if (file) void upload(file)
           }} />
 <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Download Template</span></button>
 
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
 </div>
       </div>
 
       <div data-volume-import-body className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pt-4 sm:flex sm:flex-col sm:gap-4 sm:space-y-0 sm:overflow-hidden">
-          <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+          <div data-import-summary-cards="" className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
             {[['Total Records', rows.length], ['Ready to Import', ready.length], ['Invalid', invalidCount], ['Already Imported', preview.length - invalidCount - ready.length]].map(([label, value]) => <div key={label} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums">{rows.length > 0 ? value : busy ? <LoadingSpinner label={String(label).toLowerCase()} /> : referencesReady && stagingReady ? value : '—'}</p></div>)}
           </div>
           <div className="flex shrink-0 justify-end">
@@ -356,7 +356,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !rows.length}
               aria-expanded={allPreviewGroupsExpanded} aria-controls="forecast-import-records" onClick={toggleAllPreviewGroups}
               className="rounded-md border px-3 py-2 text-sm"><ExpandCollapseIcon expanded={allPreviewGroupsExpanded} />
-              {allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'}
+              <span className="hidden md:inline">{allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
             </button>
 </div>
           </div>
@@ -364,7 +364,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             event.preventDefault()
             void saveUploadedRow(editing)
           }}>
-            <div className="shrink-0 border-b pb-4 pr-10"><h3 data-dialog-title className="text-lg font-semibold"><HeadingPencil className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Edit Uploaded Record</h3><p className="mt-1 text-xs text-muted-foreground">Forecasts</p></div>
+            <div className="shrink-0 border-b pb-4 pr-10" data-popup-form-header=""><h3 data-dialog-title className="text-lg font-semibold"><HeadingPencil className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Edit Uploaded Record</h3><p className="mt-1 text-xs text-muted-foreground">Forecasts</p></div>
             <div role="region" aria-label="Uploaded forecast fields" tabIndex={0} className="min-h-0 min-w-0 max-h-[max(5rem,calc(100dvh-17rem))] flex-1 overflow-y-auto overscroll-contain pr-1 pb-1 sm:max-h-[max(5rem,calc(100dvh-13rem))]"><fieldset disabled={disabled} className="grid min-w-0 grid-cols-1 gap-4 border-0 p-0 sm:grid-cols-2">{forecastImportFields.map(([field, label]) => <label key={field} className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>{field === 'volume' ? 'Volume (50kg)' : label}</span><input type={field === 'year' || field === 'volume' ? 'number' : 'text'} step={field === 'volume' ? 'any' : undefined} disabled={disabled} value={editing[field] ?? ''} onChange={(event) => setEditing({ ...editing, [field]: event.target.value })} className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>)}</fieldset></div>
             <div data-action-toolbar="" data-dialog-footer="" className="flex shrink-0 flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => setEditing(null)} className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button><button data-action-tone="primary" data-action-fill="" disabled={disabled} type="submit" className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm"><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Save Changes</button></div>
           </form></RecordDialog>}

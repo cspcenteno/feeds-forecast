@@ -24,7 +24,7 @@ export function SalespersonInput({ value, onValueChange, disabled, placeholder }
     return () => controller.abort()
   }, [reportError])
   useEffect(loadNames, [loadNames])
-  return <div onFocusCapture={loadNames}><SearchableSelect aria-label="Salesperson" freeText value={value} onValueChange={onValueChange}
-    disabled={disabled} placeholder={placeholder ?? 'Select or enter salesperson…'}
+  return <div onFocusCapture={loadNames}><SearchableSelect aria-label="Salesman" freeText value={value} onValueChange={onValueChange}
+    disabled={disabled} placeholder={placeholder ?? 'Select or enter salesman…'}
     options={names.map((name) => ({ value: name, label: name }))} /></div>
 }

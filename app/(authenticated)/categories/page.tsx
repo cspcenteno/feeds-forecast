@@ -227,7 +227,7 @@ export default function CategoriesPage() {
 
       {/* Form */}
       {authorization.can('Categories', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Category' : 'Edit Category'} busy={loading}>
-        <div className="mb-5">
+        <div className="mb-5" data-popup-form-header="">
           <h2 data-section-title="" className="font-semibold"><HeadingTags className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
             {editingId !== null
               ? 'Edit Category'
@@ -237,7 +237,7 @@ export default function CategoriesPage() {
 
         </div>
 
-        <div className="app-field-row">
+        <div data-category-fields="" className="app-field-row">
           {/* Code */}
           <div data-field-size="compact" className="space-y-2">
             <label
@@ -274,6 +274,7 @@ export default function CategoriesPage() {
             />
           </div>
 
+          <div data-category-description-active="">
           {/* Description */}
           <div data-field-size="wide" className="space-y-2">
             <label
@@ -301,11 +302,21 @@ export default function CategoriesPage() {
                 }
               />
           </div>
+          </div>
         </div>
 
         {/* Buttons */}
-        <div data-action-toolbar="" className="mt-5 flex gap-2">
-          <button data-action-tone="primary" data-action-fill=""
+        <div data-action-toolbar="" className="mt-5 flex gap-2" data-dialog-footer="">
+          <button data-action-tone="neutral"
+              className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
+              onClick={clearForm}
+              disabled={loading}
+            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
+              Cancel
+            </button>
+
+
+            <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveCategory}
             disabled={loading || !authorization.can('Categories', editingId === null ? 'add' : 'edit')}
@@ -316,15 +327,6 @@ export default function CategoriesPage() {
                 ? 'Save Changes'
                 : 'Add Category'}
           </button>
-
-
-            <button data-action-tone="neutral"
-              className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
-              onClick={clearForm}
-              disabled={loading}
-            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-              Cancel
-            </button>
         </div>
         {/* Error */}
 
@@ -334,7 +336,7 @@ export default function CategoriesPage() {
       <section className="rounded-xl border bg-card shadow-sm">
 
 
-        <div data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search categories" />
+        <div data-category-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search categories" />
 {authorization.can('Categories', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Category</button>}
 </div>
 

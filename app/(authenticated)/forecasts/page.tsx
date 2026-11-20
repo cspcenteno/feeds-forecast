@@ -1659,7 +1659,7 @@ export default function SalesInputPage() {
         <div data-forecast-form className="app-tables min-w-0">
 
           <div data-section-header="" data-aligned-toolbar="" className="border-b py-4 pr-10">
-            <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
+            <div data-forecast-title-row="" className="flex w-full min-w-0 flex-row items-center gap-2 sm:gap-6">
               <div>
                 <h2 data-section-title="" className="text-base font-semibold"><HeadingClipboardPlus className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
                   {rows.some((row) => row.id !== null) ? 'Edit Forecast' : 'Add Forecast'}
@@ -1668,7 +1668,7 @@ export default function SalesInputPage() {
 
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
               <div
                 className={`w-fit rounded-full px-3 py-1 text-xs font-medium ${
                   checkingWeekLock
@@ -1951,7 +1951,13 @@ export default function SalesInputPage() {
     </tfoot>
             </ForecastEntryTable>
 
-            <div data-action-toolbar="" className="mt-5 flex flex-wrap items-center gap-2">
+            <div data-action-toolbar="" className="mt-5 flex flex-wrap items-center gap-2" data-dialog-footer="">
+              <button data-action-tone="neutral" type="button" onClick={handleClear}
+                disabled={loading || initializing || workspaceOwner !== userId}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                <RotateCcw className="size-4" aria-hidden="true" />
+                Clear
+              </button>
               <button data-action-tone="primary" data-action-fill=""
                 type="button"
                 onClick={handleSave}
@@ -1965,28 +1971,8 @@ export default function SalesInputPage() {
                 <Save className="size-4" />
                 {pendingAction === 'save' ? 'Saving...' : rows.some((row) => row.status === 'Rejected') ? 'Save Changes' : 'Save as Draft'}
               </button>
-              <button data-action-tone="neutral" type="button" onClick={handleClear}
-                disabled={loading || initializing || workspaceOwner !== userId}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-muted disabled:opacity-50">
-                <RotateCcw className="size-4" aria-hidden="true" />
-                Clear
-              </button>
             </div>
 
-            {/* WEEK LOCK */}
-
-            {isLocked && (
-              <div className="mt-5 rounded-lg border bg-muted/40 px-4 py-3">
-                <p className="text-sm font-medium">
-                  Week {week} - {year} is locked.
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Forecast entries cannot be added, edited, or submitted for
-                  this week.
-                </p>
-              </div>
-            )}
 
 
           </div>
@@ -2033,8 +2019,8 @@ export default function SalesInputPage() {
 
 </div>
 </div>
-        <div data-filter-toolbar="" className="flex shrink-0 flex-nowrap items-end justify-between gap-4 overflow-x-auto border-b px-6 py-4">
-          <div className="app-field-row shrink-0 !flex-nowrap">
+        <div data-filter-toolbar="" className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b px-6 py-4">
+          <div data-saved-forecast-filters="" className="app-field-row min-w-0 w-full md:w-auto">
             <div data-field-size="compact" className="space-y-1.5">
               <label htmlFor="saved-forecast-from-week" className="block text-xs font-medium text-muted-foreground">From week</label>
               <input id="saved-forecast-from-week" type="week" value={savedFromWeek} onChange={event => {
@@ -2079,16 +2065,14 @@ export default function SalesInputPage() {
               </SelectionField>
             </div>
           </div>
-          <div data-action-toolbar="" className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap">
+          <div data-action-toolbar="" data-saved-forecast-actions="" className="ml-auto flex min-w-0 max-w-full flex-nowrap items-center gap-2 md:shrink-0 md:whitespace-nowrap">
 
 
-          {canSubmitForecasts &&
-            (!savedStatusFilter || savedStatusFilter === 'Draft' || savedStatusFilter === 'all') &&
-            eligibleSubmissionCount > 0 && (
+          {(canSubmitForecasts || initializing || authorization.loading) && (
               <button data-action-tone="transfer" data-action-fill=""
                 type="button"
                 onClick={handleSubmitAll}
-                disabled={loading}
+                disabled={!canSubmitForecasts || loading || initializing || savedTableLoading || eligibleSubmissionCount === 0 || !(!savedStatusFilter || savedStatusFilter === 'Draft' || savedStatusFilter === 'all')}
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="size-4" />
@@ -2107,14 +2091,14 @@ export default function SalesInputPage() {
             disabled={savedCustomers.length === 0}
             className="h-9 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
           ><ExpandCollapseIcon expanded={allSavedCustomersExpanded} />
-            {allSavedCustomersExpanded ? 'Collapse All' : 'Expand All'}
+            <span className="hidden md:inline">{allSavedCustomersExpanded ? 'Collapse All' : 'Expand All'}</span>
           </button>
 
 
 
-<button data-action-tone="neutral" type="button" onClick={loadForecasts} disabled={savedTableLoading || initializing || loading}
+<button data-action-tone="neutral" type="button" aria-label="Refresh saved forecasts" title="Refresh saved forecasts" onClick={loadForecasts} disabled={savedTableLoading || initializing || loading}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
-            <RefreshCw className={`size-4 ${savedTableLoading ? 'animate-spin' : ''}`} aria-hidden="true" />Refresh
+            <RefreshCw className={`size-4 ${savedTableLoading ? 'animate-spin' : ''}`} aria-hidden="true" /><span className="hidden md:inline">Refresh</span>
           </button>
 </div>
         </div>

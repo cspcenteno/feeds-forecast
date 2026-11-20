@@ -1011,11 +1011,11 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
 
       let matchedKam: ImportKam | null = null
       if (isActual) {
-        if (!source.kam?.trim()) issues.push('Missing salesperson (KAM/RSM/ASM)')
-        else if (actualImportKams === null) issues.push('Salesperson assignments are unavailable. Refresh the uploaded records to retry.')
+        if (!source.kam?.trim()) issues.push('Missing salesman (KAM/RSM/ASM)')
+        else if (actualImportKams === null) issues.push('Salesman assignments are unavailable. Refresh the uploaded records to retry.')
         else {
           try { matchedKam = resolveOracleKam(source.kam, actualImportKams) }
-          catch (cause) { issues.push(cause instanceof Error ? cause.message : 'Salesperson assignment not found (KAM/RSM/ASM)') }
+          catch (cause) { issues.push(cause instanceof Error ? cause.message : 'Salesman assignment not found (KAM/RSM/ASM)') }
         }
       }
       const regionName = source.region?.trim() || (matchedKam ? regions.find(region => region.id === matchedKam.region_id)?.name : null)
@@ -1035,7 +1035,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       } else if (matchingRegions.length > 1) {
         issues.push(`Multiple regions found: ${source.region}`)
       }
-      if (matchedKam && matchedRegion && matchedKam.region_id !== matchedRegion.id) issues.push('Salesperson is assigned to a different region')
+      if (matchedKam && matchedRegion && matchedKam.region_id !== matchedRegion.id) issues.push('Salesman is assigned to a different region')
 
       const matchingCustomers = customers.filter(
         (item) =>
@@ -1175,7 +1175,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       const labels = [valid ? 'Valid' : 'Invalid']
       if (valid) {
         labels.push(
-          'Salesperson: ' + (item.source.kam?.trim() || 'Unassigned salesperson'),
+          'Salesman: ' + (item.source.kam?.trim() || 'Unassigned salesman'),
           'Customer: ' + (item.customer?.customer ?? (item.source.customer?.trim() || 'Missing customer'))
         )
       } else {
@@ -1208,7 +1208,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     const kams = new Map<string, { kam: string; customers: Map<string, SavedCustomerGroup> }>()
 
     for (const item of filteredBudgets) {
-      const kam = item.kam?.trim() || 'Unassigned salesperson'
+      const kam = item.kam?.trim() || 'Unassigned salesman'
       const kamKey = normalizeText(kam)
       let kamGroup = kams.get(kamKey)
       if (!kamGroup) {
@@ -1467,7 +1467,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         <td className="px-3 py-3">
           <StatusBadge status={getImportStatusLabel(item.status)} compact />
           {item.status === 'Invalid' && <div className="mt-1 space-y-1 text-[10px] text-muted-foreground wrap-anywhere">
-            <p>Salesperson: {item.source.kam || '—'}</p>
+            <p>Salesman: {item.source.kam || '—'}</p>
             <p>Customer: {item.source.customer || '—'}</p>
           </div>}
           {item.region && item.issues.some((issue) => issue.startsWith('Customer not found:')) && authorization.can('Customers', 'add') && (
@@ -1720,7 +1720,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
             >
               <Download className="size-4" />
-              Download Template
+              <span data-import-icon-label="" className="sr-only md:not-sr-only">Download Template</span>
             </button>
 <button data-action-tone="neutral"
               type="button"
@@ -1731,14 +1731,14 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               <RefreshCw
                 className={`size-4 ${loadingStaging ? 'animate-spin' : ''}`}
               />
-              Refresh
+              <span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span>
             </button>
 </div>
         </div>
 
         {showImportPreview && (
           <div data-volume-import-body className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pt-4 sm:flex sm:flex-col sm:gap-4 sm:space-y-0 sm:overflow-hidden">
-            <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+            <div data-import-summary-cards="" className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">
                   Total Records
@@ -1818,7 +1818,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                 aria-expanded={allImportGroupsExpanded} aria-controls={moduleName.toLowerCase() + '-import-records'}
                 onClick={() => setExpandedImportGroups(new Set(allImportGroupsExpanded ? [] : importGroupKeys))}
                 className="rounded-md border px-3 py-2 text-sm"><ExpandCollapseIcon expanded={allImportGroupsExpanded} />
-                {allImportGroupsExpanded ? 'Collapse All' : 'Expand All'}
+                <span className="hidden md:inline">{allImportGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
               </button>
 </div>
             </div>
@@ -1829,7 +1829,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                 event.preventDefault()
                 void saveStagingRecord(editingImport, 'edit')
               }}>
-                <div className="shrink-0 border-b pb-4 pr-10">
+                <div className="shrink-0 border-b pb-4 pr-10" data-popup-form-header="">
                   <h2 data-dialog-title className="text-lg font-semibold"><HeadingPencil className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Edit Uploaded Record</h2>
                   <p className="mt-1 text-xs text-muted-foreground">{moduleName} · Record #{editingImport.id}</p>
                 </div>
@@ -1838,7 +1838,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                   {([
                     ...(isActual ? [['actual_date', 'Date']] as const : [['year', 'Year'], ['month', 'Month']] as const),
                     ['region', 'Region'],
-                    ['kam', 'Salesperson'],
+                    ['kam', 'Salesman'],
                     ['customer', 'Customer'], ['product_code', 'Product Code'],
                     ['product_name', 'Product Name'], ['volume', volumeLabel],
                   ] as const).map(([field, label]) => (
@@ -1942,7 +1942,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               {savedTitle}
             </h2>
           </div>
-          <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
+          <div data-action-toolbar="" data-saved-volume-actions="" className="flex flex-wrap items-center gap-2">
             {canManageImport && <button type="button" data-action-tone="transfer" onClick={() => {
               setShowImportPreview(true)
               if (!importBusy) void loadStagingRecords()
@@ -1953,29 +1953,30 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               disabled={initializing || savedKamKeys.length === 0}
               aria-expanded={allSavedGroupsExpanded} aria-controls={moduleName.toLowerCase() + '-saved-records'}
               className="rounded-md border px-3 py-2 text-sm"><ExpandCollapseIcon expanded={allSavedGroupsExpanded} />
-              {allSavedGroupsExpanded ? 'Collapse All' : 'Expand All'}
+              <span className="hidden md:inline">{allSavedGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
             </button>
             <button data-action-tone="neutral"
               type="button"
               onClick={loadBudgets}
+              aria-label="Refresh saved records" title="Refresh saved records"
               disabled={initializing || loading || loadingSavedRecords}
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
             >
-              <RefreshCw className="size-4" />
-              Refresh
+              <RefreshCw className="size-4" aria-hidden="true" />
+              <span className="hidden md:inline">Refresh</span>
             </button>
           </div>
         </div>
 
         {editingSavedCustomer && <RecordDialog open onClose={() => setEditingSavedCustomer(null)} title={`Edit Customer ${moduleName}`} busy={loading} wide contained fitContent maxWidth="75rem">
           <form onSubmit={saveSavedCustomer} className="app-tables flex min-h-0 flex-1 flex-col gap-4 text-sm">
-            <div className="shrink-0 border-b pb-4 pr-10">
+            <div className="shrink-0 border-b pb-4 pr-10" data-popup-form-header="">
               <h2 data-dialog-title data-section-title="" className="font-semibold"><HeadingPencil className="size-5 text-muted-foreground" aria-hidden="true" />Edit Customer {moduleName}</h2>
               <p className="mt-1 text-xs text-muted-foreground">{editingSavedCustomer.rows.length.toLocaleString('en-PH')} {editingSavedCustomer.rows.length === 1 ? 'record' : 'records'}</p>
             </div>
             <div role="region" aria-label="Customer record fields" tabIndex={0} className="flex min-h-0 min-w-0 max-h-[max(5rem,calc(100dvh-17rem))] flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1 pb-1 sm:max-h-[max(5rem,calc(100dvh-13rem))] sm:overflow-hidden">
               <fieldset disabled={loading} className="grid min-w-0 shrink-0 grid-cols-1 gap-4 border-0 p-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_6rem]">
-                <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">Salesperson
+                <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">Salesman
                   <SalespersonInput value={editingSavedCustomer.kam} disabled={loading} onValueChange={(kam) => setEditingSavedCustomer((current) => current && ({ ...current, kam }))} />
                 </label>
                 <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">Customer Name
@@ -2193,7 +2194,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                         <td className="px-3 py-3">
                           <button type="button" aria-expanded={kamExpanded} onClick={() => toggleBudgetKam(kamGroup.key)} className="flex w-full min-w-0 flex-nowrap items-center gap-2 text-left">
                             {kamExpanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
-                            <span className="min-w-0 truncate font-semibold" title={'Salesperson: ' + kamGroup.kam}>Salesperson: {kamGroup.kam}</span>
+                            <span className="min-w-0 truncate font-semibold" title={'Salesman: ' + kamGroup.kam}>Salesman: {kamGroup.kam}</span>
                             <span className="shrink-0 whitespace-nowrap text-xs font-normal text-muted-foreground">({kamItems.length} records)</span>
                           </button>
                         </td>

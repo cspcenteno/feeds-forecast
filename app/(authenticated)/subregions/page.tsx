@@ -270,7 +270,7 @@ export default function SubregionsPage() {
 
       {/* Subregion Form */}
       {authorization.can('Subregions', 'add') || editingId !== null ? <RecordDialog open={formOpen} onClose={clearForm} title={editingId === null ? 'Add Subregion' : 'Edit Subregion'} busy={loading}>
-        <div className="mb-5">
+        <div className="mb-5" data-popup-form-header="">
           <h2 data-section-title="" className="font-semibold"><HeadingMapPinned className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
             {editingId !== null
               ? 'Edit Subregion'
@@ -360,8 +360,17 @@ export default function SubregionsPage() {
         </div>
 
         {/* Buttons */}
-        <div data-action-toolbar="" className="mt-5 flex gap-2">
-          <button data-action-tone="primary" data-action-fill=""
+        <div data-action-toolbar="" className="mt-5 flex gap-2" data-dialog-footer="">
+          <button data-action-tone="neutral"
+              className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+              onClick={clearForm}
+              disabled={loading}
+            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
+              Cancel
+            </button>
+
+
+            <button data-action-tone="primary" data-action-fill=""
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={saveSubregion}
             disabled={loading || initialLoading || !authorization.can('Subregions', editingId === null ? 'add' : 'edit')}
@@ -372,15 +381,6 @@ export default function SubregionsPage() {
                 ? 'Save Changes'
                 : 'Add Subregion'}
           </button>
-
-
-            <button data-action-tone="neutral"
-              className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
-              onClick={clearForm}
-              disabled={loading}
-            ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-              Cancel
-            </button>
         </div>
         {/* Error */}
 
@@ -391,7 +391,7 @@ export default function SubregionsPage() {
       <section className="rounded-xl border bg-card shadow-sm">
 
 
-        <div data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search subregions" />
+        <div data-product-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search subregions" />
 {authorization.can('Subregions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Subregion</button>}
 <TableGroupToggle disabled={initialLoading} /></div>
 

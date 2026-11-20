@@ -11,7 +11,6 @@ import { useStatusNotification } from '@/components/action-dialogs'
 import { LockOpen as ActionLockOpenIcon, Lock as ActionLockIcon, RotateCcw as ActionRotateCcwIcon } from 'lucide-react'
 import { useActionDialogs } from '@/components/action-dialogs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
 import { currentWeekInput, weekInputDate } from '@/lib/forecast-weeks'
@@ -80,14 +79,11 @@ export function ForecastWeekManager() {
     <section className="overflow-hidden rounded-xl border bg-card">
       <div data-section-header="" data-aligned-toolbar="" className="flex flex-col items-start justify-between gap-3 border-b sm:flex-row sm:items-center">
         <h2 data-section-title="" className="font-semibold"><HeadingSettings className="size-5 text-muted-foreground" aria-hidden="true" />Schedule Settings</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <button data-action-tone="neutral" type="button" disabled={busy || loading} onClick={() => { setError(''); void load().catch((error) => setError(error.message)) }} className={button + ' inline-flex items-center gap-2'}><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button>
-          {canManage && <button data-action-tone="neutral" type="button" disabled={busy || loading} onClick={() => void save('reset')} className={button}><ActionRotateCcwIcon className="mr-1.5 inline-block size-4 align-middle" aria-hidden="true" />Use automatic rule</button>}
-        </div>
+
       </div>
 
       {canManage && <div className="p-6"><div className="max-w-3xl space-y-4">
-        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
+        <div className="grid min-w-0 grid-cols-2 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
           <label className="min-w-0 space-y-1.5 text-sm font-medium">Week
             <input type="week" disabled={busy} value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)} className={input} />
           </label>
@@ -96,18 +92,19 @@ export function ForecastWeekManager() {
           </label>
         </div>
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div data-week-lock-actions="" className="flex flex-wrap items-center gap-2">
             <div className="space-y-2">
-              <button data-action-tone="positive" type="button" disabled={busy || loading || !selectedWeek} onClick={() => void save('reopen')} className={button}><ActionLockOpenIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Reopen for 24 hours</button>
+              <button data-week-lock-icon="" aria-label="Reopen for 24 hours" title="Reopen for 24 hours" data-action-tone="positive" type="button" disabled={busy || loading || !selectedWeek} onClick={() => void save('reopen')} className={button}><ActionLockOpenIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" /><span className="hidden md:inline">Reopen for 24 hours</span></button>
             </div>
             <div className="space-y-2">
-              <button data-action-tone="caution" type="button" disabled={busy || loading || !selectedWeek} onClick={() => void save('lock')} className={button}><ActionLockIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Lock week</button>
+              <button data-week-lock-icon="" aria-label="Lock week" title="Lock week" data-action-tone="caution" type="button" disabled={busy || loading || !selectedWeek} onClick={() => void save('lock')} className={button}><ActionLockIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" /><span className="hidden md:inline">Lock week</span></button>
             </div>
+            <div className="space-y-2"><button data-action-tone="neutral" type="button" disabled={busy || loading} onClick={() => void save('reset')} className={button}><ActionRotateCcwIcon className="mr-1.5 inline-block size-4 align-middle" aria-hidden="true" />Use Automatic Rule</button></div>
           </div>
         </div>
       </div></div>}
     </section>
-    <section className="overflow-hidden rounded-xl border bg-card"><div data-section-header="" data-aligned-toolbar="" className="flex flex-col items-start gap-3 border-b px-5 py-3 sm:flex-row sm:items-center sm:justify-start"><h3 data-section-title="" className="shrink-0 whitespace-nowrap text-sm font-semibold"><HeadingCalendarDays className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Week schedule</h3><div className="shrink-0" style={{ width: '7rem' }}><input aria-label="Schedule year" type="number" min={2020} max={2100} value={year} disabled={busy} onChange={(event) => { const value = Number(event.target.value); if (value >= 2020 && value <= 2100) setYear(value) }} className={input} /></div></div>
+    <section className="overflow-hidden rounded-xl border bg-card"><div data-week-schedule-header="" data-section-header="" data-aligned-toolbar="" className="flex flex-row items-center gap-3 border-b px-5 py-3"><h3 data-section-title="" className="shrink-0 whitespace-nowrap text-sm font-semibold"><HeadingCalendarDays className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Week schedule</h3><div className="min-w-0 w-24 shrink sm:w-28"><input aria-label="Schedule year" type="number" min={2020} max={2100} value={year} disabled={busy} onChange={(event) => { const value = Number(event.target.value); if (value >= 2020 && value <= 2100) setYear(value) }} className={input} /></div></div>
       <Table summary={{ records: weeks.length }} data-week-schedule className="min-w-[760px] table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Forecast week schedule' }}><colgroup><col style={{ width: "20%" }} /><col style={{ width: "28%" }} /><col style={{ width: "18%" }} /><col style={{ width: "34%" }} /></colgroup><thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Week', 'Dates', 'Status', 'Reason'].map((label) => <th key={label} className="px-3 py-3 text-left font-medium">{label}</th>)}</tr></thead><tbody>{loading ? <TableLoadingRow columns={4} label="week schedule" /> : weeks.map((row) => <tr key={row.week} className="border-b"><td className="px-3 py-2 text-sm">{row.year}-W{String(row.week).padStart(2, '0')}</td><td className="px-3 py-2 text-sm">{dateLabel(row.start_date)} – {dateLabel(row.end_date)}</td><td className="px-3 py-2"><StatusBadge status={row.status} /></td><td className="px-3 py-2 text-sm wrap-anywhere">{row.is_override ? row.reason || 'Existing lock' : 'Automatic'}{row.is_override && row.expires_at && <span className="block text-muted-foreground">Until {new Date(row.expires_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}</span>}</td></tr>)}</tbody></Table>
     </section>
   </main>

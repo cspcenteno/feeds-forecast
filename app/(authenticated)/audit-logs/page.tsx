@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/client'
 import { modules, useAuthorization } from '@/lib/authorization'
 import { Table } from '@/components/ui/table'
+import { SelectionField } from '@/components/ui/selection-field'
 import { TableLoadingRow } from '@/components/ui/loading-spinner'
 
 type AuditRow = {
@@ -25,8 +26,6 @@ export default function AuditLogsPage() {
   const [action, setAction] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [search, setSearch] = useState('')
-  const [recordId, setRecordId] = useState('')
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const request = useRef(0)
@@ -43,7 +42,6 @@ export default function AuditLogsPage() {
         .range(page * pageSize, page * pageSize + pageSize)
       if (module) query = query.eq('module', module)
       if (action) query = query.eq('action', action)
-      if (recordId) query = query.eq('record_id', recordId)
       if (from) query = query.gte('created_at', new Date(from + 'T00:00:00').toISOString())
       if (to) {
         const end = new Date(to + 'T00:00:00')
@@ -58,7 +56,7 @@ export default function AuditLogsPage() {
     } catch (err) {
       if (current === request.current) { setRows([]); setHasMore(false); setError(err instanceof Error ? err.message : 'Unable to load audit logs.') }
     } finally { if (current === request.current) setLoading(false) }
-  }, [allowed, client, module, action, recordId, from, to, page])
+  }, [allowed, client, module, action, from, to, page])
   useEffect(() => {
     const activeRequest = request
     const timer = setTimeout(() => { void load() }, 0)
@@ -66,17 +64,12 @@ export default function AuditLogsPage() {
   }, [load])
   if (!allowed) return <p className="text-sm text-muted-foreground">Audit Logs is available to authorized Admins.</p>
   return <section className="overflow-hidden rounded-xl border bg-card shadow-sm md:flex md:max-h-full md:min-h-0 md:flex-col">
-    <form className="grid shrink-0 gap-3 border-b p-4 sm:grid-cols-2 lg:grid-cols-5" onSubmit={(event) => {
-      event.preventDefault()
-      const nextRecordId = search.trim()
-      if (page === 0 && nextRecordId === recordId) void load()
-      else { setPage(0); setRecordId(nextRecordId) }
-    }}>
-      <label className="space-y-1 text-xs text-muted-foreground">Module<select className={field} value={module} onChange={(event) => { setModule(event.target.value); setPage(0) }}><option value="">All modules</option>{modules.filter((item) => item !== 'Audit Logs' && item !== 'Dashboard' && item !== 'Weekly Sales' && item !== 'Approvals').map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label className="space-y-1 text-xs text-muted-foreground">Action<select className={field} value={action} onChange={(event) => { setAction(event.target.value); setPage(0) }}><option value="">All actions</option><option value="INSERT">Created</option><option value="UPDATE">Updated</option><option value="DELETE">Deleted</option></select></label>
-      <label className="space-y-1 text-xs text-muted-foreground">From date<input type="date" className={field} value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} /></label>
-      <label className="space-y-1 text-xs text-muted-foreground">To date<input type="date" className={field} value={to} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></label>
-      <label className="space-y-1 text-xs text-muted-foreground">Record ID<div className="flex gap-2"><input className={field} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Exact ID" /><button type="submit" className="rounded-md border px-2 text-sm">Search</button></div></label>
+    <form data-audit-filters="" data-filter-toolbar="" className="grid shrink-0 gap-4 border-b px-6 py-4 sm:grid-cols-2" onSubmit={(event) => event.preventDefault()}>
+      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">Module<SelectionField aria-label="Module" className={field} value={module} onValueChange={(value) => { setModule(value); setPage(0) }}><option value="">All modules</option>{modules.filter((item) => item !== 'Audit Logs' && item !== 'Dashboard' && item !== 'Weekly Sales' && item !== 'Approvals').map((item) => <option key={item}>{item}</option>)}</SelectionField></label>
+      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">Action<SelectionField aria-label="Action" className={field} value={action} onValueChange={(value) => { setAction(value); setPage(0) }}><option value="">All actions</option><option value="INSERT">Created</option><option value="UPDATE">Updated</option><option value="DELETE">Deleted</option></SelectionField></label>
+      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">From date<input type="date" className={field} value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} /></label>
+      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">To date<input type="date" className={field} value={to} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></label>
+
     </form>
 
     <Table className="w-full min-w-[1000px] table-fixed text-sm md:min-w-0" containerProps={{ className: 'min-h-0 max-h-[65vh] overflow-auto md:flex-[0_1_auto] md:max-h-none', 'aria-label': 'Audit activity', tabIndex: 0 }}>

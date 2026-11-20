@@ -321,10 +321,10 @@ export default function SystemDashboard() {
               if (!event.target.value) return
               setMonth(event.target.value)
               setExpanded(new Set())
-            }} className="h-10 w-48 min-w-0 rounded-md border bg-background px-3 text-sm" />
-            <button data-action-tone="neutral" type="button" onClick={() => setRevision((value) => value + 1)} disabled={!current}
-              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-sm border bg-background px-3 text-sm hover:bg-muted disabled:opacity-50">
-              <RefreshCw className="size-4" /> Refresh
+            }} className="h-10 w-44 min-w-0 rounded-md border bg-background px-3 text-sm md:w-48" />
+            <button data-action-tone="neutral" type="button" aria-label="Refresh dashboard" title="Refresh dashboard" onClick={() => setRevision((value) => value + 1)} disabled={!current}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-sm border bg-background p-0 text-sm hover:bg-muted disabled:opacity-50 md:w-auto md:px-3">
+              <RefreshCw className="size-4" aria-hidden="true" /><span className="hidden md:inline">Refresh</span>
             </button>
           </div>
         </div>
@@ -502,14 +502,14 @@ export default function SystemDashboard() {
           </div>
 
           <section aria-busy={loading} className={panel}>
-            <div data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
+            <div data-monthly-sales-header="" data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
               <div>
                 <h3 data-section-title="" className="text-sm font-semibold"><HeadingCalendarDays className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Monthly Sales · {monthLabel}</h3>
               </div>
               <button data-slot="expand-collapse-button" data-action-tone="neutral" type="button" disabled={keys.length === 0}
                 onClick={() => setExpanded(new Set(allExpanded ? [] : keys))}
                 className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"><ExpandCollapseIcon expanded={allExpanded} />
-                {allExpanded ? 'Collapse All' : 'Expand All'}
+                <span className="hidden md:inline">{allExpanded ? 'Collapse All' : 'Expand All'}</span>
               </button>
             </div>
             <SalesHierarchyTable showActions={false} showStatus={false} rows={monthlyHierarchyRows(salesGroups)} loading={loading}

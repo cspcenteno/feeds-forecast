@@ -25,7 +25,7 @@ export function TableGroupToggle({ disabled = false }: { disabled?: boolean }) {
   return <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !keys.length}
     className="shrink-0 rounded-md border px-3 py-2 text-sm"
     onClick={() => setCollapsed(allExpanded ? new Set(keys) : new Set())}><ExpandCollapseIcon expanded={allExpanded} />
-    {allExpanded ? 'Collapse All' : 'Expand All'}
+    <span className="hidden md:inline">{allExpanded ? 'Collapse All' : 'Expand All'}</span>
   </button>
 }
 

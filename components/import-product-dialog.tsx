@@ -62,7 +62,7 @@ export function ImportProductDialog({ code: initialCode, name: initialName, onCl
       } catch (err) { setError(err instanceof Error ? err.message : 'Unable to add product. Check whether the code already exists.') }
       finally { setSaving(false) }
     }}>
-      <h3 data-dialog-title className="pr-8 text-lg font-semibold">Add to Products</h3>
+      <h3 data-dialog-title className="pr-8 text-lg font-semibold" data-popup-form-header="">Add to Products</h3>
       <div className="app-field-row">
         <label className="space-y-1 text-sm">Product code<input required value={code} onChange={(event) => setCode(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
         <label className="space-y-1 text-sm">Product name<input required value={name} onChange={(event) => setName(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
@@ -70,7 +70,7 @@ export function ImportProductDialog({ code: initialCode, name: initialName, onCl
         <label className="space-y-1 text-sm">Weight (kg)<input required type="number" min="0" step="any" value={weight} onChange={(event) => setWeight(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
       </div>
 
-      <div data-action-toolbar="" className="flex flex-wrap justify-end gap-2 border-t pt-4"><button data-action-tone="neutral" type="button" onClick={onClose} disabled={saving} className="h-10 rounded-md border px-4 text-sm">Cancel</button><button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || saving || !authorization.can('Products', 'add')} className="h-10 rounded-md border px-4 text-sm font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Add Product'}</button></div>
+      <div data-action-toolbar="" data-dialog-footer="" className="flex flex-wrap justify-end gap-2 border-t pt-4"><button data-action-tone="neutral" type="button" onClick={onClose} disabled={saving} className="h-10 rounded-md border px-4 text-sm">Cancel</button><button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || saving || !authorization.can('Products', 'add')} className="h-10 rounded-md border px-4 text-sm font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Add Product'}</button></div>
     </form>
   </RecordDialog>
 }

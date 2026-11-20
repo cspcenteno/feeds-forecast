@@ -29,7 +29,7 @@ const identity = (value: string | null) => oracleSalespersonName(value).toLowerC
 export function resolveOracleKam(value: string, users: ImportKam[]) {
   const key = identity(value)
   const matches = users.filter(user => key && [identity(user.full_name), identity(user.email)].includes(key))
-  if (matches.length !== 1) throw new Error(matches.length ? `Multiple salesperson assignments match: ${value}` : `Salesperson assignment not found (KAM/RSM/ASM): ${value}`)
-  if (matches[0].region_id === null) throw new Error(`Salesperson has no assigned region: ${value}`)
+  if (matches.length !== 1) throw new Error(matches.length ? `Multiple salesman assignments match: ${value}` : `Salesman assignment not found (KAM/RSM/ASM): ${value}`)
+  if (matches[0].region_id === null) throw new Error(`Salesman has no assigned region: ${value}`)
   return matches[0]
 }

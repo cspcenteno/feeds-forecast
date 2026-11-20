@@ -178,9 +178,9 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
       <div data-action-toolbar="" className="flex flex-wrap gap-2">
 <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} />
 <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Download Template</span></button>
 
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
 </div>
     </div>
 
@@ -188,7 +188,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
       {busy && progress && <p role="status" className="text-sm">{progress}</p>}
       <section aria-labelledby="import-account-settings" className="shrink-0 overflow-hidden rounded-lg border bg-card"><header data-section-header="" data-aligned-toolbar="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
+          <div data-import-account-fields="" className="flex flex-wrap items-end gap-3">
             <div className="w-full space-y-1.5 sm:w-64"><label htmlFor="users-import-password" className="block text-sm font-medium">Temporary Password</label><input id="users-import-password" type="password" autoComplete="new-password" placeholder="At least 8 characters" minLength={8} maxLength={128} disabled={disabled} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="block h-10 w-full rounded-md border bg-background px-3 text-sm" /></div>
             <ActiveField id="users-import-active" disabled={disabled} checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
           </div>
@@ -202,7 +202,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
           setOutcomes(current => { const next = { ...current }; delete next[editing.id]; return next })
           setEditing(null)
         }}>
-          <div className="shrink-0 border-b pb-4 pr-10"><h3 data-dialog-title className="text-lg font-semibold"><HeadingUserPen className="mr-2 inline-block size-5 text-muted-foreground" aria-hidden="true" />Edit Uploaded User</h3></div>
+          <div className="shrink-0 border-b pb-4 pr-10" data-popup-form-header=""><h3 data-dialog-title className="text-lg font-semibold"><HeadingUserPen className="mr-2 inline-block size-5 text-muted-foreground" aria-hidden="true" />Edit Uploaded User</h3></div>
           <div role="region" aria-label="Uploaded user fields" tabIndex={0} className="min-h-0 min-w-0 max-h-[max(5rem,calc(100dvh-17rem))] flex-1 overflow-y-auto overscroll-contain pr-1 pb-1 sm:max-h-[max(5rem,calc(100dvh-13rem))]">
             <fieldset disabled={disabled} className="grid min-w-0 grid-cols-1 gap-4 border-0 p-0 sm:grid-cols-2">
               {userImportColumns.map(column => <label key={column} className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>{userFieldLabels[column]}</span><input value={editing[column]} onChange={event => setEditing({ ...editing, [column]: event.target.value })} className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>)}

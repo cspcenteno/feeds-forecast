@@ -13,7 +13,7 @@ export async function GET() {
     const { data, error } = await supabaseAdmin.from('users').select('full_name').in('position', ['KAM', 'RSM', 'ASM', 'NSM'])
       .eq('is_active', true)
       .order('id').range(offset, offset + 499)
-    if (error) return NextResponse.json({ error: 'Unable to load salesperson names.' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Unable to load salesman names.' }, { status: 500 })
     for (const row of data ?? []) if (row.full_name?.trim()) names.add(row.full_name.trim())
     if (!data || data.length < 500) break
   }

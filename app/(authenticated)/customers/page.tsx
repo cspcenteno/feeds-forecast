@@ -226,7 +226,7 @@ export default function CustomersPage() {
 
       {authorization.can('Customers', 'add') || editingId !== null ? (
         <RecordDialog open={formOpen} onClose={resetForm} title={editingId === null ? 'Add Customer' : 'Edit Customer'} busy={loading}>
-          <div className="mb-5">
+          <div className="mb-5" data-popup-form-header="">
             <h2 data-section-title="" className="font-semibold"><HeadingUsers className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{editingId === null ? 'Add Customer' : 'Edit Customer'}</h2>
 
           </div>
@@ -238,8 +238,8 @@ export default function CustomersPage() {
               <input value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
-              Salesperson
-              <SalespersonInput value={salesman} onValueChange={setSalesman} placeholder="Select or enter salesperson name" />
+              Salesman
+              <SalespersonInput value={salesman} onValueChange={setSalesman} placeholder="Select or enter salesman name" />
             </label>
             <label className="space-y-2 text-sm font-medium">
               Region
@@ -266,7 +266,7 @@ export default function CustomersPage() {
 
 
 
-          <div data-action-toolbar="" className="mt-5 flex gap-2">
+          <div data-action-toolbar="" className="mt-5 flex gap-2" data-dialog-footer="">
             {authorization.can('Customers', editingId === null ? 'add' : 'edit') && (
               <button data-action-tone="primary" data-action-fill="" onClick={() => void saveCustomer()} disabled={loading} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
                 {loading ? 'Saving...' : editingId === null ? 'Add Customer' : 'Save Changes'}
@@ -281,7 +281,7 @@ export default function CustomersPage() {
       <section className="rounded-xl border bg-card shadow-sm">
 
 
-        <div data-filter-toolbar="" className="flex flex-nowrap items-end justify-between gap-4 overflow-x-auto border-b px-6 py-4">
+        <div data-customer-toolbar="" data-filter-toolbar="" className="flex flex-nowrap items-end justify-between gap-4 overflow-x-auto border-b px-6 py-4">
           <div className="w-64 shrink-0">
             <div className="app-field-row">
               <div className="space-y-1.5">
@@ -322,7 +322,7 @@ export default function CustomersPage() {
             <thead><tr className="border-b bg-muted/40">
               {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <th data-action-column="standard" className="px-1.5 py-3 sm:px-3 text-left font-medium">Action</th>}
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer</SortableHeader>
-              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>Salesperson</SortableHeader>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>Salesman</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('segment')}>Segment</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('status')}>Status</SortableHeader>
@@ -335,7 +335,7 @@ export default function CustomersPage() {
                 <tr><td colSpan={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">{search.trim() ? 'No customers match your search.' : 'No customers to display.'}</td></tr>
               ) : <GroupedTableRows rows={sortedCustomers}
                 columnCount={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6}
-                getGroup={(item) => ({ key: item.salesman?.trim() || '', label: 'Salesperson: ' + (item.salesman?.trim() || 'Unassigned') })}>
+                getGroup={(item) => ({ key: item.salesman?.trim() || '', label: 'Salesman: ' + (item.salesman?.trim() || 'Unassigned') })}>
                 {(item) => (
                 <tr key={item.id} className="border-b last:border-0">
                   {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <td data-action-column="standard" className="px-1.5 py-3 sm:px-3">

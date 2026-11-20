@@ -1148,7 +1148,7 @@ export default function UsersPage() {
                   disabled
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none disabled:opacity-50"
                   aria-label="Selection">
-                  <option value="">No region selected</option>
+                  <option value="">Not applicable</option>
                 </SelectionField>
               ) : (
                 <SelectionField id="newRegion"
@@ -1184,7 +1184,7 @@ export default function UsersPage() {
                   disabled
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none disabled:opacity-50"
                   aria-label="Selection">
-                  <option value="">No subregion selected</option>
+                  <option value="">Not applicable</option>
                 </SelectionField>
               ) : (
                 <SelectionField id="newSubregion"
@@ -1197,7 +1197,7 @@ export default function UsersPage() {
                   disabled={formBusy || formRegionId === null}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Selection">
-                  <option value="">No subregion selected</option>
+                  <option value="">Select subregion…</option>
                   {formSubregions.map((subregion) => (
                     <option key={subregion.id} value={subregion.id}>
                       {subregion.name}
@@ -1261,9 +1261,10 @@ export default function UsersPage() {
                   </button>
                 </div>
               ) : (<>
+                <div data-permissions-table-frame="" className="flex min-h-0 max-h-[min(16rem,45vh)] flex-[0_1_auto] flex-col overflow-hidden rounded-lg border">
                 <Table
                   className="min-w-[650px]"
-                  containerProps={{ className: "max-h-[min(16rem,45vh)] overflow-auto rounded-lg border", tabIndex: 0, role: "region", "aria-label": "User permissions" }}
+                  containerProps={{ className: "min-h-0 flex-[0_1_auto] overflow-auto", style: { maxHeight: 'none' }, tabIndex: 0, role: "region", "aria-label": "User permissions" }}
                 >
                     <thead className="sticky top-0 z-10 bg-background">
                       <tr className="border-b bg-muted/40">
@@ -1371,19 +1372,16 @@ export default function UsersPage() {
                       })}
                     </tbody>
                 </Table>
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    {formPermissions.filter((p) => p.can_view).length} of{' '}
-                    {modules.length} modules have View enabled.
-                  </p>
+                <div data-slot="table-summary" className="shrink-0 border-t bg-card px-4 py-3 text-left text-sm font-normal text-muted-foreground">
+                  {formPermissions.filter((p) => p.can_view).length} of {modules.length} modules enabled
+                </div>
                 </div>
                 </>
               )}
             </div>
           </div>
 
-          <div data-action-toolbar="" className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-6 py-4">
+          <div data-action-toolbar="" className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-6 py-4" data-dialog-footer="">
             <button type="button" data-action-tone="neutral" disabled={formBusy} onClick={() => { clearSelection(); resetCreateUserForm() }} className="inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm"><X className="size-4" aria-hidden="true" />Cancel</button>
             <button data-action-tone="primary" data-action-fill=""
               type="button"
@@ -1417,7 +1415,7 @@ export default function UsersPage() {
 
           </div>
 
-          <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
+          <div data-user-account-actions="" data-action-toolbar="" className="flex flex-wrap items-center gap-2">
             <label className="relative w-full sm:w-64">
               <span className="sr-only">Search user accounts by name or email</span>
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -1443,13 +1441,14 @@ export default function UsersPage() {
             <button data-action-tone="neutral"
               type="button"
               onClick={handleRefresh}
+              aria-label="Refresh user accounts" title="Refresh user accounts"
               disabled={loading || refreshing}
               className="inline-flex items-center justify-center gap-2 rounded-md border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw
                 className={`size-4 ${refreshing ? 'animate-spin' : ''}`}
               />
-              {refreshing ? 'Refreshing...' : 'Refresh'}
+              <span className="hidden md:inline">{refreshing ? 'Refreshing...' : 'Refresh'}</span>
             </button>
           </div>
         </div>

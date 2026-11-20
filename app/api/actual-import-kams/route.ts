@@ -25,7 +25,7 @@ export async function GET() {
     if (scopedSubregion) query = query.or(`subregion_id.eq.${viewer.subregion_id},position.eq.ASM`)
     if (viewer.position === 'KAM') query = query.or(`id.eq.${user.id},position.in.(RSM,ASM)`)
     const { data, error } = await query
-    if (error) return NextResponse.json({ error: 'Unable to load salesperson assignments.' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Unable to load salesman assignments.' }, { status: 500 })
     users.push(...(data ?? []))
     if (!data || data.length < 500) break
   }

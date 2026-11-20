@@ -1139,7 +1139,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
             {/* FILTERS AND BULK ACTIONS */}
 
             <div data-filter-toolbar="" className="flex flex-wrap items-end justify-between gap-4 px-6 py-4">
-              <div className="min-w-0 max-w-full">
+              <div data-weekly-filter-fields="" className="min-w-0 max-w-full">
                 {/* PERIOD AND REGION */}
 
                 <div className="app-field-row">
@@ -1205,7 +1205,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
               {/* BULK ACTIONS */}
 
-              <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
+              <div data-action-toolbar="" data-weekly-filter-actions="" data-approval-filter-actions={!weekly ? '' : undefined} className="flex flex-wrap items-center gap-2">
 {weekly && authorization.can('Weekly Sales', 'view') && authorization.can('Weekly Sales', 'export') && <button type="button" data-action-tone="transfer"
                   onClick={async () => {
                     setExporting(true)
@@ -1273,17 +1273,19 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
 <button data-slot="expand-collapse-button" data-action-tone="neutral"
                   type="button"
+                  aria-label={allGroupsExpanded ? 'Collapse all groups' : 'Expand all groups'}
+                  title={allGroupsExpanded ? 'Collapse all groups' : 'Expand all groups'}
                   onClick={() =>
                     setExpandedGroups(allGroupsExpanded ? new Set() : visibleGroupKeys)
                   }
                   disabled={loading || visibleGroupKeys.size === 0}
                   className="h-9 rounded-md px-3 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
                 ><ExpandCollapseIcon expanded={allGroupsExpanded} />
-                  {allGroupsExpanded ? 'Collapse All' : 'Expand All'}
+                  <span className="hidden md:inline">{allGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
                 </button>
-<button type="button" data-action-tone="neutral" onClick={loadData} disabled={loading}
+<button type="button" data-action-tone="neutral" aria-label="Refresh sales" title="Refresh sales" onClick={loadData} disabled={loading}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
-                  <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />Refresh
+                  <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /><span className="hidden md:inline">Refresh</span>
                 </button>
 </div>
             </div>
@@ -1352,7 +1354,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
               {/* MODAL BUTTONS */}
 
             </div>
-              <div data-action-toolbar="" className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <div data-action-toolbar="" className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6" data-dialog-footer="">
                 <button data-action-tone="neutral"
                   type="button"
                   onClick={closeModal}
