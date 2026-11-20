@@ -15,6 +15,7 @@ import { rsmAssignmentKey, rsmForSubregion } from '@/lib/rsm-reporting'
 import { actionGroupCount } from '@/lib/action-group-count'
 
 import { weeklyBudget } from '@/lib/weekly-budget'
+import { salesWeekRange } from '@/lib/forecast-weeks'
 
 import { sortRegions } from '@/lib/region-order'
 
@@ -160,8 +161,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   // FILTERS
   // -----------------------------------------
 
-  const [fromWeek, setFromWeek] = useState('')
-  const [toWeek, setToWeek] = useState('')
+  const [initialWeekRange] = useState(() => salesWeekRange())
+  const [fromWeek, setFromWeek] = useState(initialWeekRange.fromWeek)
+  const [toWeek, setToWeek] = useState(initialWeekRange.toWeek)
   const [selectedRegion, setSelectedRegion] = useState('all')
 
   // -----------------------------------------
@@ -222,7 +224,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       ? ['approve', 'return']
       : ['endorse', 'return', 'undo']
   const [reviewAssignment, setReviewAssignment] = useState<{ region: number | null; subregion: number | null }>({ region: null, subregion: null })
-  const regionRestricted = customerOnly || userRole === 'Manager' ||
+  const regionRestricted = customerOnly || (userRole === 'Manager' && reviewPosition !== 'NSM') ||
     (userRole === 'Superuser' && ['Supervisor', 'SV'].includes(reviewPosition))
   const canShowActions = availableReviewActions.length > 0
   const requiresReviewReason = actionType === 'return' || actionType === 'reject'
@@ -414,7 +416,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     const ownWeeklyRecords = profile.position === 'KAM' || (role === 'User' && !['NSM', 'ASM', 'RSM', 'Supervisor', 'SV'].includes(profile.position ?? ''))
     const supervisor = isSuperuser && profile.position === 'Supervisor'
     const restrictSubregion = role === 'Manager' && profile.position === 'RSM'
-    const restrictRegion = weekly ? !isAdmin && profile.position !== 'NSM' : role === 'Manager' || supervisor
+    const globalRegionAccess = isAdmin || String(profile.position ?? '').trim().toUpperCase() === 'NSM'
+    const restrictRegion = !globalRegionAccess && (weekly || role === 'Manager' || supervisor)
 
     setUserRole(role)
     setReviewPosition(profile.position ?? '')
@@ -632,8 +635,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         }
       }
     }
-    // Names decorate the already-authorized rows; they must not block the table.
-    void loadReportingNames()
+    // Keep the initial hierarchy loading until its person labels are resolved.
+    await loadReportingNames()
 
   }
 
@@ -1114,7 +1117,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                       setExcelPreview({ ...assignedInput, ...references })
                     } catch (cause) { if (request === excelRequest.current) setExcelError(cause instanceof Error ? cause.message : 'Unable to open Excel report.') }
                     finally { if (request === excelRequest.current) setExporting(false) }
-                  }}><FileSpreadsheet className="size-4" />View Excel</button>}
+                  }}><FileSpreadsheet className="size-4" />Excel View</button>}
                   {!weekly && (userRole === 'Admin' || userRole === 'Superuser') && (
                     <button
                       type="button"
@@ -1215,7 +1218,31 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                         throw new Error('Weekly Sales View and Export permissions are required to download this report.')
                       }
                       const { downloadWeeklySalesExport, loadWeeklySalesExportReferences } = await import('@/lib/weekly-sales-export')
-                      const exportInput = { sales: filteredSales, regions: regions.filter((region) => selectedRegion === 'all' || region.id === Number(selectedRegion)), subregions, products, users: submittedUsers, fromWeek, toWeek, asmNames }
+                      const position = String(access.position ?? '').trim().toUpperCase()
+                      const level: NonNullable<ExportInput['weeklyScope']>['level'] = access.role === 'User' || position === 'KAM' ? 'kam'
+                        : access.role === 'Manager' && position === 'RSM' ? 'subregion'
+                          : access.role === 'Manager' && position === 'ASM' ? 'region' : 'all'
+                      const exportInput: ExportInput = { sales: filteredSales, regions: regions.filter((region) => selectedRegion === 'all' || region.id === Number(selectedRegion)), subregions, products,
+                        users: { ...submittedUsers, [userId]: viewerName }, fromWeek, toWeek, asmNames,
+                        weeklyScope: access.role === 'Superuser' ? undefined : { level, userId, regionId: access.regionId, subregionId: access.subregionId, viewerName } }
+                      if (level !== 'kam') {
+                        const assignmentsResponse = await fetch('/api/reporting-asms?module=Weekly%20Sales', { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+                        const assignments = await assignmentsResponse.json()
+                        if (!assignmentsResponse.ok) throw new Error(assignments.error || 'Unable to load sales assignments.')
+                        exportInput.asmNames = Object.fromEntries(exportInput.regions.map(region => [region.id, asmForRegion(region.id, assignments.users ?? []).asm_name]))
+                        exportInput.rsmNames = Object.fromEntries(subregions.map(area => [rsmAssignmentKey(area.region_id, area.id), rsmForSubregion(area.region_id, area.id, assignments.rsms ?? [])]))
+                        exportInput.kamAssignments = assignments.kams ?? []
+                        for (const kam of exportInput.kamAssignments ?? []) if (kam.full_name?.trim()) exportInput.users[kam.id] = kam.full_name.trim()
+                      }
+                      if (level === 'subregion' && filteredSales.some(sale => !exportInput.users[sale.user_id || sale.submitted_by || ''])) {
+                        for (let offset = 0; offset < filteredSales.length; offset += 10000) {
+                          const namesResponse = await fetch('/api/reporting-names', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ module: 'Weekly Sales', ids: filteredSales.slice(offset, offset + 10000).map(sale => sale.id) }), signal: AbortSignal.timeout(20000) })
+                          const result = await namesResponse.json()
+                          if (!namesResponse.ok) throw new Error(result.error || 'Unable to load KAM names.')
+                          Object.assign(exportInput.users, result.names)
+                        }
+                      }
                       const references = await loadWeeklySalesExportReferences(supabase, exportInput)
                       downloadWeeklySalesExport({ ...exportInput, ...references })
                     } catch (error) {
@@ -1223,9 +1250,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     } finally {
                       setExporting(false)
                     }
-                  }} disabled={loading || exporting || (filteredSales.length === 0 && !(fromWeek && toWeek && regions.length))}
+                  }} disabled={loading || exporting || filteredSales.length === 0}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
-                  <Download className="size-4" aria-hidden="true" />{exporting ? 'Exporting…' : 'Export'}
+                  <Download className="size-4" aria-hidden="true" />{exporting ? 'Exporting…' : 'Excel Export'}
                 </button>}
 {availableReviewActions.filter((action) => action !== 'undo').map((action) => {
                   const { label, icon: Icon, tone } = reviewActions[action]
@@ -1266,6 +1293,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
         {/* APPROVAL TABLE */}
 
         <SalesHierarchyTable showActions={!weekly} showStatus={!weekly} rows={reviewHierarchyRows()} loading={loading} label={pageTitle+' table'}
+          totalVolume={filteredSales.reduce((sum, item) => sum + (Number(item.volume) || 0), 0)}
           emptyMessage={weekly?'No weekly sales match the current filters.':'No forecasts awaiting review match the current filters.'}
           summary={summaryForLevel(filteredSales.length,weeklyAsmLevel?'asms':nestedKamGroups||(weekly&&groupByEndorser)?'rsms':customerOnly?'customers':'kams',filteredSales.map(row=>weeklyAsmLevel?row.asm_id:nestedKamGroups||(weekly&&groupByEndorser)?row.endorsed_by:customerOnly?row.customer_id:row.submitted_by??row.user_id))} />
 

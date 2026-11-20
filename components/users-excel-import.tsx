@@ -16,8 +16,9 @@ import { TableActionButton } from '@/components/ui/table-action-button'
 import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { ChevronDown, ChevronRight, Download, RefreshCw, Upload } from 'lucide-react'
+import { Download, RefreshCw, Upload } from 'lucide-react'
 import { Table } from '@/components/ui/table'
+import { RecordDialog } from '@/components/ui/record-dialog'
 import { createClient } from '@/lib/client'
 import { defaultPermissions, modules } from '@/lib/authorization-rules'
 import { useAuthorization } from '@/lib/authorization'
@@ -165,21 +166,27 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
     XLSX.writeFile(workbook, 'users-import-template.xlsx')
   }
 
-  return <section className="rounded-xl border bg-card shadow-sm">
-    <div data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+  return <>
+    <button data-action-tone="transfer" type="button" disabled={disabled} onClick={() => {
+      setShow(true)
+      void run(async () => { await loadReferences() })
+    }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" />Excel Import</button>
+    <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Users Excel Import" busy={busy} wide contained maxWidth="90rem">
+    <section className="app-tables flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div data-import-dialog-header data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b pb-4">
       <div><h2 data-section-title="" className="font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Users Excel Import</h2></div>
       <div data-action-toolbar="" className="flex flex-wrap gap-2">
 <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} />
 <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
 <button data-action-tone="neutral" type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
-<button data-slot="show-hide-button" data-action-tone="neutral" type="button" disabled={disabled} aria-expanded={show} onClick={() => setShow(!show)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
+
 <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
 </div>
     </div>
 
-    {show && <div className="space-y-4 p-4">
+    <div data-volume-import-body className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pt-4 sm:flex sm:flex-col sm:gap-4 sm:space-y-0 sm:overflow-hidden">
       {busy && progress && <p role="status" className="text-sm">{progress}</p>}
-      <section aria-labelledby="import-account-settings" className="overflow-hidden rounded-lg border bg-card"><header data-section-header="" data-aligned-toolbar="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
+      <section aria-labelledby="import-account-settings" className="shrink-0 overflow-hidden rounded-lg border bg-card"><header data-section-header="" data-aligned-toolbar="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-full space-y-1.5 sm:w-64"><label htmlFor="users-import-password" className="block text-sm font-medium">Temporary Password</label><input id="users-import-password" type="password" autoComplete="new-password" placeholder="At least 8 characters" minLength={8} maxLength={128} disabled={disabled} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="block h-10 w-full rounded-md border bg-background px-3 text-sm" /></div>
@@ -188,16 +195,39 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
         </div>
         <button data-action-tone="primary" data-action-fill="" type="button" disabled={disabled || !referencesReady || !ready.length || temporaryPassword.length < 8} onClick={() => void createUsers()} className="h-10 shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Create {ready.length} {ready.length === 1 ? 'User' : 'Users'}</button>
       </div></section>
-      {editing && <form onSubmit={(event) => { event.preventDefault(); setRows((current) => current.map((row) => row.id === editing.id ? editing : row)); setOutcomes((current) => { const next = { ...current }; delete next[editing.id]; return next }); setEditing(null) }} className="space-y-3 rounded-lg border p-4"><h3 data-section-title="" className="text-sm font-medium"><HeadingUserPen className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Edit uploaded user</h3><div className="app-field-row">{userImportColumns.map((column) => <label key={column} className="space-y-1 text-sm"><span>{userFieldLabels[column]}</span><input value={editing[column]} disabled={disabled} onChange={(event) => setEditing({ ...editing, [column]: event.target.value })} className="h-10 w-full rounded-md border bg-background px-3" /></label>)}</div><div data-action-toolbar="" className="flex gap-2"><button data-action-tone="primary" data-action-fill="" type="submit" disabled={disabled} className="rounded-md border px-3 py-2 text-sm"><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Save Changes</button><button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => setEditing(null)} className="rounded-md border px-3 py-2 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button></div></form>}
-      <Table summary={{ records: preview.length }} className="min-w-[1400px] table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Users import preview', 'aria-busy': busy }}>
-        <colgroup>{[8, 20, 16, 20, 8, 8, 10, 10].map((width, index) => <col data-action-column={index === 0 ? "single" : undefined} key={index} style={{ width: index === 0 ? undefined : `${width}%` }} />)}</colgroup>
-        <thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Action', 'Status / Validation', ...userImportColumns.map((column) => userFieldLabels[column])].map((label) => <th data-action-column={label === "Action" ? "single" : undefined} key={label} className="px-3 py-3 text-left font-medium">{label}</th>)}</tr></thead>
+      {editing && <RecordDialog open onClose={() => setEditing(null)} title="Edit Uploaded User" busy={busy} wide contained fitContent>
+        <form className="app-tables flex min-h-0 flex-1 flex-col gap-4" onSubmit={(event) => {
+          event.preventDefault()
+          setRows(current => current.map(row => row.id === editing.id ? editing : row))
+          setOutcomes(current => { const next = { ...current }; delete next[editing.id]; return next })
+          setEditing(null)
+        }}>
+          <div className="shrink-0 border-b pb-4 pr-10"><h3 data-dialog-title className="text-lg font-semibold"><HeadingUserPen className="mr-2 inline-block size-5 text-muted-foreground" aria-hidden="true" />Edit Uploaded User</h3></div>
+          <div role="region" aria-label="Uploaded user fields" tabIndex={0} className="min-h-0 min-w-0 max-h-[max(5rem,calc(100dvh-17rem))] flex-1 overflow-y-auto overscroll-contain pr-1 pb-1 sm:max-h-[max(5rem,calc(100dvh-13rem))]">
+            <fieldset disabled={disabled} className="grid min-w-0 grid-cols-1 gap-4 border-0 p-0 sm:grid-cols-2">
+              {userImportColumns.map(column => <label key={column} className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>{userFieldLabels[column]}</span><input value={editing[column]} onChange={event => setEditing({ ...editing, [column]: event.target.value })} className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>)}
+            </fieldset>
+          </div>
+          <div data-action-toolbar="" data-dialog-footer="" className="flex shrink-0 flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+            <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => setEditing(null)} className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm"><ActionXIcon className="mr-1.5 size-4" aria-hidden="true" />Cancel</button>
+            <button data-action-tone="primary" data-action-fill="" type="submit" disabled={disabled} className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm"><ActionSaveIcon className="mr-1.5 size-4" aria-hidden="true" />Save Changes</button>
+          </div>
+        </form>
+      </RecordDialog>}
+      <Table className="w-full min-w-[1100px] table-fixed lg:min-w-0" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Users import preview', 'aria-busy': busy }}>
+        <colgroup>{[8, 12, 16, 20, 8, 16, 10, 10].map((width, index) => <col data-action-column={index === 0 ? "compact" : undefined} key={index} style={{ width: index === 0 ? undefined : `${width}%` }} />)}</colgroup>
+        <thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Action', 'Status', ...userImportColumns.map((column) => userFieldLabels[column])].map((label) => <th data-action-column={label === "Action" ? "compact" : undefined} key={label} className="px-3 py-3 text-left font-medium">{label}</th>)}</tr></thead>
         <tbody>{busy && !progress ? <TableLoadingRow columns={8} label="user import preview" /> : !rows.length ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">No uploaded users to display.</td></tr> : preview.map((row) => { const outcome = outcomes[row.source.id]; return <tr key={row.source.id} className="border-b align-top">
-          <td data-action-column="single" className="px-3 py-3"><TableActionButton action="edit" type="button" disabled={disabled || outcome?.status === 'Created'} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs disabled:opacity-50" /></td>
-          <td className={`px-3 py-3 text-sm leading-5 wrap-anywhere ${row.status === 'Invalid' || outcome?.status === 'Failed' ? 'text-destructive' : ''}`}><div><StatusBadge status={outcome?.status ?? row.status} /></div>{outcome?.message ?? row.issues.join(' ')}</td>
+          <td data-action-column="compact" className="px-1 py-3"><TableActionButton action="edit" compact type="button" disabled={disabled || outcome?.status === 'Created'} onClick={() => setEditing(row.source)} className="inline-flex size-8 items-center justify-center rounded-md border disabled:opacity-50" /></td>
+          <td className={`px-3 py-3 text-sm leading-5 wrap-anywhere ${row.status === 'Invalid' || outcome?.status === 'Failed' ? 'text-destructive' : ''}`}><div><StatusBadge compact status={outcome?.status ?? row.status} /></div>{outcome?.message ?? row.issues.join(' ')}</td>
           {userImportColumns.map((column) => <td key={column} className="px-3 py-3 wrap-anywhere">{row.source[column] || '—'}</td>)}
         </tr> })}</tbody>
+        {preview.length > 0 && <tfoot className="sticky bottom-0 z-10 border-t bg-card">
+          <tr><td colSpan={8} className="px-3 py-3 text-sm text-muted-foreground">{preview.length.toLocaleString('en-PH')} {preview.length === 1 ? 'record' : 'records'}</td></tr>
+        </tfoot>}
       </Table>
-    </div>}
+    </div>
   </section>
+  </RecordDialog>
+  </>
 }

@@ -1033,11 +1033,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      {isAdmin && authorization.can('Users', 'add') && authorization.can('Users', 'import') && <UsersExcelImport
-        blocked={loading || saving || deleting || creatingUser || refreshing || resettingPassword}
-        onBusyChange={setImportBusy}
-        onCreated={loadUsers}
-      />}
+
       {/* User form */}
       {isAdmin && (selectedUser || authorization.can('Users', 'add')) && (
         <RecordDialog open={userDialogOpen} onClose={() => { clearSelection(); resetCreateUserForm() }} title={selectedUser ? 'Edit User' : 'Create User'} busy={formBusy} wide>
@@ -1429,6 +1425,11 @@ export default function UsersPage() {
                 placeholder="Search name or email…" autoComplete="off"
                 className="h-10 w-full rounded-md border bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             </label>
+      {isAdmin && authorization.can('Users', 'add') && authorization.can('Users', 'import') && <UsersExcelImport
+        blocked={loading || saving || deleting || creatingUser || refreshing || resettingPassword}
+        onBusyChange={setImportBusy}
+        onCreated={loadUsers}
+      />}
             {isAdmin && authorization.can('Users', 'add') && <button data-action-tone="primary" data-action-fill=""
               type="button"
               onClick={openCreateUserForm}
@@ -1453,9 +1454,14 @@ export default function UsersPage() {
           </div>
         </div>
 
-        <Table summary={{ records: visibleUsers.length }} saved
+        <Table data-directory-table="users" summary={{ records: visibleUsers.length }} saved
           containerProps={{ tabIndex: 0, role: "region", "aria-label": "User Accounts table", 'aria-busy': loading || refreshing }}
         >
+            <colgroup>
+              {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <col data-action-column="standard" />}
+              <col data-fixed-column="status" />
+              {['name', 'email', 'role', 'position', 'region', 'subregion'].map(column => <col key={column} style={{ width: `var(--directory-${column}, auto)` }} />)}
+            </colgroup>
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b bg-muted/40">
                 {(authorization.can('Users', 'add') || authorization.can('Users', 'edit') || authorization.can('Users', 'delete')) && <th data-action-column="standard" className="whitespace-nowrap px-4 py-3 text-left font-medium">Action</th>}

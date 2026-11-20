@@ -455,7 +455,12 @@ export default function ProductsPage() {
 <TableGroupToggle disabled={tableLoading} /></div>
 
         <div className="overflow-x-auto">
-          <Table summary={summaryForLevel(sortedProducts.length, 'categories', sortedProducts.map((row) => row.category_id))} saved aria-busy={tableLoading} className="table-fixed">
+          <Table data-directory-table="products" summary={summaryForLevel(sortedProducts.length, 'categories', sortedProducts.map((row) => row.category_id))} saved aria-busy={tableLoading} className="table-fixed">
+            <colgroup>
+              {canShowActions && <col data-action-column="standard" />}
+              <col data-fixed-column="status" />
+              {['category', 'code', 'name', 'line', 'species', 'weight', 'created'].map(column => <col key={column} style={{ width: `var(--directory-${column}, auto)` }} />)}
+            </colgroup>
             <TableHeader>
               <TableRow>
                 {canShowActions && <TableHead data-action-column="standard" className="w-[13%] text-left">Action</TableHead>}

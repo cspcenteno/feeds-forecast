@@ -26,6 +26,17 @@ test('shared table preserves Action, Status and all monthly reference headers wi
 // Exercise the actual page adapter without its authenticated data-loading hooks.
 const source=fs.readFileSync(path.join(process.cwd(),'components/sales-submissions-page.tsx'),'utf8');
 const file=ts.createSourceFile('page.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+test('NSM can select All Regions while assigned-area roles keep their region locked',()=>{
+  let expression
+  function find(node){if(ts.isVariableDeclaration(node)&&node.name.getText(file)==='regionRestricted')expression=node.initializer.getText(file);ts.forEachChild(node,find)}find(file)
+  const restricted=(userRole,reviewPosition,customerOnly=false)=>new Function('userRole','reviewPosition','customerOnly',`return ${expression}`)(userRole,reviewPosition,customerOnly)
+  assert.equal(restricted('Manager','NSM'),false)
+  assert.equal(restricted('Admin',''),false)
+  assert.equal(restricted('Manager','RSM'),true)
+  assert.equal(restricted('Manager','ASM'),true)
+  assert.equal(restricted('Superuser','Supervisor'),true)
+  assert.equal(restricted('User','KAM',true),true)
+})
 let builder;function visit(node){if(ts.isFunctionDeclaration(node)&&node.name?.text==='reviewHierarchyRows')builder=node.getText(file);ts.forEachChild(node,visit)}visit(file);
 const compiled=ts.transpileModule(builder,{compilerOptions:options}).outputText;
 function fixture(flags){
@@ -100,7 +111,7 @@ const savedSource=fs.readFileSync(path.join(process.cwd(),'app/(authenticated)/f
 const savedFile=ts.createSourceFile('saved.tsx',savedSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
 let savedBuilder;function visitSaved(node){if(ts.isFunctionDeclaration(node)&&node.name?.text==='savedHierarchyRows')savedBuilder=node.getText(savedFile);ts.forEachChild(node,visitSaved)}visitSaved(savedFile);
 const savedCompiled=ts.transpileModule(savedBuilder,{compilerOptions:options}).outputText;
-test('Saved Forecasts combines month, region and status filters',()=>{
+test('Saved Forecasts combines inclusive week ranges, region and status filters',()=>{
   let predicate
   function find(node){if(ts.isVariableDeclaration(node)&&node.name.getText(savedFile)==='visibleSavedForecasts')predicate=node.initializer.arguments[0].getText(savedFile);ts.forEachChild(node,find)}find(savedFile)
   const forecasts=[
@@ -109,15 +120,18 @@ test('Saved Forecasts combines month, region and status filters',()=>{
     {id:3,year:2025,week:49,region_id:1,status:'Draft'},
     {id:4,year:2026,week:48,region_id:1,status:'Approved'},
     {id:5,year:2026,week:48,region_id:1,status:'Draft'},
+    {id:6,year:2027,week:1,region_id:1,status:'Draft'},
   ]
   const {savedForecastMatchesStatus}=require('../lib/saved-forecast-status.ts')
   const context={forecasts,isAdmin:true,customerAssignmentRestricted:false,customers:[],savedForecastMatchesStatus,
-    savedMonthFilter:'2026-12',effectiveSavedRegion:'1',savedStatusFilter:'',getMonthForWeek:(_year,week)=>week>=49?12:11}
+    savedFromWeek:'2026-W49',savedToWeek:'2026-W50',effectiveSavedRegion:'1',savedStatusFilter:''}
   const ids=()=>new Function('context',`with(context){return (${predicate})().map(item=>item.id)}`)(context)
   assert.deepEqual(ids(),[1])
   context.effectiveSavedRegion='all';assert.deepEqual(ids(),[1,2])
-  context.savedMonthFilter='2026-11';context.savedStatusFilter='all';assert.deepEqual(ids(),[4,5])
-  context.savedMonthFilter='';context.savedStatusFilter='';assert.deepEqual(ids(),[1,2,3,5])
+  context.savedFromWeek='2026-W48';context.savedToWeek='2026-W48';context.savedStatusFilter='all';assert.deepEqual(ids(),[4,5])
+  context.savedFromWeek='2026-W49';context.savedToWeek='2027-W01';context.savedStatusFilter='';assert.deepEqual(ids(),[1,2,6])
+  context.savedFromWeek='';context.savedToWeek='2026-W48';assert.deepEqual(ids(),[3,5])
+  context.savedToWeek='';assert.deepEqual(ids(),[1,2,3,5,6])
   context.effectiveSavedRegion='';assert.deepEqual(ids(),[])
 })
 const {canReviseRsmForecast}=require('../lib/rsm-returned-forecasts.ts');

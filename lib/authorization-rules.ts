@@ -100,7 +100,6 @@ export function defaultPermissions(role: string, position = ''): PermissionMap {
     set('Customers', ['view', 'add', 'edit'])
     set('Budgets', ['view', 'add', 'edit'])
     set('Actuals', ['view', 'add', 'edit', 'import'])
-    set('Week Locks', ['view', 'add', 'edit'])
   } else if (role === 'Manager' && salesPosition === 'NSM') {
     set('Dashboard', ['view'])
     set('Weekly Sales', ['view'])
@@ -121,7 +120,8 @@ export function defaultPermissions(role: string, position = ''): PermissionMap {
     modules.forEach((m) => set(m, ['view', 'add', 'edit', 'import', 'delete']))
   }
 
-  p['Weekly Sales'].export = p['Weekly Sales'].view && (role === 'Superuser' || role === 'Admin')
+  p['Weekly Sales'].export = p['Weekly Sales'].view && (['User', 'Superuser', 'Admin'].includes(role)
+    || (role === 'Manager' && ['', 'RSM', 'ASM', 'NSM'].includes(salesPosition)))
   for (const moduleName of modules) {
     for (const action of disabledPermissions[moduleName] ?? []) {
       p[moduleName][action] = false

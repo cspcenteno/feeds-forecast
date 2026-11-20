@@ -396,7 +396,7 @@ export default function SubregionsPage() {
 <TableGroupToggle disabled={initialLoading} /></div>
 
         <div className="overflow-x-auto">
-          <Table summary={summaryForLevel(sortedSubregions.length, 'regions', sortedSubregions.map((row) => row.region_id))} className="min-w-[640px] table-fixed wrap-anywhere">
+          <Table data-directory-table="subregions" summary={summaryForLevel(sortedSubregions.length, 'regions', sortedSubregions.map((row) => row.region_id))} className="min-w-[640px] table-fixed wrap-anywhere">
             <colgroup>
               {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <col data-action-column="standard" className="w-[20%]" />}
               <col className="w-[12%]" />

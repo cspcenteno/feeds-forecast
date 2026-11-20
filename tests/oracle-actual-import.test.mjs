@@ -48,3 +48,8 @@ test('matches one KAM assignment and rejects unknown, duplicate or unassigned re
   assert.throws(() => resolveOracleKam(kam.full_name, [kam, { ...kam, id: '2' }]), /Multiple/)
   assert.throws(() => resolveOracleKam(kam.full_name, [{ ...kam, region_id: null }]), /no assigned region/)
 })
+
+test('salesperson matching accepts active lookup entries for KAM, RSM and ASM', () => {
+  const users = ['KAM','RSM','ASM'].map((position, index) => ({ id: String(index), full_name: `${position} NAME`, email: null, region_id: 1, subregion_id: position === 'ASM' ? null : 2, position }))
+  for (const user of users) assert.equal(resolveOracleKam(`CDO-AN ${user.full_name}`, users).position, user.position)
+})

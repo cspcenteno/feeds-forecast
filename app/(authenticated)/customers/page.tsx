@@ -238,8 +238,8 @@ export default function CustomersPage() {
               <input value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
-              Salesman
-              <SalespersonInput value={salesman} onValueChange={setSalesman} placeholder="Select or enter salesman name" />
+              Salesperson
+              <SalespersonInput value={salesman} onValueChange={setSalesman} placeholder="Select or enter salesperson name" />
             </label>
             <label className="space-y-2 text-sm font-medium">
               Region
@@ -306,23 +306,23 @@ export default function CustomersPage() {
             <TableGroupToggle disabled={tableLoading} />
           </div>
         </div>
-        <Table summary={summaryForLevel(sortedCustomers.length, 'kams', sortedCustomers.map((row) => row.salesman?.trim()))} aria-busy={tableLoading}
+        <Table data-directory-table="customers" summary={summaryForLevel(sortedCustomers.length, 'salespeople', sortedCustomers.map((row) => row.salesman?.trim()))} aria-busy={tableLoading}
           className="min-w-[1200px] table-fixed wrap-anywhere"
           containerProps={{ className: "max-h-[min(32rem,65vh)] overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Customers table" }}
         >
             <colgroup>
               {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <col data-action-column="standard" />}
               <col />
-              <col />
-              <col className="w-32" />
-              <col className="w-32" />
+              <col data-directory-column="salesperson" />
+              <col data-directory-column="region" className="w-32" />
+              <col data-directory-column="segment" className="w-32" />
               <col data-fixed-column="status" />
-              <col className="w-[180px]" />
+              <col data-directory-column="created" className="w-[180px]" />
             </colgroup>
             <thead><tr className="border-b bg-muted/40">
               {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <th data-action-column="standard" className="px-1.5 py-3 sm:px-3 text-left font-medium">Action</th>}
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer</SortableHeader>
-              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>KAM / Salesman</SortableHeader>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>Salesperson</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('segment')}>Segment</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('status')}>Status</SortableHeader>
@@ -335,7 +335,7 @@ export default function CustomersPage() {
                 <tr><td colSpan={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6} className="px-6 py-10 text-center text-muted-foreground">{search.trim() ? 'No customers match your search.' : 'No customers to display.'}</td></tr>
               ) : <GroupedTableRows rows={sortedCustomers}
                 columnCount={authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete') ? 7 : 6}
-                getGroup={(item) => ({ key: item.salesman?.trim() || '', label: 'KAM: ' + (item.salesman?.trim() || 'Unassigned') })}>
+                getGroup={(item) => ({ key: item.salesman?.trim() || '', label: 'Salesperson: ' + (item.salesman?.trim() || 'Unassigned') })}>
                 {(item) => (
                 <tr key={item.id} className="border-b last:border-0">
                   {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <td data-action-column="standard" className="px-1.5 py-3 sm:px-3">

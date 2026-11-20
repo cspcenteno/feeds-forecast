@@ -17,7 +17,7 @@ test('RSM and ASM defaults differ only in returned forecast access', () => {
   assert.deepEqual(asm['Forecasts'],{view:false,add:false,edit:false,import:false,export:false,delete:false})
   for (const p of [rsm,asm]) {
     for (const module of ['Dashboard','Weekly Sales','Budgets','Actuals']) {
-      assert.deepEqual(p[module],{view:true,add:false,edit:false,import:false,export:false,delete:false})
+      assert.deepEqual(p[module],{view:true,add:false,edit:false,import:false,export:module === 'Weekly Sales',delete:false})
     }
     assert.deepEqual(p.Approvals,{view:true,add:false,edit:true,import:false,export:false,delete:false})
   }
@@ -25,17 +25,18 @@ test('RSM and ASM defaults differ only in returned forecast access', () => {
 
 test('Superuser defaults remain focused on customer and volume management', () => {
   const p = defaultPermissions('Superuser','Supervisor')
-  for (const module of ['Customers','Budgets','Actuals','Week Locks']) {
-    assert.deepEqual(p[module],{view:true,add:module !== 'Week Locks',edit:true,import:module === 'Actuals',export:false,delete:false})
+  for (const module of ['Customers','Budgets','Actuals']) {
+    assert.deepEqual(p[module],{view:true,add:true,edit:true,import:module === 'Actuals',export:false,delete:false})
   }
+  assert.deepEqual(p['Week Locks'],{view:false,add:false,edit:false,import:false,export:false,delete:false})
   assert.equal(p.Products.view,true)
   assert.equal(p['Forecasts'].view,false)
 })
 
-test('Manager NSM defaults select only Dashboard and Weekly Sales View', () => {
+test('Manager NSM defaults select Dashboard View and Weekly Sales View/Export', () => {
   const p = defaultPermissions('Manager',' nsm ')
   for (const [module, actions] of Object.entries(p)) {
-    assert.deepEqual(actions, { view: ['Dashboard','Weekly Sales'].includes(module), add:false, edit:false, import:false,export:false, delete:false })
+    assert.deepEqual(actions, { view: ['Dashboard','Weekly Sales'].includes(module), add:false, edit:false, import:false,export:module === 'Weekly Sales', delete:false })
   }
 })
 
@@ -48,10 +49,10 @@ test('Admin defaults enable supported actions while unsupported checkboxes stay 
   }
 })
 
-test('only Superuser and Admin preselect Weekly Sales Export', () => {
+test('KAM, Supervisor, RSM, ASM, NSM and Admin preselect Weekly Sales Export', () => {
   for (const [role, position, expected] of [
-    ['User', 'KAM', false], ['Manager', 'RSM', false], ['Manager', 'ASM', false],
-    ['Manager', 'NSM', false], ['Superuser', 'Supervisor', true], ['Admin', '', true],
+    ['User', 'KAM', true], ['Manager', '', true], ['Manager', 'RSM', true], ['Manager', 'ASM', true],
+    ['Manager', 'NSM', true], ['Superuser', 'Supervisor', true], ['Admin', '', true],
   ]) {
     assert.equal(defaultPermissions(role, position)['Weekly Sales'].export, expected, `${role} ${position}`)
   }

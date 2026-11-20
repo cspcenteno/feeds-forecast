@@ -339,15 +339,15 @@ export default function CategoriesPage() {
 </div>
 
         <div className="overflow-x-auto">
-          <Table summary={{ records: sortedCategories.length }} className="w-full min-w-[1120px] table-fixed" aria-busy={tableLoading}
+          <Table data-directory-table="categories" summary={{ records: sortedCategories.length }} className="w-full min-w-[1120px] table-fixed" aria-busy={tableLoading}
             containerProps={{ className: 'overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Categories table' }}>
             <colgroup>
               {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <col data-action-column="standard" />}
               <col style={{ width: 112 }} />
-              <col style={{ width: 128 }} />
+              <col className="w-32 lg:w-[12%]" />
               <col style={{ width: '24%' }} />
               <col />
-              <col style={{ width: 224 }} />
+              <col className="w-56 lg:w-[20%]" />
             </colgroup>
             <TableHeader>
               <TableRow>

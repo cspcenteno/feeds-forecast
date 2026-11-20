@@ -316,7 +316,7 @@ export default function RegionsPage() {
 </div>
 
         <div className="overflow-x-auto">
-          <Table summary={{ records: sortedRegions.length }} saved aria-busy={tableLoading}>
+          <Table data-directory-table="regions" summary={{ records: sortedRegions.length }} saved aria-busy={tableLoading}>
             <TableHeader>
               <TableRow>
                 {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableHead data-action-column="standard" className="w-[180px] text-left">Action</TableHead>}

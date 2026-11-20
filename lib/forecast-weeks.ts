@@ -23,3 +23,10 @@ export function currentWeekInput(now = new Date()) {
   const week = Math.ceil(((date.getTime() - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7)
   return `${year}-W${String(week).padStart(2, '0')}`
 }
+
+export function salesWeekRange(now = new Date()) {
+  const fromWeek = currentWeekInput(now)
+  const end = new Date(weekInputDate(fromWeek) + 'T00:00:00Z')
+  end.setUTCDate(end.getUTCDate() + 21)
+  return { fromWeek, toWeek: currentWeekInput(end) }
+}

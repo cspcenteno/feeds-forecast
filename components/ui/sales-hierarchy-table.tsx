@@ -18,12 +18,14 @@ const columns = [['Forecast', '(Qty.)'], ['Volume', '(50kg)'], ['Budget', '(Vol.
   ['Actual', '(Cum. Vol.)'], ['Actual', '(Prev. Mo.)'], ['Forecast', '(Cum. Vol.)']]
 const number = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 })
 
-export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage, summary, showActions = true, showStatus = true }: {
+export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage, summary, totalVolume, showActions = true, showStatus = true }: {
   rows: SalesHierarchyRow[]; loading?: boolean; label: string; emptyMessage: string
-  summary: TableSummaryCounts; showActions?: boolean; showStatus?: boolean
+  summary: TableSummaryCounts; totalVolume?: number; showActions?: boolean; showStatus?: boolean
 }) {
   const columnCount = 8 + Number(showActions) + Number(showStatus)
   return <Table data-sales-hierarchy="" aria-busy={loading} summary={summary}
+    summaryAlignColumn={Number(showActions) + Number(showStatus) + 3}
+    summaryEnd={totalVolume === undefined ? undefined : <span className="inline-flex flex-wrap items-baseline justify-end gap-2 text-sm leading-5" aria-busy={loading}><span>Grand Total</span><strong className="text-sm leading-5 font-semibold tabular-nums text-foreground">{loading ? '—' : number.format(totalVolume)}</strong></span>}
     className="w-full table-fixed"
     containerProps={{ className: 'max-h-[min(36rem,70vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': label }}>
     <colgroup>

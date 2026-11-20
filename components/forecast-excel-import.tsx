@@ -18,6 +18,8 @@ import { useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { ChevronDown, ChevronRight, Download, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { Table } from '@/components/ui/table'
+import { RecordDialog } from '@/components/ui/record-dialog'
+import { importVolumeSummary } from '@/lib/import-volume-summary'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
 import { downloadImportTemplate } from '@/lib/download-import-template'
@@ -30,6 +32,8 @@ import {
 
 const emptyReferences: ForecastImportReferences = { users: [], regions: [], subregions: [], customers: [], products: [], forecasts: [], locks: [] }
 const headerKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+const previewFields = forecastImportFields.filter(([field]) => field !== 'kam' && field !== 'customer')
+const previewColumnCount = previewFields.length + 2
 const numberLabel = (value: number | null) => value === null || !Number.isFinite(value) ? '—' : value.toLocaleString('en-PH', { maximumFractionDigits: 2 })
 
 export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyChange, onImported }: {
@@ -58,9 +62,31 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
   const input = useRef<HTMLInputElement>(null)
   const taskInProgress = useRef(false)
   const disabled = busy || blocked || !userId || !isAdmin
-  const preview = useMemo(() => validateForecastImport(rows, references, scope), [rows, references, scope])
+  const preview = useMemo(() => validateForecastImport(rows, references, scope).map(row => row.status === 'Duplicate in upload'
+    ? { ...row, status: 'Invalid' as const, issues: [...row.issues, 'Duplicate in upload'] } : row), [rows, references, scope])
+  const volumes = importVolumeSummary(preview.map(row => ({ volume: row.payload.volume, status: row.status })))
   const ready = preview.filter((row) => row.status === 'Ready')
   const invalidCount = preview.filter((row) => row.issues.length > 0).length
+  const [expandedOwners, setExpandedOwners] = useState<Set<string>>(new Set())
+  const ownerGroups = useMemo(() => {
+    const groups = new Map<string, { label: string; customers: Map<string, { label: string; rows: typeof preview }> }>()
+    for (const row of preview.filter(row => !row.issues.length)) {
+      const label = row.source.kam?.trim() || 'Unassigned KAM'
+      const key = label.toLowerCase()
+      const group = groups.get(key) ?? { label, customers: new Map() }
+      const customer = row.source.customer.trim() || 'Unassigned customer'
+      const customerKey = key + ':' + customer.toLowerCase()
+      const entry = group.customers.get(customerKey) ?? { label: customer, rows: [] }
+      entry.rows.push(row)
+      group.customers.set(customerKey, entry)
+      groups.set(key, group)
+    }
+    return groups
+  }, [preview])
+  const ownerKeys = [...ownerGroups].flatMap(([key, group]) => [key, ...group.customers.keys()])
+  function toggleOwner(key: string) {
+    setExpandedOwners(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next })
+  }
   const validationGroups = useMemo(() => {
     const groups = new Map<string, { label: string; rows: typeof preview }>()
     for (const row of preview) {
@@ -75,12 +101,13 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
   }, [preview])
 
   const allPreviewGroupsExpanded = expanded.Valid && expanded.Invalid &&
-    [...validationGroups.keys()].every((key) => expandedValidationGroups.has(key))
+    [...validationGroups.keys()].every((key) => expandedValidationGroups.has(key)) && ownerKeys.every(key => expandedOwners.has(key))
 
   function toggleAllPreviewGroups() {
     const expand = !allPreviewGroupsExpanded
     setExpanded({ Valid: expand, Invalid: expand })
     setExpandedValidationGroups(new Set(expand ? validationGroups.keys() : []))
+    setExpandedOwners(new Set(expand ? ownerKeys : []))
   }
 
   async function refreshPreview() {
@@ -289,8 +316,14 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
   }
 
   return (
-    <section className="rounded-xl border bg-card shadow-sm">
-      <div data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+    <>
+      <button data-action-tone="transfer" type="button" disabled={disabled} onClick={() => {
+        setShow(true)
+        void run(async () => { await refreshPreview() })
+      }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" />Excel Import</button>
+      <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Forecasts Excel Import" busy={busy} wide contained maxWidth="90rem">
+      <section className="app-tables flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div data-import-dialog-header data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div>
           <h2 data-section-title="" className="text-base font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Forecasts Excel Import</h2>
 
@@ -303,25 +336,22 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
           }} />
 <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
 <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
-<button data-slot="show-hide-button" data-action-tone="neutral" type="button" aria-expanded={show} onClick={() => {
-            setShow(!show)
-            if (!show && !disabled) void run(async () => { await refreshPreview() })
-          }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
+
 <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
 </div>
       </div>
 
-      {show && <div className="space-y-4 p-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[['Total Records', rows.length], ['Ready to Import', ready.length], ['Invalid', invalidCount], ['Already Imported / Duplicate', preview.length - invalidCount - ready.length]].map(([label, value]) => <div key={label} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{rows.length > 0 ? value : busy ? <LoadingSpinner label={String(label).toLowerCase()} /> : referencesReady && stagingReady ? value : '—'}</p></div>)}
+      <div data-volume-import-body className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pt-4 sm:flex sm:flex-col sm:gap-4 sm:space-y-0 sm:overflow-hidden">
+          <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+            {[['Total Records', rows.length], ['Ready to Import', ready.length], ['Invalid', invalidCount], ['Already Imported', preview.length - invalidCount - ready.length]].map(([label, value]) => <div key={label} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums">{rows.length > 0 ? value : busy ? <LoadingSpinner label={String(label).toLowerCase()} /> : referencesReady && stagingReady ? value : '—'}</p></div>)}
           </div>
-          <div className="flex justify-end">
+          <div className="flex shrink-0 justify-end">
             <div data-action-toolbar="" className="flex shrink-0 flex-wrap items-center gap-2">
               <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || !referencesReady || !stagingReady || !ready.length || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} onClick={() => void importReady()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-                <Upload className="size-4" />Import {ready.length} Record(s)
+                <Upload className="size-4" />Import Ready
               </button>
               {authorization.can('Forecasts', 'delete') && <button data-action-tone="danger" type="button" disabled={disabled || !stagingReady || !rows.length} onClick={() => void discardUploadedRows(rows.map((row) => row.id))} className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50">
-                <Trash2 className="size-4" aria-hidden="true" />Discard {rows.length} Record(s)
+                <Trash2 className="size-4" aria-hidden="true" />Discard All
               </button>}
             <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !rows.length}
               aria-expanded={allPreviewGroupsExpanded} aria-controls="forecast-import-records" onClick={toggleAllPreviewGroups}
@@ -330,36 +360,37 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             </button>
 </div>
           </div>
-          {referencesReady && stagingReady && editing && <form className="space-y-3 rounded-lg border p-4" onSubmit={(event) => {
+          {referencesReady && stagingReady && editing && <RecordDialog open onClose={() => setEditing(null)} title="Edit Uploaded Record" busy={busy} wide contained fitContent><form className="app-tables flex min-h-0 flex-1 flex-col gap-4" onSubmit={(event) => {
             event.preventDefault()
             void saveUploadedRow(editing)
           }}>
-            <h3 data-section-title="" className="text-sm font-medium"><HeadingPencil className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Edit uploaded forecast</h3>
-            <div className="app-field-row">{forecastImportFields.map(([field, label]) => <label key={field} className="space-y-1 text-sm"><span>{label}</span><input disabled={disabled} value={editing[field] ?? ''} onChange={(event) => setEditing({ ...editing, [field]: event.target.value })} className="w-full rounded-md border bg-background px-3 py-2" /></label>)}</div>
-            <div data-action-toolbar="" className="flex gap-2"><button data-action-tone="primary" data-action-fill="" disabled={disabled} type="submit" className="rounded-md border px-3 py-2 text-sm"><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Save Changes</button><button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => setEditing(null)} className="rounded-md border px-3 py-2 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button></div>
-          </form>}
+            <div className="shrink-0 border-b pb-4 pr-10"><h3 data-dialog-title className="text-lg font-semibold"><HeadingPencil className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Edit Uploaded Record</h3><p className="mt-1 text-xs text-muted-foreground">Forecasts</p></div>
+            <div role="region" aria-label="Uploaded forecast fields" tabIndex={0} className="min-h-0 min-w-0 max-h-[max(5rem,calc(100dvh-17rem))] flex-1 overflow-y-auto overscroll-contain pr-1 pb-1 sm:max-h-[max(5rem,calc(100dvh-13rem))]"><fieldset disabled={disabled} className="grid min-w-0 grid-cols-1 gap-4 border-0 p-0 sm:grid-cols-2">{forecastImportFields.map(([field, label]) => <label key={field} className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>{field === 'volume' ? 'Volume (50kg)' : label}</span><input type={field === 'year' || field === 'volume' ? 'number' : 'text'} step={field === 'volume' ? 'any' : undefined} disabled={disabled} value={editing[field] ?? ''} onChange={(event) => setEditing({ ...editing, [field]: event.target.value })} className="h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>)}</fieldset></div>
+            <div data-action-toolbar="" data-dialog-footer="" className="flex shrink-0 flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => setEditing(null)} className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button><button data-action-tone="primary" data-action-fill="" disabled={disabled} type="submit" className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm"><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Save Changes</button></div>
+          </form></RecordDialog>}
 
-          <Table summary={{ records: preview.length }} data-volume-layout="forecast-import" id="forecast-import-records" className="min-w-[1200px] table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Forecast import preview' }}>
+          <Table data-volume-layout="forecast-import" id="forecast-import-records" className="w-full table-fixed" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Forecast import preview' }}>
             <colgroup>
-              <col data-action-column="standard" />
-              {[280, 160, 96, 160, 224, 256, 160, 288, 144].map((width, index) => <col key={index} style={{ width }} />)}
+              <col data-action-column="compact" />
+              <col data-import-column="status" style={{ width: 144 }} />
+              {previewFields.map(([field]) => <col key={field} data-import-column={field} />)}
             </colgroup>
-            <thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Action', 'Status / Validation', ...forecastImportFields.map(([, label]) => label)].map((label) => <th data-action-column={label === "Action" ? "standard" : undefined} key={label} scope="col" className={`px-3 py-3 font-medium ${label === 'Volume' ? 'text-right' : label === 'Year' ? 'text-center' : 'text-left'}`}>{label}</th>)}</tr></thead>
-            <tbody>{busy ? <TableLoadingRow columns={forecastImportFields.length + 2} label="forecast import preview" /> : !rows.length ? <tr><td colSpan={forecastImportFields.length + 2} className="px-4 py-10 text-center text-muted-foreground">No pending uploads.</td></tr> : (['Invalid', 'Valid'] as const).map((group) => {
+            <thead className="sticky top-0 z-10 bg-card"><tr className="border-b bg-muted/40">{['Action', 'Status', ...previewFields.map(([, label]) => label === 'Volume' ? 'Volume (50kg)' : label)].map((label) => <th data-action-column={label === "Action" ? "compact" : undefined} key={label} scope="col" className={`px-3 py-3 font-medium ${label === 'Volume (50kg)' ? 'text-right' : label === 'Year' || label === 'Action' ? 'text-center' : 'text-left'}`}>{label}</th>)}</tr></thead>
+            <tbody>{busy ? <TableLoadingRow columns={previewColumnCount} label="forecast import preview" /> : !rows.length ? <tr><td colSpan={previewColumnCount} className="px-4 py-10 text-center text-muted-foreground">No pending uploads.</td></tr> : (['Invalid', 'Valid'] as const).map((group) => {
               const grouped = preview.filter((row) => (row.issues.length > 0) === (group === 'Invalid'))
               const renderRows = (items: typeof preview) => items.map((row) => <tr key={row.source.id} className="border-b">
-                  <td data-action-column="standard" className="px-3 py-3 align-top"><div className="flex flex-nowrap gap-1.5">
-                    {authorization.can('Forecasts', 'edit') && <TableActionButton action="edit" type="button" disabled={disabled} onClick={() => setEditing(row.source)} className="rounded-md border px-2 py-1 text-xs" />}
-                    {authorization.can('Forecasts', 'delete') && <TableActionButton action="discard" type="button" disabled={disabled} onClick={() => void discardUploadedRows([row.source.id])} className="rounded-md border px-2 py-1 text-xs" />}
+                  <td data-action-column="compact" className="px-1 py-2 align-top"><div className="flex flex-nowrap items-center justify-center gap-1">
+                    {authorization.can('Forecasts', 'edit') && <TableActionButton action="edit" compact type="button" disabled={disabled} onClick={() => setEditing(row.source)} className="inline-flex items-center justify-center rounded-md border" />}
+                    {authorization.can('Forecasts', 'delete') && <TableActionButton action="discard" compact type="button" disabled={disabled} onClick={() => void discardUploadedRows([row.source.id])} className="inline-flex items-center justify-center rounded-md border" />}
                   </div></td>
-                  <td className={`px-3 py-3 align-top text-sm leading-5 wrap-anywhere ${row.issues.length ? 'text-destructive' : ''}`}>
-                    <StatusBadge status={row.status} />
-                    {row.issues.length > 0 && <p className="mt-1">{row.issues.join(' ')}</p>}
+                  <td className={`px-2 py-2 align-top text-xs leading-4 wrap-anywhere ${row.issues.length ? 'text-destructive' : ''}`}>
+                    <StatusBadge compact status={row.status === 'Already imported' ? 'Already Imported' : row.status} />
+                    {row.issues.length > 0 && <><p className="mt-1">{row.issues.join(' ')}</p><p className="mt-1 text-muted-foreground">{row.source.kam || 'Unassigned KAM'} · {row.source.customer || 'Unassigned customer'}</p></>}
                     {!row.customer && row.region && row.source.customer.trim() && authorization.can('Customers', 'add') && (scope.allRegions || row.region.id === scope.regionId) && (
                       <button data-action-tone="primary" type="button" disabled={disabled} onClick={() => void addCustomer(row)} className="mt-2 block rounded-md border px-2 py-1 text-foreground disabled:opacity-50"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Add to Customers</button>
                     )}
                   </td>
-                  {forecastImportFields.map(([field]) => <td key={field} className={`px-3 py-3 align-top leading-5 ${field === 'volume' ? 'text-right tabular-nums wrap-anywhere' : field === 'year' ? 'whitespace-nowrap text-center tabular-nums' : 'wrap-anywhere'}`}>{field === 'volume' ? row.source.volume || numberLabel(row.payload.volume) : row.source[field] || '—'}</td>)}
+                  {previewFields.map(([field]) => <td key={field} className={`px-3 py-3 align-top leading-5 ${field === 'volume' ? 'text-right tabular-nums wrap-anywhere' : field === 'year' ? 'whitespace-nowrap text-center tabular-nums' : 'wrap-anywhere'}`}>{field === 'volume' ? row.source.volume || numberLabel(row.payload.volume) : row.source[field] || '—'}</td>)}
                 </tr>)
               return <ForecastPreviewGroup key={group} label={group} count={grouped.length} expanded={expanded[group]} onToggle={() => setExpanded((current) => ({ ...current, [group]: !current[group] }))}>
                 {group === 'Invalid'
@@ -373,12 +404,20 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
                       {renderRows(validation.rows)}
                     </ForecastPreviewGroup>
                   ))
-                  : renderRows(grouped)}
+                  : Array.from(ownerGroups, ([ownerKey, owner]) => <ForecastPreviewGroup key={ownerKey} nested label={'KAM: ' + owner.label} count={[...owner.customers.values()].reduce((sum, customer) => sum + customer.rows.length, 0)} expanded={expandedOwners.has(ownerKey)} onToggle={() => toggleOwner(ownerKey)}>
+                    {Array.from(owner.customers, ([customerKey, customer]) => <ForecastPreviewGroup key={customerKey} nested label={'Customer: ' + customer.label} count={customer.rows.length} expanded={expandedOwners.has(customerKey)} onToggle={() => toggleOwner(customerKey)}>{renderRows(customer.rows)}</ForecastPreviewGroup>)}
+                  </ForecastPreviewGroup>)} 
               </ForecastPreviewGroup>
             })}</tbody>
+            {preview.length > 0 && <tfoot className="sticky bottom-0 z-10 border-t bg-card">
+              <tr><td colSpan={previewColumnCount - 1} className="px-3 py-3 text-sm text-muted-foreground"><div className="flex items-center justify-between gap-3"><span>{preview.length.toLocaleString('en-PH')} {preview.length === 1 ? 'record' : 'records'}</span><span>Grand Total</span></div></td>
+                <td className="px-3 py-3 text-right font-semibold tabular-nums" aria-busy={busy}>{referencesReady && stagingReady ? numberLabel(volumes.total) : '—'}</td></tr>
+            </tfoot>}
           </Table>
-      </div>}
+      </div>
     </section>
+    </RecordDialog>
+    </>
   )
 }
 
@@ -386,7 +425,7 @@ function ForecastPreviewGroup({ label, count, expanded, onToggle, children, nest
   label: string; count: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; nested?: boolean
 }) {
   return <>
-    <tr className={label === 'Invalid' ? 'border-b bg-destructive/10' : 'border-b bg-muted/30'}><td colSpan={forecastImportFields.length + 2}><button type="button" aria-expanded={expanded} onClick={onToggle} className={`flex w-full items-center gap-2 py-3 pr-3 text-left font-medium ${nested ? 'pl-6 text-sm' : 'pl-3'}`}>{expanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}<span className="wrap-anywhere">{label} <span className="text-xs font-normal text-muted-foreground">({count})</span></span></button></td></tr>
+    <tr className={label === 'Invalid' ? 'border-b bg-destructive/10' : 'border-b bg-muted/30'}><td colSpan={previewColumnCount}><button type="button" aria-expanded={expanded} onClick={onToggle} className={`flex w-full items-center gap-2 py-3 pr-3 text-left font-medium ${nested ? 'pl-6 text-sm' : 'pl-3'}`}>{expanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}<span className="wrap-anywhere">{label} <span className="text-xs font-normal text-muted-foreground">({count})</span></span></button></td></tr>
     {expanded && children}
   </>
 }

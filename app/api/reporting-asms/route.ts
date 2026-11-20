@@ -30,16 +30,22 @@ export async function GET(request: Request) {
     if (!ids.length) return NextResponse.json({ users: [] }, { headers: { 'Cache-Control': 'no-store' } })
     query = query.in('region_id', ids)
   }
-  let rsmQuery = reportModule === 'Approvals'
+  let rsmQuery = reportModule === 'Approvals' || (profile.role !== 'User' && profile.position !== 'KAM')
     ? supabaseAdmin.from('users').select('id,full_name,region_id,subregion_id').eq('position','RSM').eq('is_active',true).order('id') : null
   if (rsmQuery && !(profile.role === 'Admin' || profile.position === 'NSM')) {
     rsmQuery = rsmQuery.eq('region_id', profile.region_id)
-    if (profile.position === 'RSM' || profile.position === 'Supervisor') {
+    if (profile.position === 'RSM' || (reportModule === 'Approvals' && profile.position === 'Supervisor')) {
       if (!profile.subregion_id) return NextResponse.json({ error: 'An assigned subregion is required.' }, { status: 403 })
       rsmQuery = rsmQuery.eq('subregion_id', profile.subregion_id)
     }
   }
-  const [asms, rsms] = await Promise.all([query, rsmQuery ?? Promise.resolve({ data: [], error: null })])
-  if (asms.error || rsms.error) return NextResponse.json({ error: 'Unable to load sales manager assignments.' }, { status: 500 })
-  return NextResponse.json({ users: asms.data, rsms: rsms.data }, { headers: { 'Cache-Control':'no-store' } })
+  let kamQuery = null
+  if (reportModule === 'Weekly Sales' && profile.role === 'Manager' && profile.position === 'RSM') {
+    if (!profile.region_id || !profile.subregion_id) return NextResponse.json({ error: 'An assigned region and subregion are required.' }, { status: 403 })
+    kamQuery = supabaseAdmin.from('users').select('id,full_name,region_id,subregion_id').eq('position','KAM').eq('is_active',true)
+      .eq('region_id',profile.region_id).eq('subregion_id',profile.subregion_id).order('full_name')
+  }
+  const [asms, rsms, kams] = await Promise.all([query, rsmQuery ?? Promise.resolve({ data: [], error: null }), kamQuery ?? Promise.resolve({ data: [], error: null })])
+  if (asms.error || rsms.error || kams.error) return NextResponse.json({ error: 'Unable to load sales assignments.' }, { status: 500 })
+  return NextResponse.json({ users: asms.data, rsms: rsms.data, kams: kams.data }, { headers: { 'Cache-Control':'no-store' } })
 }

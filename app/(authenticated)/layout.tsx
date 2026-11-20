@@ -56,14 +56,15 @@ export default function AuthenticatedLayout({
 
   const pageTitle = pageTitles[pathname] || "Feed Sales Forecast"
   const PageIcon = pageIcons[pathname]
-  const boundedSalesPage = pathname === '/approvals' || pathname === '/weekly-sales' || pathname === '/forecasts'
+  const boundedSalesPage = pathname === '/approvals' || pathname === '/weekly-sales' || pathname === '/forecasts' || pathname === '/audit-logs'
+  const boundedVolumePage = pathname === '/budgets' || pathname === '/actuals'
 
   return (
     <SidebarProvider>
       <AuthorizationProvider>
       <ForecastAttentionProvider>
       <AppSidebar />
-      <main className={boundedSalesPage ? 'w-full min-w-0 md:flex md:h-dvh md:flex-col md:overflow-hidden' : 'w-full min-w-0'}>
+      <main className={boundedSalesPage ? 'w-full min-w-0 md:flex md:h-dvh md:flex-col md:overflow-hidden' : boundedVolumePage ? 'w-full min-w-0 lg:flex lg:h-dvh lg:flex-col lg:overflow-hidden' : 'w-full min-w-0'}>
         <div className="flex h-14 shrink-0 items-center border-b px-4">
           <h1 className="flex items-center gap-2 text-lg leading-tight font-semibold">
             {PageIcon && <PageIcon className="size-5 shrink-0" aria-hidden="true" />}
@@ -71,7 +72,7 @@ export default function AuthenticatedLayout({
           </h1>
         </div>
 
-        <div className={boundedSalesPage ? 'app-tables p-4 md:min-h-0 md:flex-1 md:overflow-hidden md:p-6' : 'app-tables p-4 md:p-6'}>
+        <div data-page-tables className={boundedSalesPage ? 'app-tables p-4 md:min-h-0 md:flex-1 md:overflow-hidden md:p-6' : boundedVolumePage ? 'app-tables p-4 md:p-6 lg:min-h-0 lg:flex-1 lg:overflow-hidden' : 'app-tables p-4 md:p-6'}>
           {children}
         </div>
       </main>

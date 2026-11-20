@@ -11,10 +11,12 @@ type Sale = {
   product_id: number | null; forecast: number; volume: number | null; asm_name?: string
   endorsed_by?: string | null; submitted_by?: string | null; user_id?: string | null
 }
-type Lookup = { id: number; name: string }
+type Lookup = { id: number; name: string; region_id?: number }
 type Budget = { year: number; month: number | null; region_id: number | null; subregion_id: number | null; customer_id: number | null; product_id: number | null; volume: number; kam_id?: string | null }
 type Actual = { actual_date: string; region_id: number | null; subregion_id: number | null; product_id: number | null; volume: number; kam_id?: string | null }
 export type ExportInput = {
+  weeklyScope?: { level: 'kam' | 'subregion' | 'region' | 'all'; userId: string; regionId: number | null; subregionId?: number | null; viewerName: string }
+  kamAssignments?: { id: string; full_name: string | null; region_id: number | null; subregion_id: number | null }[]
   reportType?: 'approvals'; approvalStage?: 'rsm' | 'asm'; budgetMonth?: number
   approvalScope?: { level: 'region' | 'subregion'; regionId: number; subregionId?: number | null; viewerName: string }
   sales: Sale[]; regions: Lookup[]; subregions: Lookup[]
@@ -184,9 +186,15 @@ export function buildWeeklySalesExport(input: ExportInput): Uint8Array {
   const weeks = exportWeeks(input)
   if (!weeks.length || (!input.sales.length && !input.regions.length)) throw new Error('No Weekly Sales records to export.')
   const selectedWeeks = new Set(weeks.map((week) => `${week.year}-${week.week}`))
-  const scope = input.approvalScope
+  const weeklyScope = input.weeklyScope
+  const scope = input.approvalScope ?? (weeklyScope && (weeklyScope.level === 'region' || weeklyScope.level === 'subregion')
+    ? { ...weeklyScope, level: weeklyScope.level, regionId: weeklyScope.regionId ?? 0 } : undefined)
   if (scope && (!scope.regionId || (scope.level === 'subregion' && !scope.subregionId))) throw new Error('An assigned region/subregion is required.')
-  const selectedSales = input.sales.filter((sale) => selectedWeeks.has(`${sale.year}-${sale.week}`) && (!scope || (sale.region_id === scope.regionId && (scope.level === 'region' || sale.subregion_id === scope.subregionId))))
+  if (weeklyScope?.level === 'kam' && (!weeklyScope.userId || !weeklyScope.regionId)) throw new Error('An assigned KAM and region are required.')
+  const ownerOf = (sale: Sale) => weeklyScope ? sale.user_id || sale.submitted_by : sale.submitted_by || sale.user_id
+  const selectedSales = input.sales.filter((sale) => selectedWeeks.has(`${sale.year}-${sale.week}`) && (!scope || (sale.region_id === scope.regionId && (scope.level === 'region' || sale.subregion_id === scope.subregionId)))
+    && (weeklyScope?.level !== 'kam' || (ownerOf(sale) === weeklyScope.userId && sale.region_id === weeklyScope.regionId)))
+  if (input.reportType !== 'approvals' && !selectedSales.length) throw new Error('No Weekly Sales records to export for the selected weeks.')
   const workbook = XLSX.utils.book_new()
   const productsById = new Map(input.products.map(product => [product.id, product]))
   const productsByCode = new Map(input.products.map(product => [product.code, product]))
@@ -263,16 +271,17 @@ export function buildWeeklySalesExport(input: ExportInput): Uint8Array {
     const number = (ref: string, value: number, style: number, formula?: string) => `<c r="${ref}" s="${style}">${formula ? `<f>${formula}</f>` : ''}<v>${value}</v></c>`
     const row = (r: number, content: string, height = 18.45) => `<row r="${r}" ht="${height}" customHeight="1">${content}</row>`
     const names = (items: (string | undefined)[]) => [...new Set(items.filter(Boolean))].join(', ')
-    const asm = (regionId == null ? undefined : input.asmNames?.[regionId]) || names(sales.map((sale) => sale.asm_name)) || (scope?.level === 'region' ? scope.viewerName : '') || (input.reportType === 'approvals' ? 'Unassigned ASM' : 'Name unavailable')
-    const rsm = input.rsmNames?.[rsmAssignmentKey(regionId, areaId)] || (scope?.level === 'subregion' ? scope.viewerName : '') || names(sales.map((sale) => sale.endorsed_by ? input.users[sale.endorsed_by] : undefined)) || (input.reportType === 'approvals' ? 'Unassigned RSM' : 'Name unavailable')
+    const asm = (regionId == null ? undefined : input.asmNames?.[regionId]) || names(sales.map((sale) => sale.asm_name)) || (scope?.level === 'region' ? scope.viewerName : '') || (input.reportType === 'approvals' || weeklyScope ? 'Unassigned ASM' : 'Name unavailable')
+    const rsm = input.rsmNames?.[rsmAssignmentKey(regionId, areaId)] || (scope?.level === 'subregion' ? scope.viewerName : '') || names(sales.map((sale) => sale.endorsed_by ? input.users[sale.endorsed_by] : undefined)) || (input.reportType === 'approvals' || weeklyScope ? 'Unassigned RSM' : 'Name unavailable')
     const approval = input.reportType === 'approvals'
-    const asmSubregion = approval && input.approvalStage === 'asm' && area && !kamId
+    const ownKamSheet = !approval && weeklyScope?.level === 'kam' && kamId === weeklyScope.userId
+    const asmSubregion = area && !kamId && ((approval && input.approvalStage === 'asm') || (!approval && weeklyScope && ['region', 'all'].includes(weeklyScope.level)))
     const subregionName = input.subregions.find(item => item.id === areaId)?.name || 'Unassigned subregion'
-    let body = row(1, text('B1', input.reportType === 'approvals' ? 'WEEKLY FORECAST APPROVAL' : 'WEEKLY FORECAST', 25), 22) + row(2, '', 22)
-    body += row(3, text('A3', kamId ? 'KAM:' : area ? 'RSM:' : 'ASM:', 4) + text('B3', kamId ? input.users[kamId] || 'Name unavailable' : area ? rsm : asm, 5), 24)
-    body += row(4, text('A4', kamId ? 'RSM:' : asmSubregion ? 'ASM:' : area ? approval ? 'SUBREGION:' : 'ASM:' : 'REGION:', 4) + text('B4', kamId ? rsm : asmSubregion ? asm : area ? approval ? subregionName : asm : region, 6), 24)
-    if (area && approval && (kamId || asmSubregion)) body += row(5, text('A5', 'SUBREGION:', 4) + text('B5', subregionName, 6))
-    else if (area && !approval) body += row(5, text('A5', 'REGION:', 4) + text('B5', region, 6))
+    let body = row(1, text('B1', input.reportType === 'approvals' ? 'WEEKLY FORECAST APPROVAL' : 'WEEKLY SALES', 25), 22) + row(2, '', 22)
+    body += row(3, text('A3', kamId ? 'KAM:' : area ? 'RSM:' : 'ASM:', 4) + text('B3', kamId ? input.users[kamId] || input.kamAssignments?.find(kam => kam.id === kamId)?.full_name?.trim() || (weeklyScope?.userId === kamId ? weeklyScope.viewerName : '') || (ownKamSheet ? 'Unassigned' : 'Name unavailable') : area ? rsm : asm, 5), 24)
+    body += row(4, text('A4', ownKamSheet ? 'SUBREGION:' : kamId ? 'RSM:' : asmSubregion ? 'ASM:' : area ? approval ? 'SUBREGION:' : 'ASM:' : 'REGION:', 4) + text('B4', ownKamSheet ? input.subregions.find(item => item.id === areaId)?.name || 'Unassigned' : kamId ? rsm : asmSubregion ? asm : area ? approval ? subregionName : asm : region, 6), 24)
+    if (area && (approval || asmSubregion) && (kamId || asmSubregion)) body += row(5, text('A5', 'SUBREGION:', 4) + text('B5', subregionName, 6))
+    else if (area && !approval && !ownKamSheet) body += row(5, text('A5', 'REGION:', 4) + text('B5', region, 6))
     const monthLabel = months[budgetMonth - 1]
     const dates = weeks.map(week => {
       const label = weekLabel(week.year, week.week)
@@ -304,19 +313,25 @@ export function buildWeeklySalesExport(input: ExportInput): Uint8Array {
     sheets.push('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="A1:'+column(budgetEnd)+(rows.length+8)+'"/><sheetViews><sheetView workbookViewId="0"><pane xSplit="2" ySplit="7" topLeftCell="C8" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18.45"/><cols><col min="1" max="1" width="30" customWidth="1"/><col min="2" max="2" width="61" customWidth="1"/><col min="3" max="'+(lastIndex+1)+'" width="13" customWidth="1"/><col min="'+(budgetStart+1)+'" max="'+(budgetEnd+1)+'" hidden="1" width="13" customWidth="1"/></cols><sheetData>'+body+'</sheetData><mergeCells count="'+merges.length+'">'+merges.map(ref=>'<mergeCell ref="'+ref+'"/>').join('')+'</mergeCells><dataValidations count="1"><dataValidation type="list" allowBlank="0" showErrorMessage="1" errorTitle="Choose a budget month" error="Select one of the listed months." sqref="C6"><formula1>"'+months.join(',')+'"</formula1></dataValidation></dataValidations><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/><ignoredErrors><ignoredError sqref="A1:XFD1048576" formula="1"/></ignoredErrors><drawing r:id="rId1"/></worksheet>')
 
   }
-  if (scope?.level === 'subregion') {
+  if (weeklyScope?.level === 'kam') {
+    const region = input.regions.find(row => row.id === weeklyScope.regionId)?.name || 'Assigned region'
+    addSheet(weeklyScope.viewerName || input.users[weeklyScope.userId] || 'KAM', selectedSales, region, true, weeklyScope.regionId, weeklyScope.subregionId, weeklyScope.userId)
+  } else if (scope?.level === 'subregion') {
     const region = input.regions.find(row => row.id === scope.regionId)?.name || 'Assigned region'
     const area = input.subregions.find(row => row.id === scope.subregionId)?.name || 'Assigned subregion'
     addSheet(area, selectedSales, region, true, scope.regionId, scope.subregionId)
-    for (const owner of new Set(selectedSales.map(sale => sale.submitted_by || sale.user_id).filter((id): id is string => Boolean(id)))) {
-      addSheet(input.users[owner] || 'KAM', selectedSales.filter(sale => (sale.submitted_by || sale.user_id) === owner), region, true, scope.regionId, scope.subregionId, owner)
+    const assignedKams = weeklyScope ? (input.kamAssignments ?? []).filter(kam => kam.region_id === scope.regionId && kam.subregion_id === scope.subregionId) : []
+    for (const owner of new Set(selectedSales.map(ownerOf).filter((id): id is string => Boolean(id)))) {
+      const name = input.users[owner] || assignedKams.find(kam => kam.id === owner)?.full_name?.trim() || 'KAM'
+      addSheet(name, selectedSales.filter(sale => ownerOf(sale) === owner), region, true, scope.regionId, scope.subregionId, owner)
     }
   } else for (const regionId of new Set(scope ? [scope.regionId] : selectedSales.length ? selectedSales.map((sale) => sale.region_id) : input.regions.map((region) => region.id))) {
     const sales = selectedSales.filter((sale) => sale.region_id === regionId)
     const name = input.regions.find((region) => region.id === regionId)?.name || 'Unassigned region'
     const rsmSheets = input.reportType === 'approvals' && input.approvalStage === 'rsm'
     if (!rsmSheets) addSheet(name, sales, name, false, regionId)
-    for (const areaId of new Set(sales.map((sale) => sale.subregion_id))) {
+    const areaIds = sales.map(sale => sale.subregion_id)
+    for (const areaId of new Set(areaIds)) {
       const areaSales = sales.filter(sale => sale.subregion_id === areaId)
       addSheet(input.subregions.find((area) => area.id === areaId)?.name || `${name} - Unassigned`, areaSales, name, true, regionId, areaId)
       if (rsmSheets) for (const owner of new Set(areaSales.map(sale => sale.submitted_by || sale.user_id).filter((id): id is string => Boolean(id)))) {
@@ -371,7 +386,14 @@ export function weeklySalesExportFilename(input: ExportInput) {
   })
   const range = `${format(start, start.getUTCFullYear() !== end.getUTCFullYear())} - ${format(end, true)}`
   const region = input.regions.length === 1 ? input.regions[0].name : 'All Regions'
-  return `${region} Weekly Forecast${input.reportType === 'approvals' ? ' Approval' : ''} (${range})`.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-') + '.xlsx'
+  if (input.reportType === 'approvals') return `${region} Weekly Forecast Approval (${range})`.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-') + '.xlsx'
+  const scope = input.weeklyScope
+  const label = scope?.level === 'kam' ? scope.viewerName || input.users[scope.userId] || 'Unassigned'
+    : scope?.level === 'subregion' ? input.subregions.find(area => area.id === scope.subregionId)?.name || 'Unassigned'
+      : scope?.level === 'region' ? input.regions.find(area => area.id === scope.regionId)?.name || 'Unassigned'
+        : scope?.level === 'all' ? 'All Regions' : region
+  const displayName = label.trim().toLocaleLowerCase('en-PH').replace(/(^|[\s'’-])\p{L}/gu, value => value.toLocaleUpperCase('en-PH'))
+  return `${displayName} - Weekly Sales (${range})`.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-') + '.xlsx'
 }
 
 export function downloadWeeklySalesExport(input: ExportInput) {

@@ -425,6 +425,10 @@ textarea::placeholder {
   --action-column-width: 5rem;
 }
 
+[data-action-column="compact"] {
+  --action-column-width: 6.5rem;
+}
+
 td[data-action-column] {
   white-space: nowrap;
 }
@@ -476,12 +480,22 @@ td[data-action-column] > div {
 
 /* Structural columns keep their width; description columns share spare space. */
 @media (min-width: 768px) {
-  [data-sales-review-page] .app-table-scroll,
+  [data-sales-review-page] .app-table-scroll {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: none;
+    overscroll-behavior: contain;
+  }
+
   [data-saved-forecasts-page] #saved-forecasts > .app-table-scroll {
     flex: 0 1 auto;
     min-height: 0;
     max-height: none;
     overscroll-behavior: contain;
+  }
+
+  [data-saved-forecasts-page] #saved-forecasts > [data-slot="table-summary"] {
+    flex-shrink: 0;
   }
 }
 
@@ -782,20 +796,73 @@ table[data-week-schedule] > tbody > tr > td:nth-child(3) > span {
 }
 
 table[data-volume-layout="forecast-import"] {
-  width: 1928px;
-  min-width: 1928px;
+  width: 1144px;
+  min-width: 1144px;
   table-layout: fixed;
 }
 
 table[data-volume-layout="import"] {
-  width: 1424px;
-  min-width: 1424px;
+  width: 1144px;
+  min-width: 1144px;
   table-layout: fixed;
+}
+
+@media (min-width: 640px) {
+  [data-volume-import-body] > [data-slot="table-container"] {
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: none;
+  }
+  [data-volume-import-body] > [data-slot="table-summary"] {
+    flex-shrink: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-saved-volumes] > [data-slot="table-container"] {
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: none;
+  }
+  [data-saved-volumes] > [data-slot="table-summary"] {
+    flex-shrink: 0;
+  }
 }
 
 table:is([data-volume-layout="forecast-import"], [data-volume-layout="import"]) > thead > tr > th {
   white-space: nowrap;
   overflow-wrap: normal;
+}
+
+@media (min-width: 1024px) {
+  table[data-volume-layout="forecast-import"] {
+    width: 100%;
+    min-width: 0;
+  }
+  table[data-volume-layout="forecast-import"] col[data-import-column="region"] { width: 12%; }
+  table[data-volume-layout="forecast-import"] col[data-import-column="year"] { width: 6%; }
+  table[data-volume-layout="forecast-import"] col[data-import-column="week"] { width: 12%; }
+  table[data-volume-layout="forecast-import"] col[data-import-column="product_code"] { width: 12%; }
+  table[data-volume-layout="forecast-import"] col[data-import-column="volume"] { width: 6rem; }
+  table[data-volume-layout="forecast-import"] > thead > tr > th { white-space: normal; }
+  table[data-volume-layout="forecast-import"] > :is(thead, tbody) > tr > :is(th, td) { padding-inline: 0.5rem; }
+  table[data-volume-layout="import"] {
+    width: 100%;
+    min-width: 0;
+  }
+  table[data-volume-layout="import"] col[data-import-column="status"] { width: 8rem; }
+  table[data-volume-layout="import"] col[data-import-column="year"] { width: 7%; }
+  table[data-volume-layout="import"] col[data-import-column="period"] { width: 12%; }
+  table[data-volume-layout="import"] col[data-import-column="region"] { width: 12%; }
+  table[data-volume-layout="import"] col[data-import-column="code"] { width: 12%; }
+  table[data-volume-layout="import"] col[data-import-column="product"] { width: auto; }
+  table[data-volume-layout="import"] col[data-import-column="volume"] { width: 6rem; }
+  table[data-volume-layout="import"] > thead > tr > th {
+    white-space: normal;
+  }
+  table[data-volume-layout="import"] > :is(thead, tbody) > tr > :is(th, td) {
+    padding-inline: 0.5rem;
+  }
 }
 
 /* Base styles */
@@ -1260,6 +1327,14 @@ button[data-slot="expand-collapse-button"] {
   padding-top: 0.75rem;
 }
 
+@media (max-width: 639px) {
+  [data-record-dialog] [data-dialog-footer] > button {
+    flex: 0 0 auto;
+    height: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
 @media (min-width: 768px) {
   [data-compact-editor] :is(input:not([type="checkbox"]):not([type="radio"]), select) {
     height: 2.25rem;
@@ -1484,4 +1559,103 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
 @media (max-width: 639px) {
   [data-section-header][data-aligned-toolbar],
   [data-filter-toolbar] { padding-inline: 1rem; }
+}
+
+/* Keep both import toolbars aligned, with closing above the header actions. */
+[data-record-dialog] [data-import-dialog-header] {
+  padding: 2rem 0 1rem;
+}
+
+/* Page lists grow with their rows, then scroll within the available height. */
+@media (min-width: 1024px) {
+  [data-page-tables] table[data-directory-table] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    table-layout: fixed;
+    --directory-fixed-width: 6rem;
+    --directory-data-width: calc(var(--table-viewport-width, 100%) - var(--directory-fixed-width));
+  }
+
+  [data-page-tables] table[data-directory-table]:has(col[data-action-column]) {
+    --directory-fixed-width: 11.5rem;
+  }
+
+  [data-page-tables] [data-directory-table] [data-action-column="standard"] { --action-column-width: 5.5rem; }
+  [data-page-tables] [data-directory-table] [data-slot="table-action-button"] [data-action-label] { display: none; }
+  [data-page-tables] [data-directory-table] [data-slot="table-action-button"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0;
+    gap: 0;
+  }
+
+  [data-page-tables] [data-directory-table] > :is(thead, tbody) > tr > :is(th, td):not([data-action-column]) {
+    padding-inline: 0.5rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  [data-directory-table] th > button { max-width: 100%; min-width: 0; }
+  [data-directory-table] th > button > svg { flex-shrink: 0; }
+
+  [data-directory-table="users"] {
+    --directory-name: calc(var(--directory-data-width) * 0.22);
+    --directory-email: calc(var(--directory-data-width) * 0.24);
+    --directory-role: calc(var(--directory-data-width) * 0.10);
+    --directory-position: calc(var(--directory-data-width) * 0.16);
+    --directory-region: calc(var(--directory-data-width) * 0.12);
+    --directory-subregion: calc(var(--directory-data-width) * 0.16);
+  }
+
+  [data-page-tables] [data-directory-table="users"] > thead > tr > th:nth-last-child(3) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  [data-directory-table="products"] {
+    --directory-category: calc(var(--directory-data-width) * 0.14);
+    --directory-code: calc(var(--directory-data-width) * 0.16);
+    --directory-name: calc(var(--directory-data-width) * 0.18);
+    --directory-line: calc(var(--directory-data-width) * 0.14);
+    --directory-species: calc(var(--directory-data-width) * 0.12);
+    --directory-weight: calc(var(--directory-data-width) * 0.07);
+    --directory-created: calc(var(--directory-data-width) * 0.19);
+  }
+
+  [data-page-tables] [data-directory-table="products"] > thead > tr > th:nth-last-child(6),
+  [data-page-tables] [data-directory-table="products"] > thead > tr > th:nth-last-child(3) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  [data-directory-table="customers"] col[data-directory-column="region"] { width: 10%; }
+  [data-directory-table="customers"] col[data-directory-column="salesperson"] { width: 21%; }
+  [data-directory-table="customers"] col[data-directory-column="segment"] { width: 13%; }
+  [data-directory-table="customers"] col[data-directory-column="created"] { width: 16%; }
+
+  [data-page-tables] [data-directory-table="customers"] > tbody > tr > td:nth-last-child(3):not([colspan]) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  [data-page-tables] [data-slot="table-container"] {
+    height: auto;
+    min-height: 0;
+    max-height: var(--page-table-max-height, calc(100dvh - 16rem));
+    flex: 0 1 auto;
+    overscroll-behavior: contain;
+  }
+
+  [data-page-tables] [data-saved-volumes] {
+    flex: 0 1 auto;
+  }
+
+  [data-page-tables] [data-slot="table-summary"] {
+    flex-shrink: 0;
+  }
 }

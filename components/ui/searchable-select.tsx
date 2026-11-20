@@ -33,7 +33,7 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
   // Width follows the field's purpose, never its currently available choices.
   const contentSize = /\bstatus\b/.test(fieldName) ? 'status'
     : /\bregion\b/.test(fieldName) ? 'month'
-    : /customer|product|name|email|reason|kam|salesman/.test(fieldName) ? 'long'
+    : /customer|product|name|email|reason|kam|salesman|salesperson/.test(fieldName) ? 'long'
     : /year/.test(fieldName) ? 'year'
     : /week|status|role/.test(fieldName) ? 'short'
     : /month|^region$/.test(fieldName) ? 'month' : 'medium'

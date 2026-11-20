@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { currentWeekInput, isoWeekStart, weekInputDate } from '../lib/forecast-weeks.ts'
+import { currentWeekInput, isoWeekStart, salesWeekRange, weekInputDate } from '../lib/forecast-weeks.ts'
 import { loadForecastWeekStates } from '../lib/forecast-week-locks.ts'
 
 test('ISO calendars validate week 53 and correctly cross year boundaries', () => {
@@ -15,6 +15,12 @@ test('ISO calendars validate week 53 and correctly cross year boundaries', () =>
 test('current week uses the Philippine business date rather than host timezone', () => {
   assert.equal(currentWeekInput(new Date('2027-01-03T16:30:00Z')), '2027-W01')
   assert.equal(currentWeekInput(new Date('2027-01-03T15:30:00Z')), '2026-W53')
+})
+
+test('sales week defaults advance weekly and cross ISO year boundaries', () => {
+  assert.deepEqual(salesWeekRange(new Date('2026-11-20T04:00:00Z')), { fromWeek: '2026-W47', toWeek: '2026-W50' })
+  assert.deepEqual(salesWeekRange(new Date('2026-11-23T04:00:00Z')), { fromWeek: '2026-W48', toWeek: '2026-W51' })
+  assert.deepEqual(salesWeekRange(new Date('2026-12-28T04:00:00Z')), { fromWeek: '2026-W53', toWeek: '2027-W03' })
 })
 
 test('status RPC deduplicates weeks and accepts only complete explicit statuses', async () => {

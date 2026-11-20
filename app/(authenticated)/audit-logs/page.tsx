@@ -3,7 +3,6 @@
 import { usePopupError } from '@/components/action-dialogs'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { modules, useAuthorization } from '@/lib/authorization'
 import { Table } from '@/components/ui/table'
@@ -14,7 +13,7 @@ type AuditRow = {
   record_id: string | null; action: string; summary: string; changed_fields: string[]
 }
 const pageSize = 50
-const field = 'h-10 w-full rounded-md border bg-background px-3 text-sm'
+const field = 'h-10 w-full min-w-0 rounded-md border bg-background px-3 text-sm'
 
 export default function AuditLogsPage() {
   const authorization = useAuthorization()
@@ -66,11 +65,13 @@ export default function AuditLogsPage() {
     return () => { clearTimeout(timer); ++activeRequest.current }
   }, [load])
   if (!allowed) return <p className="text-sm text-muted-foreground">Audit Logs is available to authorized Admins.</p>
-  return <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
-    <header data-section-header="" data-aligned-toolbar="" className="flex justify-end border-b">
-      <button type="button" disabled={loading} onClick={() => void load()} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={'size-4 ' + (loading ? 'animate-spin' : '')} />Refresh</button>
-    </header>
-    <form className="grid gap-3 border-b p-4 sm:grid-cols-2 lg:grid-cols-5" onSubmit={(event) => { event.preventDefault(); setPage(0); setRecordId(search.trim()) }}>
+  return <section className="overflow-hidden rounded-xl border bg-card shadow-sm md:flex md:max-h-full md:min-h-0 md:flex-col">
+    <form className="grid shrink-0 gap-3 border-b p-4 sm:grid-cols-2 lg:grid-cols-5" onSubmit={(event) => {
+      event.preventDefault()
+      const nextRecordId = search.trim()
+      if (page === 0 && nextRecordId === recordId) void load()
+      else { setPage(0); setRecordId(nextRecordId) }
+    }}>
       <label className="space-y-1 text-xs text-muted-foreground">Module<select className={field} value={module} onChange={(event) => { setModule(event.target.value); setPage(0) }}><option value="">All modules</option>{modules.filter((item) => item !== 'Audit Logs' && item !== 'Dashboard' && item !== 'Weekly Sales' && item !== 'Approvals').map((item) => <option key={item}>{item}</option>)}</select></label>
       <label className="space-y-1 text-xs text-muted-foreground">Action<select className={field} value={action} onChange={(event) => { setAction(event.target.value); setPage(0) }}><option value="">All actions</option><option value="INSERT">Created</option><option value="UPDATE">Updated</option><option value="DELETE">Deleted</option></select></label>
       <label className="space-y-1 text-xs text-muted-foreground">From date<input type="date" className={field} value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} /></label>
@@ -78,18 +79,18 @@ export default function AuditLogsPage() {
       <label className="space-y-1 text-xs text-muted-foreground">Record ID<div className="flex gap-2"><input className={field} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Exact ID" /><button type="submit" className="rounded-md border px-2 text-sm">Search</button></div></label>
     </form>
 
-    <Table className="min-w-[1200px] table-fixed text-sm" containerProps={{ className: 'max-h-[65vh] overflow-auto', 'aria-label': 'Audit activity', tabIndex: 0 }}>
+    <Table className="w-full min-w-[1000px] table-fixed text-sm md:min-w-0" containerProps={{ className: 'min-h-0 max-h-[65vh] overflow-auto md:flex-[0_1_auto] md:max-h-none', 'aria-label': 'Audit activity', tabIndex: 0 }}>
       <colgroup>
-        <col className="w-[200px]" />
-        <col className="w-[180px]" />
-        <col className="w-[220px]" />
-        <col className="w-[100px]" />
-        <col className="w-[180px]" />
+        <col style={{ width: '18%' }} />
+        <col style={{ width: '16%' }} />
+        <col style={{ width: '19%' }} />
+        <col style={{ width: '5rem' }} />
+        <col style={{ width: '7rem' }} />
         <col />
       </colgroup>
       <thead className="sticky top-0 bg-card"><tr>{['Time', 'User', 'Module / Table', 'Action', 'Record ID', 'Details'].map((title) => <th key={title} className="whitespace-nowrap px-3 py-3 text-left font-semibold">{title}</th>)}</tr></thead>
       <tbody>{loading ? <TableLoadingRow columns={6} label="audit logs" /> : rows.length === 0 ? <tr><td colSpan={6} className="px-3 py-10 text-center text-muted-foreground">{error ? 'Audit logs could not be loaded.' : 'No audit activity found. Logging starts when the audit migration is applied.'}</td></tr> : rows.map((row) => <tr key={row.id} className="border-t align-top">
-        <td className="whitespace-nowrap px-3 py-3">{new Date(row.created_at).toLocaleString()}</td>
+        <td className="px-3 py-3 wrap-anywhere">{new Date(row.created_at).toLocaleString()}</td>
         <td className="px-3 py-3 wrap-anywhere">{row.actor_name}</td>
         <td className="px-3 py-3 wrap-anywhere">{row.module}<span className="block text-xs text-muted-foreground">{row.table_name}</span></td>
         <td className={'whitespace-nowrap px-3 py-3 font-medium ' + (row.action === 'DELETE' ? 'text-red-600 dark:text-red-400' : row.action === 'INSERT' ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>{row.action === 'INSERT' ? 'Created' : row.action === 'UPDATE' ? 'Updated' : 'Deleted'}</td>
@@ -97,6 +98,6 @@ export default function AuditLogsPage() {
         <td className="px-3 py-3 wrap-anywhere">{row.summary}{row.changed_fields.length > 0 && <span className="mt-1 block text-xs text-muted-foreground">Fields: {row.changed_fields.join(', ')}</span>}</td>
       </tr>)}</tbody>
     </Table>
-    <footer className="flex items-center justify-between gap-2 border-t p-4 text-sm"><span>Page {page + 1} · {rows.length} records</span><div className="flex gap-2"><button className="rounded-md border px-3 py-2 disabled:opacity-50" disabled={loading || page === 0} onClick={() => setPage((current) => current - 1)}>Previous</button><button className="rounded-md border px-3 py-2 disabled:opacity-50" disabled={loading || !hasMore} onClick={() => setPage((current) => current + 1)}>Next</button></div></footer>
+    <footer className="flex shrink-0 items-center justify-between gap-2 border-t p-4 text-sm"><span>Page {page + 1} · {rows.length} records</span><div className="flex gap-2"><button className="rounded-md border px-3 py-2 disabled:opacity-50" disabled={loading || page === 0} onClick={() => setPage((current) => current - 1)}>Previous</button><button className="rounded-md border px-3 py-2 disabled:opacity-50" disabled={loading || !hasMore} onClick={() => setPage((current) => current + 1)}>Next</button></div></footer>
   </section>
 }

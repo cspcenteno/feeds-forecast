@@ -513,6 +513,7 @@ export default function SystemDashboard() {
               </button>
             </div>
             <SalesHierarchyTable showActions={false} showStatus={false} rows={monthlyHierarchyRows(salesGroups)} loading={loading}
+              totalVolume={(data?.details ?? []).reduce((sum, item) => sum + (Number(item.volume) || 0), 0)}
               label="Monthly Sales table" emptyMessage="No approved forecasts for the selected month."
               summary={summaryForLevel(data?.details.length ?? 0, data?.showAsm ? 'asms' : data?.scope === 'kam' ? 'customers' : data?.scope === 'rsm' ? 'kams' : 'rsms', (data?.details ?? []).map(row => data?.showAsm ? row.asm_id : data?.scope === 'kam' ? row.customer_id : data?.scope === 'rsm' ? row.submitted_by : row.endorsed_by))} />
 

@@ -50,7 +50,7 @@ import { createClient } from '@/lib/client'
 import { loadActualRecords, type ActualRecord } from '@/lib/actual-records'
 import { useAuthorization } from '@/lib/authorization'
 import { loadForecastWeekStates } from '@/lib/forecast-week-locks'
-import { currentWeekInput } from '@/lib/forecast-weeks'
+import { currentWeekInput, salesWeekRange } from '@/lib/forecast-weeks'
 
 type Region = {
   id: number
@@ -221,8 +221,10 @@ export default function SalesInputPage() {
   const loading = pendingAction !== null || importBusy
   const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
-  const [savedStatusFilter, setSavedStatusFilter] = useState('')
-  const [savedMonthFilter, setSavedMonthFilter] = useState('')
+  const [savedStatusFilter, setSavedStatusFilter] = useState('all')
+  const [initialSavedWeekRange] = useState(() => salesWeekRange())
+  const [savedFromWeek, setSavedFromWeek] = useState(initialSavedWeekRange.fromWeek)
+  const [savedToWeek, setSavedToWeek] = useState(initialSavedWeekRange.toWeek)
   const [savedRegionFilter, setSavedRegionFilter] = useState('all')
   const canFilterAllSavedRegions = role === 'Admin' || salesPosition.trim().toUpperCase() === 'NSM'
   const effectiveSavedRegion = canFilterAllSavedRegions ? savedRegionFilter : String(assignedRegionId ?? '')
@@ -1149,6 +1151,7 @@ export default function SalesInputPage() {
     }
 
     const revised = rows.some((row) => row.status === 'Rejected')
+    setSavedStatusFilter('')
     setMessage(editingSharedForecast ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts for RSM review.' : revised ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts back to your RSM.' : 'Forecasts saved successfully.')
     setSelectedCustomerId('')
 
@@ -1389,12 +1392,13 @@ export default function SalesInputPage() {
     } finally { actionConfirmation?.finish() }
   }
 
-  const visibleSavedForecasts = useMemo(() => forecasts.filter((item) =>
-    (isAdmin || !customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
+  const visibleSavedForecasts = useMemo(() => forecasts.filter((item) => {
+    const week = `${item.year}-W${String(item.week).padStart(2, '0')}`
+    return (isAdmin || !customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
     savedForecastMatchesStatus(item, savedStatusFilter) &&
     (effectiveSavedRegion === 'all' || (effectiveSavedRegion !== '' && item.region_id === Number(effectiveSavedRegion))) &&
-    (!savedMonthFilter || (item.year === Number(savedMonthFilter.slice(0, 4)) && getMonthForWeek(item.year, item.week) === Number(savedMonthFilter.slice(5, 7))))
-  ), [forecasts, savedStatusFilter, savedMonthFilter, effectiveSavedRegion, customerAssignmentRestricted, customers, isAdmin])
+    (!savedFromWeek || week >= savedFromWeek) && (!savedToWeek || week <= savedToWeek)
+  }), [forecasts, savedStatusFilter, savedFromWeek, savedToWeek, effectiveSavedRegion, customerAssignmentRestricted, customers, isAdmin])
 
   // Group by week and customer, keeping each review status separate.
   const savedWeekGroups = useMemo<SavedWeekGroup[]>(() => {
@@ -1647,18 +1651,6 @@ export default function SalesInputPage() {
     <div data-saved-forecasts-page className="space-y-4 md:flex md:h-full md:min-h-0 md:flex-col">
 
       {/* ADD FORECAST */}
-
-      {userId && role === 'Admin' && authorization.can('Forecasts', 'add') && authorization.can('Forecasts', 'import') && (
-        <ForecastExcelImport
-          key={userId}
-          userId={userId}
-          isAdmin={role === 'Admin'}
-          scope={{ allRegions: canChooseRegion, regionId: assignedRegionId, subregionId: assignedSubregionId }}
-          blocked={pendingAction !== null}
-          onBusyChange={setImportBusy}
-          onImported={() => loadForecasts()}
-        />
-      )}
 
       {canCreateForecast ||
       authorization.can('Forecasts', 'edit') ? (
@@ -2004,7 +1996,7 @@ export default function SalesInputPage() {
 
       {/* SAVED FORECASTS */}
 
-      <div id="saved-forecasts" className="scroll-mt-4 rounded-xl border bg-card shadow-sm md:flex md:min-h-0 md:flex-[0_1_auto] md:flex-col">
+      <div id="saved-forecasts" className="scroll-mt-4 rounded-xl border bg-card shadow-sm md:flex md:min-h-0 md:flex-[0_1_auto] md:flex-col md:overflow-hidden">
         <div data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 data-section-title="" className="text-base font-semibold"><HeadingArchive className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
@@ -2014,7 +2006,19 @@ export default function SalesInputPage() {
 
           </div>
 
-        <div data-action-toolbar="" className="flex items-center gap-2">
+        <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
+      {userId && role === 'Admin' && authorization.can('Forecasts', 'add') && authorization.can('Forecasts', 'import') && (
+        <ForecastExcelImport
+          key={userId}
+          userId={userId}
+          isAdmin={role === 'Admin'}
+          scope={{ allRegions: canChooseRegion, regionId: assignedRegionId, subregionId: assignedSubregionId }}
+          blocked={pendingAction !== null}
+          onBusyChange={setImportBusy}
+          onImported={() => loadForecasts()}
+        />
+      )}
+
 {canCreateForecast && (
           <button type="button" data-action-tone="primary" data-action-fill=""
             disabled={loading || initializing || workspaceOwner !== userId}
@@ -2026,13 +2030,27 @@ export default function SalesInputPage() {
             <Plus className="size-4" aria-hidden="true" />Add Forecast
           </button>
       )}
+
 </div>
 </div>
         <div data-filter-toolbar="" className="flex shrink-0 flex-nowrap items-end justify-between gap-4 overflow-x-auto border-b px-6 py-4">
           <div className="app-field-row shrink-0 !flex-nowrap">
             <div data-field-size="compact" className="space-y-1.5">
-              <label htmlFor="saved-forecast-month" className="block text-xs font-medium text-muted-foreground">Month</label>
-              <input id="saved-forecast-month" type="month" value={savedMonthFilter} onChange={event=>setSavedMonthFilter(event.target.value)}
+              <label htmlFor="saved-forecast-from-week" className="block text-xs font-medium text-muted-foreground">From week</label>
+              <input id="saved-forecast-from-week" type="week" value={savedFromWeek} onChange={event => {
+                const value = event.target.value
+                setSavedFromWeek(value)
+                if (value && savedToWeek && value > savedToWeek) setSavedToWeek(value)
+              }}
+                className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div data-field-size="compact" className="space-y-1.5">
+              <label htmlFor="saved-forecast-to-week" className="block text-xs font-medium text-muted-foreground">To week</label>
+              <input id="saved-forecast-to-week" type="week" value={savedToWeek} onChange={event => {
+                const value = event.target.value
+                setSavedToWeek(value)
+                if (value && savedFromWeek && value < savedFromWeek) setSavedFromWeek(value)
+              }}
                 className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <div className="space-y-1.5">
@@ -2107,6 +2125,7 @@ export default function SalesInputPage() {
       {/* SAVED FORECAST TABLE */}
 
         <SalesHierarchyTable rows={savedHierarchyRows()} loading={savedTableLoading || initializing}
+          totalVolume={visibleSavedForecasts.reduce((sum, item) => sum + (Number(item.volume) || 0), 0)}
           label="Saved Forecasts table" emptyMessage="No forecasts match the current filters."
           summary={{records:savedCustomers.reduce((count,customer)=>count+customer.items.length,0),customers:totalSavedCustomers}} />
 

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as XLSX from 'xlsx'
 import * as CFB from 'cfb'
-import { buildWeeklySalesExport, loadWeeklySalesExportReferences } from '../lib/weekly-sales-export.ts'
+import { buildWeeklySalesExport, loadWeeklySalesExportReferences, weeklySalesExportFilename } from '../lib/weekly-sales-export.ts'
 
 const input = {
   sales: [
@@ -15,6 +15,91 @@ const input = {
   products: [{ id: 3, code: '010AP203', name: 'Creep' }, { id: 5, code: 'NEW-1', name: 'New feed' }],
   users: { rsm: 'RSM <One>' },
 }
+
+test('Weekly Sales filenames use role scope and the selected date range', () => {
+  const report = { ...input, fromWeek: '2026-W45', toWeek: '2026-W49', regions: [{ id: 1, name: 'LUZON' }], subregions: [{ id: 2, name: 'SOUTH LUZON' }] }
+  const scope = { userId: 'kam', viewerName: 'ALEX A. MAGUA', regionId: 1, subregionId: 2 }
+  const name = level => weeklySalesExportFilename({ ...report, weeklyScope: { ...scope, level } })
+  assert.equal(name('kam'), 'Alex A. Magua - Weekly Sales (Nov 2 - Dec 6, 2026).xlsx')
+  assert.equal(name('subregion'), 'South Luzon - Weekly Sales (Nov 2 - Dec 6, 2026).xlsx')
+  assert.equal(name('region'), 'Luzon - Weekly Sales (Nov 2 - Dec 6, 2026).xlsx')
+  assert.equal(name('all'), 'All Regions - Weekly Sales (Nov 2 - Dec 6, 2026).xlsx')
+  assert.equal(weeklySalesExportFilename(report), name('region'))
+  const crossing = weeklySalesExportFilename({ ...report, fromWeek: '2026-W53', toWeek: '2027-W01', weeklyScope: { ...scope, level: 'kam' } })
+  assert.equal(crossing, 'Alex A. Magua - Weekly Sales (Dec 28, 2026 - Jan 10, 2027).xlsx')
+})
+
+test('Weekly Sales sheets follow KAM, RSM, ASM and NSM scopes and keep Supervisor unchanged', () => {
+  const report = { ...input, fromWeek: '2026-W47', toWeek: '2026-W47',
+    regions: [...input.regions, { id: 9, name: 'LUZON' }, { id: 99, name: 'EMPTY REGION' }],
+    subregions: [{ id: 2, name: 'ILOILO', region_id: 1 }, { id: 4, name: 'NEGROS', region_id: 1 }, { id: 91, name: 'NORTH LUZON', region_id: 9 }, { id: 5, name: 'EMPTY SUBREGION', region_id: 1 }],
+    users: { a: 'KAM A', b: 'KAM B', c: 'KAM C', rsm: 'RSM One' },
+    sales: [
+      { ...input.sales[0], user_id: 'a', submitted_by: 'rsm' },
+      { ...input.sales[0], user_id: 'b', submitted_by: 'rsm', volume: 5 },
+      { ...input.sales[1], user_id: 'c' },
+      { ...input.sales[0], region_id: 9, subregion_id: 91, user_id: 'other', volume: 99 },
+    ],
+    budgets: [{ year: 2026, month: 11, region_id: 1, subregion_id: 2, customer_id: null, product_id: 3, volume: 80, kam_id: 'a' },
+      { year: 2026, month: 11, region_id: 1, subregion_id: 2, customer_id: null, product_id: 3, volume: 20, kam_id: 'b' }],
+    actuals: [{ actual_date: '2026-11-16', region_id: 1, subregion_id: 2, product_id: 3, volume: 15, kam_id: 'a' },
+      { actual_date: '2026-11-16', region_id: 1, subregion_id: 2, product_id: 3, volume: 10, kam_id: 'b' }],
+  }
+  const build = weeklyScope => XLSX.read(buildWeeklySalesExport({ ...report, weeklyScope }), { type: 'array' })
+  const scope = { userId: 'a', regionId: 1, subregionId: 2, viewerName: 'KAM A' }
+  const kam = build({ ...scope, level: 'kam' })
+  assert.deepEqual(kam.SheetNames, ['KAM A'])
+  assert.equal(kam.Sheets['KAM A'].A3.v, 'KAM:')
+  assert.equal(kam.Sheets['KAM A'].B3.v, 'KAM A')
+  assert.equal(kam.Sheets['KAM A'].A4.v, 'SUBREGION:')
+  assert.equal(kam.Sheets['KAM A'].B4.v, 'ILOILO')
+  assert.equal(kam.Sheets['KAM A'].A5, undefined)
+  const missingAssignments = XLSX.read(buildWeeklySalesExport({ ...report, users: {},
+    weeklyScope: { ...scope, level: 'kam', subregionId: null, viewerName: '' },
+  }), { type: 'array' }).Sheets.KAM
+  assert.equal(missingAssignments.B3.v, 'Unassigned')
+  assert.equal(missingAssignments.B4.v, 'Unassigned')
+  assert.equal(kam.Sheets['KAM A'].D8.v, 12.5)
+  assert.equal(kam.Sheets['KAM A'].C8.v, 80)
+  assert.equal(kam.Sheets['KAM A'].F8.v, 15)
+  const rsm = build({ ...scope, level: 'subregion', userId: 'rsm', viewerName: 'RSM One' })
+  assert.deepEqual(rsm.SheetNames, ['ILOILO', 'KAM A', 'KAM B'])
+  assert.equal(rsm.Sheets.ILOILO.D8.v, 17.5)
+  assert.equal(rsm.Sheets['KAM B'].D8.v, 5)
+  assert.equal(rsm.Sheets['KAM B'].C8.v, 20)
+  assert.equal(rsm.Sheets['KAM B'].F8.v, 10)
+  const allKams = XLSX.read(buildWeeklySalesExport({ ...report,
+    weeklyScope: { ...scope, level: 'subregion' }, kamAssignments: [
+      { id: 'idle', full_name: 'KAM without forecasts', region_id: 1, subregion_id: 2 },
+      { id: 'foreign', full_name: 'Outside assigned area', region_id: 1, subregion_id: 4 },
+    ],
+  }), { type: 'array' })
+  assert.deepEqual(allKams.SheetNames, ['ILOILO', 'KAM A', 'KAM B'])
+  const asm = XLSX.read(buildWeeklySalesExport({ ...report, asmNames: { 1: 'Assigned ASM' }, rsmNames: { '1:2': 'Assigned RSM' },
+    weeklyScope: { ...scope, level: 'region' },
+  }), { type: 'array' })
+  assert.deepEqual(asm.SheetNames, ['VISAYAS', 'ILOILO', 'NEGROS'])
+  assert.equal(asm.Sheets.ILOILO.A3.v, 'RSM:')
+  assert.equal(asm.Sheets.ILOILO.B3.v, 'Assigned RSM')
+  assert.equal(asm.Sheets.ILOILO.A4.v, 'ASM:')
+  assert.equal(asm.Sheets.ILOILO.B4.v, 'Assigned ASM')
+  assert.equal(asm.Sheets.ILOILO.A5.v, 'SUBREGION:')
+  assert.equal(asm.Sheets.ILOILO.B5.v, 'ILOILO')
+  const nsm = build({ ...scope, level: 'all', regionId: null })
+  assert.deepEqual(nsm.SheetNames, ['VISAYAS', 'ILOILO', 'NEGROS', 'LUZON', 'NORTH LUZON'])
+  assert.equal(nsm.Sheets.LUZON.D8.v, 99)
+  for (const weeklyScope of [undefined, ...['kam', 'subregion', 'region', 'all'].map(level => ({ ...scope, level }))]) {
+    assert.throws(() => buildWeeklySalesExport({ ...report, sales: [], weeklyScope }), /No Weekly Sales/)
+    const zero = XLSX.read(buildWeeklySalesExport({ ...report, sales: [{ ...report.sales[0], forecast: 0, volume: 0 }], weeklyScope }), { type: 'array' })
+    assert.ok(zero.SheetNames.length > 0)
+    assert.ok(zero.SheetNames.every(name => !/EMPTY|without forecasts/.test(name)))
+    assert.equal(zero.Sheets[zero.SheetNames[0]].D8.v, 0)
+    assert.equal(zero.Sheets[zero.SheetNames[0]].C8.v, weeklyScope?.level === 'kam' ? 80 : 100)
+    assert.throws(() => buildWeeklySalesExport({ ...report, fromWeek: '2026-W48', toWeek: '2026-W48', weeklyScope }), /No Weekly Sales/)
+  }
+  assert.deepEqual(build(undefined).SheetNames, ['VISAYAS', 'ILOILO', 'NEGROS', 'LUZON', 'NORTH LUZON'])
+  assert.throws(() => build({ ...scope, level: 'subregion', subregionId: null }), /assigned/)
+})
 
 test('Weekly Sales and Approvals forecast columns use 50kg volume instead of quantity', () => {
   const sales = [
@@ -320,8 +405,8 @@ test('selected W46–W50 includes all five weeks and only their records', () => 
   assert.equal(sheet.I8.v, 19.5)
 })
 
-test('one selected week has exactly one week column; empty ranges still export zeros', () => {
-  const workbook = XLSX.read(buildWeeklySalesExport({ ...input, sales: [], fromWeek: '2026-W46', toWeek: '2026-W46', asmNames: { 1: 'Assigned ASM' } }), { type: 'array' })
+test('one selected week has exactly one week column and retains zero-volume records', () => {
+  const workbook = XLSX.read(buildWeeklySalesExport({ ...input, sales: [{ ...input.sales[0], week: 46, forecast: 0, volume: 0 }], fromWeek: '2026-W46', toWeek: '2026-W46', asmNames: { 1: 'Assigned ASM' } }), { type: 'array' })
   const sheet = workbook.Sheets.VISAYAS
   assert.equal(sheet.B3.v, 'Assigned ASM')
   assert.match(sheet.D7.v, /Nov 9 -\s+Nov 15/)
@@ -351,7 +436,7 @@ test('every sheet has the logo, bold merged title and merged grand total label',
   const xml = (path) => new TextDecoder().decode(part(path))
   for (const [i, name] of workbook.SheetNames.entries()) {
     const sheet = workbook.Sheets[name]
-    assert.equal(sheet.B1.v, 'WEEKLY FORECAST')
+    assert.equal(sheet.B1.v, 'WEEKLY SALES')
     assert.equal(sheet.A8.v, 'GRAND TOTAL')
     assert.deepEqual(sheet['!merges'].map(XLSX.utils.encode_range), ['A1:A2', 'B1:B2', 'A6:A7', 'B6:B7', 'D6:I6', 'J6:O6', 'A8:B8'])
     assert.match(xml(`xl/worksheets/sheet${i + 1}.xml`), /<drawing r:id="rId1"\/>/)

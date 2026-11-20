@@ -20,12 +20,12 @@ export async function GET() {
   if ((!allRegions && !viewer.region_id) || (scopedSubregion && !viewer.subregion_id)) return NextResponse.json({ error: 'Your account needs an assigned region/subregion.' }, { status: 403 })
   const users = []
   for (let from = 0; ; from += 500) {
-    let query = supabaseAdmin.from('users').select('id,full_name,email,region_id,subregion_id').eq('position','KAM').eq('is_active',true).order('id').range(from, from + 499)
+    let query = supabaseAdmin.from('users').select('id,full_name,email,region_id,subregion_id,position').in('position',['KAM','RSM','ASM']).eq('is_active',true).order('id').range(from, from + 499)
     if (!allRegions) query = query.eq('region_id', viewer.region_id)
-    if (scopedSubregion) query = query.eq('subregion_id', viewer.subregion_id)
-    if (viewer.position === 'KAM') query = query.eq('id', user.id)
+    if (scopedSubregion) query = query.or(`subregion_id.eq.${viewer.subregion_id},position.eq.ASM`)
+    if (viewer.position === 'KAM') query = query.or(`id.eq.${user.id},position.in.(RSM,ASM)`)
     const { data, error } = await query
-    if (error) return NextResponse.json({ error: 'Unable to load KAM assignments.' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Unable to load salesperson assignments.' }, { status: 500 })
     users.push(...(data ?? []))
     if (!data || data.length < 500) break
   }
