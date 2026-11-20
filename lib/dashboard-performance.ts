@@ -8,8 +8,8 @@ type Labels = { regions: Map<number, string>; subregions: Map<number, string>; c
 export function dashboardLevel(profile: { role: string; position: string | null }): DashboardLevel {
   const position = (profile.position ?? '').trim().toUpperCase()
   if (profile.role === 'Admin' || position === 'NSM') return 'company'
-  if (position === 'ASM') return 'subregion'
-  if (['RSM', 'SV', 'SUPERVISOR'].includes(position)) return 'kam'
+  if (['ASM', 'SV', 'SUPERVISOR'].includes(position)) return 'subregion'
+  if (position === 'RSM') return 'kam'
   if (position === 'KAM' || profile.role === 'User') return 'customer'
   return 'company'
 }

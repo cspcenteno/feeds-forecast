@@ -25,6 +25,10 @@ test('RSM returned corrections retain ownership, scope and the two-stage approva
       select set_config('test.viewer','rsm',false),set_config('test.allowed','yes',false),set_config('test.open','yes',false);
     `)
     await db.exec(await readFile(new URL('../supabase/migrations/202611120001_rsm_returned_forecast_revision.sql', import.meta.url), 'utf8'))
+    await db.exec('create view public.forecasts as select * from public.sales_forecasts')
+    const bulkMigration = await readFile(new URL('../supabase/migrations/202611180005_rsm_bulk_forecast_submission.sql', import.meta.url), 'utf8')
+    await db.exec(bulkMigration)
+    await db.exec(bulkMigration)
     async function reset() {
       await db.exec(`truncate sales_forecasts;
         select set_config('test.viewer','rsm',false),set_config('test.allowed','yes',false),set_config('test.open','yes',false);
@@ -112,6 +116,36 @@ test('RSM returned corrections retain ownership, scope and the two-stage approva
       assert.equal(Number((await db.query('select forecast from sales_forecasts where id=1')).rows[0].forecast),10)
       assert.equal((await db.query('select count(*)::int total from sales_forecasts')).rows[0].total,2)
     })
+    await t.test('KAM and Submit All batches span customers, weeks and owners atomically', async () => {
+      const bulk = (entries) => db.query('select submit_rsm_returned_forecasts($1::jsonb) changed', [JSON.stringify(entries)])
+      const drafts = async () => (await db.query('select * from sales_forecasts order by id')).rows.map(row => ({
+        id:Number(row.id), product_id:Number(row.product_id), forecast:Number(row.forecast),
+        original:{ product_id:Number(row.product_id), forecast:Number(row.forecast), status:row.status },
+      }))
+      await reset()
+      await db.exec("update sales_forecasts set status='Draft'; update sales_forecasts set customer_id=200,week=47,user_id='kam2',submitted_by='kam2' where id=2")
+      assert.equal((await bulk(await drafts())).rows[0].changed,2)
+      const submitted = (await db.query('select status,user_id,submitted_by from sales_forecasts order by id')).rows
+      assert.deepEqual(submitted, [
+        {status:'Pending',user_id:'kam',submitted_by:'kam'},
+        {status:'Pending',user_id:'kam2',submitted_by:'kam2'},
+      ])
+      await reset()
+      await db.exec("update sales_forecasts set status='Draft'; update sales_forecasts set customer_id=200,subregion_id=12 where id=2")
+      await assert.rejects(bulk(await drafts()),/assigned region and subregion/)
+      assert.equal((await db.query('select status from sales_forecasts where id=1')).rows[0].status,'Draft')
+      await reset()
+      await assert.rejects(bulk(await drafts()),/revised returned drafts/)
+      await db.exec("update sales_forecasts set status='Draft'")
+      const records = await drafts()
+      await assert.rejects(bulk([records[0],records[0]]),/Duplicate/)
+      await assert.rejects(bulk([records[0],{...records[1],id:999}]),/revised returned drafts/)
+      await db.exec("select set_config('test.open','no',false)")
+      await assert.rejects(bulk(records),/locked/)
+      await db.exec("select set_config('test.open','yes',false); select set_config('test.allowed','no',false)")
+      await assert.rejects(bulk(records),/permissions/)
+      assert.equal((await db.query("select count(*)::int total from sales_forecasts where status='Draft'")).rows[0].total,2)
+    })
     await t.test('Admin actions apply across owners and areas while preserving ownership and status guards', async () => {
       await db.exec("insert into users values ('admin','Admin',null,null,null,true)")
       await db.exec(await readFile(new URL('../supabase/migrations/202611120006_admin_saved_forecast_actions.sql',import.meta.url),'utf8'))
@@ -152,6 +186,42 @@ test('RSM returned corrections retain ownership, scope and the two-stage approva
       await assert.rejects(db.query('select delete_admin_saved_forecasts(array[1,999]::bigint[])'),/unavailable/)
       assert.equal((await db.query('select count(*)::int count from sales_forecasts')).rows[0].count,2)
       assert.equal((await db.query('select delete_admin_saved_forecasts(array[1,2]::bigint[]) changed')).rows[0].changed,2)
+    })
+    await t.test('Admin KAM and Submit All batches preserve owners and roll back failures across groups', async () => {
+      const migration = await readFile(new URL('../supabase/migrations/202611180006_admin_bulk_forecast_submission.sql',import.meta.url),'utf8')
+      await db.exec(migration)
+      await db.exec(migration)
+      const setup = async () => {
+        await reset()
+        await db.exec(`select set_config('test.viewer','admin',false);
+          update sales_forecasts set status='Draft',returned_at=null;
+          update sales_forecasts set customer_id=200,week=47,user_id='kam2',region_id=2,subregion_id=22 where id=2`)
+        return (await db.query('select * from sales_forecasts order by id')).rows.map(row => ({
+          id:Number(row.id),product_id:Number(row.product_id),forecast:Number(row.forecast),
+          original:{product_id:Number(row.product_id),forecast:Number(row.forecast),status:row.status},
+        }))
+      }
+      const bulk = records => db.query('select submit_admin_saved_forecasts($1::jsonb) changed',[JSON.stringify(records)])
+      assert.equal((await bulk(await setup())).rows[0].changed,2)
+      assert.deepEqual((await db.query('select user_id,status from sales_forecasts order by id')).rows,
+        [{user_id:'kam',status:'Pending'},{user_id:'kam2',status:'Pending'}])
+      let records = await setup()
+      records[1].original.forecast=999
+      await assert.rejects(bulk(records),/changed/)
+      assert.equal((await db.query("select count(*)::int count from sales_forecasts where status='Draft'")).rows[0].count,2)
+      records=await setup()
+      await assert.rejects(bulk([records[0],records[0]]),/Duplicate/)
+      await assert.rejects(bulk([records[0],{...records[1],id:999}]),/Only drafts/)
+      await db.exec("select set_config('test.allowed','no',false)")
+      await assert.rejects(bulk(records),/permissions/)
+      records=await setup()
+      await db.exec("select set_config('test.viewer','rsm',false)")
+      await assert.rejects(bulk(records),/active Admin/)
+      records=await setup()
+      await db.exec(`create or replace function forecast_week_is_open(int,int) returns boolean
+        language sql stable as $$ select $2 <> 47 $$`)
+      await assert.rejects(bulk(records),/locked/)
+      assert.equal((await db.query("select count(*)::int count from sales_forecasts where status='Draft'")).rows[0].count,2)
     })
   } finally { await db.close() }
 })

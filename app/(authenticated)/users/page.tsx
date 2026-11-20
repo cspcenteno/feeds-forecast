@@ -1042,7 +1042,7 @@ export default function UsersPage() {
       {isAdmin && (selectedUser || authorization.can('Users', 'add')) && (
         <RecordDialog open={userDialogOpen} onClose={() => { clearSelection(); resetCreateUserForm() }} title={selectedUser ? 'Edit User' : 'Create User'} busy={formBusy} wide>
         <div id="user-editor" className="min-w-0">
-          <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div data-section-header="" data-aligned-toolbar="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 data-section-title="" className="font-semibold"><HeadingUserRoundCog className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{selectedUser ? 'Edit User' : 'Create User'}</h2>
 
@@ -1050,7 +1050,7 @@ export default function UsersPage() {
 
           </div>
 
-          <div className="app-field-row p-6">
+          <div data-filter-toolbar="" className="app-field-row p-6">
             <div data-field-size="wide" className="space-y-2">
               <label htmlFor="newFullName" className="text-sm font-medium">
                 Full Name <span className="text-destructive">*</span>
@@ -1415,7 +1415,7 @@ export default function UsersPage() {
 
       {/* User Accounts */}
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div data-section-header="" data-aligned-toolbar="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 data-section-title="" className="font-semibold"><HeadingUsers className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />User Accounts</h2>
 

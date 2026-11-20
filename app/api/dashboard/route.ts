@@ -6,8 +6,10 @@ import { actualInDashboardScope, mergeRegionalActuals } from '@/lib/dashboard-co
 import { buildDashboardPerformance, dashboardLevel } from '@/lib/dashboard-performance'
 import { buildKamVolumeScope } from '@/lib/kam-volume-scope'
 import { asmForRegion, type AsmUser } from '@/lib/asm-reporting'
+import { loadMonthlyReferences } from '@/lib/sales-monthly-references'
+import { dashboardMonthlyReferences, dashboardReferenceRowKey, type DashboardReferenceKey } from '@/lib/dashboard-monthly-references'
 
-type Detail = { region_id: number | null; subregion_id: number | null; customer_id: number | null; product_id: number | null; volume: number }
+type Detail = Omit<DashboardReferenceKey, 'id'> & { volume: number }
 type Dashboard = {
   scope: 'global' | 'asm' | 'rsm' | 'kam'
   regions: { region: string; budget: number; forecast: number }[]
@@ -166,7 +168,21 @@ export async function GET(request: Request) {
       if (error) throw new Error('Unable to load ASM assignments.')
       asmUsers = data ?? []
     }
-    const details = dashboard.details.map((row) => ({ ...row, ...(showAsm ? asmForRegion(row.region_id,asmUsers) : {}), region: row.region_id === null ? null : names.get(row.region_id) ?? null }))
+    const anchors: DashboardReferenceKey[] = []
+    if (dashboard.details.length) {
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await client.rpc('get_dashboard_monthly_reference_keys', { p_month: first })
+          .order('id').range(offset, offset + 499).abortSignal(AbortSignal.timeout(45000))
+        if (error) throw new Error('Unable to load Dashboard monthly reference scopes. ' + error.message)
+        anchors.push(...(data ?? []) as DashboardReferenceKey[])
+        if (!data || data.length < 500) break
+      }
+    }
+    const references = await loadMonthlyReferences(client, anchors.map((row) => row.id), 'dashboard')
+    const referencesByRow = new Map(anchors.map((row) => [dashboardReferenceRowKey(row), dashboardMonthlyReferences(row, references)]))
+    const details = dashboard.details.map((row) => ({ ...row,
+      monthly_references: referencesByRow.get(dashboardReferenceRowKey(row)),
+      ...(showAsm ? asmForRegion(row.region_id,asmUsers) : {}), region: row.region_id === null ? null : names.get(row.region_id) ?? null }))
     let assignedSubregion: string | null = null
     if (dashboard.scope === 'kam' && profile.subregion_id !== null) {
       const { data, error } = await supabaseAdmin.from('subregions').select('name').eq('id',profile.subregion_id).maybeSingle()

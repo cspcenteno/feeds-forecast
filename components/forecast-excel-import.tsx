@@ -290,25 +290,25 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
 
   return (
     <section className="rounded-xl border bg-card shadow-sm">
-      <div data-section-header="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+      <div data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
         <div>
           <h2 data-section-title="" className="text-base font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Forecasts Excel Import</h2>
 
         </div>
         <div data-action-toolbar="" className="flex flex-wrap gap-2">
-          <input ref={input} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => {
+<input ref={input} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => {
             const file = event.target.files?.[0]
             event.target.value = ''
             if (file) void upload(file)
           }} />
-          <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
-          <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
-          <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
-          <button data-slot="show-hide-button" data-action-tone="neutral" type="button" aria-expanded={show} onClick={() => {
+<button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
+<button data-slot="show-hide-button" data-action-tone="neutral" type="button" aria-expanded={show} onClick={() => {
             setShow(!show)
             if (!show && !disabled) void run(async () => { await refreshPreview() })
           }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
-        </div>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
+</div>
       </div>
 
       {show && <div className="space-y-4 p-4">

@@ -3,7 +3,7 @@ const monthlySalesColumns = [
   ['Volume', '(50kg)'],
   ['Budget', '(Vol.)'],
   ['Actual', '(Cum. Vol.)'],
-  ['Actual', '(Prev. Mo. Vol.)'],
+  ['Actual', '(Prev. Mo.)'],
   ['Forecast', '(Cum. Vol.)'],
 ] as const
 

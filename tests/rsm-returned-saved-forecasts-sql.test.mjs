@@ -47,5 +47,20 @@ test('saved forecasts expose only owned rows or returned KAM rows in the RSM are
     assert.deepEqual(await ids('admin'),[])
     await db.exec("select set_config('test.allowed','yes',false); update users set is_active=false where id='rsm'")
     assert.deepEqual(await ids('rsm'),[])
+    await db.exec(`select set_config('test.allowed','yes',false);
+      update users set is_active=true where id in ('rsm','admin');
+      alter table sales_forecasts rename to forecasts;
+      insert into forecasts values (10,'kam2',1,11,'Endorsed',null),(11,'rsm',2,22,'Draft',null)`)
+    const expandedScope = await readFile(new URL('../supabase/migrations/202611190002_rsm_subregion_saved_forecasts.sql',import.meta.url),'utf8')
+    await db.exec(expandedScope)
+    await db.exec(expandedScope)
+    assert.deepEqual(await ids('rsm'),[1,2,5,6,7,8,9,10])
+    assert.deepEqual(await ids('missing'),[])
+    assert.deepEqual(await ids('kam2'),[2,10])
+    assert.deepEqual(await ids('admin'),[1,2,3,4,5,6,7,8,9,10,11])
+    await db.exec("select set_config('test.allowed','no',false)")
+    assert.deepEqual(await ids('rsm'),[])
+    await db.exec("select set_config('test.allowed','yes',false);update users set is_active=false where id='rsm'")
+    assert.deepEqual(await ids('rsm'),[])
   } finally { await db.close() }
 })

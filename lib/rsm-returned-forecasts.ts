@@ -24,3 +24,11 @@ export function rsmRevisionPayload(items: RsmReturnedForecast[], edits: { id: nu
     return { ...edit, original: { product_id: original.product_id, forecast: original.forecast, status: original.status } }
   })
 }
+
+export function canSubmitRsmForecast(item: RsmReturnedForecast, actor: {
+  role: string; position: string; regionId: number | null; subregionId: number | null
+  userId: string; canEdit: boolean
+}) {
+  return actor.canEdit && item.user_id !== actor.userId && item.status === 'Draft'
+    && canReviseRsmForecast(item, actor)
+}

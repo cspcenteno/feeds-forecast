@@ -31,5 +31,9 @@ test('KAM names include only owners of accessible saved forecasts', async () => 
     assert.deepEqual((await db.query('select * from get_saved_forecast_owners()')).rows,[{ id:id(3),full_name:'KAM B' }])
     await db.exec(`select set_config('test.viewer','${id(1)}',false);update users set is_active=false where id='${id(1)}'`)
     assert.deepEqual((await db.query('select * from get_saved_forecast_owners()')).rows,[])
+    await db.exec(`update users set is_active=true where id='${id(1)}'; alter table sales_forecasts rename to forecasts`)
+    await db.exec(await readFile(new URL('../supabase/migrations/202611190002_rsm_subregion_saved_forecasts.sql',import.meta.url),'utf8'))
+    assert.deepEqual((await db.query('select * from get_saved_forecast_owners() order by full_name')).rows,
+      [{ id:id(2),full_name:'KAM A' },{ id:id(4),full_name:'KAM C' }])
   } finally { await db.close() }
 })

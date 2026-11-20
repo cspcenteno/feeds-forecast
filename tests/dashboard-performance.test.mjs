@@ -6,8 +6,8 @@ test('performance granularity follows the sales position', () => {
   for (const role of ['Manager', 'Superuser']) {
     assert.equal(dashboardLevel({ role, position: 'ASM' }), 'subregion')
     assert.equal(dashboardLevel({ role, position: 'RSM' }), 'kam')
-    assert.equal(dashboardLevel({ role, position: 'Supervisor' }), 'kam')
-    assert.equal(dashboardLevel({ role, position: ' SV ' }), 'kam')
+    assert.equal(dashboardLevel({ role, position: 'Supervisor' }), 'subregion')
+    assert.equal(dashboardLevel({ role, position: ' SV ' }), 'subregion')
   }
   assert.equal(dashboardLevel({ role: 'User', position: 'KAM' }), 'customer')
   assert.equal(dashboardLevel({ role: 'User', position: null }), 'customer')

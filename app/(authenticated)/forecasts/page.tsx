@@ -1,7 +1,9 @@
 'use client'
 
+import { SalesHierarchyTable, type SalesHierarchyRow } from '@/components/ui/sales-hierarchy-table'
+import { loadMonthlyReferences, monthlyReferenceKey, type MonthlyReference } from '@/lib/sales-monthly-references'
+
 import { weeklyBudget } from '@/lib/weekly-budget'
-import { actionGroupCount } from '@/lib/action-group-count'
 import { referencePeriod } from '@/lib/reference-period'
 import { readForecastWorkspace, writeForecastWorkspace } from '@/lib/forecast-workspace'
 import { saveForecastDrafts } from '@/lib/save-forecast-drafts'
@@ -26,25 +28,23 @@ import { forecastSubmissionConfirmation } from '@/lib/forecast-submission-confir
 import { SelectionField } from '@/components/ui/selection-field'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { TableActionButton } from '@/components/ui/table-action-button'
-import { Table } from '@/components/ui/table'
 import { ForecastEntryTable } from '@/components/forecast-entry-table'
 import { ForecastReturnNotice } from '@/components/forecast-return-notice'
-import { canReviseRsmForecast, rsmRevisionPayload } from '@/lib/rsm-returned-forecasts'
+import { canReviseRsmForecast, canSubmitRsmForecast, rsmRevisionPayload } from '@/lib/rsm-returned-forecasts'
 import { savedCustomerGroupKey, savedKamGroupKey } from '@/lib/saved-forecast-kam-groups'
 import { RecordDialog } from '@/components/ui/record-dialog'
 import { useForecastAttention } from '@/lib/use-forecast-attention'
 import { MonthlySalesHeaders } from '@/components/ui/monthly-sales-columns'
-import { LoadingSpinner, TableLoadingRow } from '@/components/ui/loading-spinner'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { ForecastExcelImport } from '@/components/forecast-excel-import'
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
   Save,
   Send,
-  ChevronDown,
-  ChevronRight,
   RotateCcw,
+  RefreshCw,
 } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { loadActualRecords, type ActualRecord } from '@/lib/actual-records'
@@ -175,7 +175,6 @@ export default function SalesInputPage() {
   const [selectedActualsLoading, setSelectedActualsLoading] = useState(false)
   const [selectedActualsError, setSelectedActualsError] = useState(false)
   const [forecastLoadError, setForecastLoadError] = useState(false)
-  const [savedActualRecords, setSavedActualRecords] = useState<ActualRecord[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [products, setProducts] = useState<Product[]>([])
@@ -223,6 +222,10 @@ export default function SalesInputPage() {
   const [, setError] = usePopupError()
   const setMessage = useStatusNotification()
   const [savedStatusFilter, setSavedStatusFilter] = useState('')
+  const [savedMonthFilter, setSavedMonthFilter] = useState('')
+  const [savedRegionFilter, setSavedRegionFilter] = useState('all')
+  const canFilterAllSavedRegions = role === 'Admin' || salesPosition.trim().toUpperCase() === 'NSM'
+  const effectiveSavedRegion = canFilterAllSavedRegions ? savedRegionFilter : String(assignedRegionId ?? '')
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('status') === 'Returned') {
       void Promise.resolve().then(() => setSavedStatusFilter('Rejected'))
@@ -236,6 +239,7 @@ export default function SalesInputPage() {
   const [savedActualsLoading, setSavedActualsLoading] = useState(true)
   const [savedActualsError, setSavedActualsError] = useState(false)
   const savedActualRequest = useRef(0)
+  const [savedMonthlyReferences, setSavedMonthlyReferences] = useState<Map<string, MonthlyReference>>(new Map())
   const [workspaceOwner, setWorkspaceOwner] = useState('')
   const workspaceStorageFailed = useRef(false)
 
@@ -660,33 +664,11 @@ export default function SalesInputPage() {
     const request = ++savedActualRequest.current
     setSavedActualsLoading(true)
     setSavedActualsError(false)
+    setSavedMonthlyReferences(new Map())
     try {
-      // Load actual records for the years represented in the saved forecasts
-      // and the corresponding previous years. These are lookup-only values.
-      const lookupYears = Array.from(
-        new Set(
-          allForecasts.flatMap((item) => [item.year, item.year - 1])
-        )
-      )
-
-      if (lookupYears.length === 0) {
-        setSavedActualRecords([])
-        return
-      }
-
-      const { data, error } = await loadActualRecords(supabase, lookupYears, {
-        regionIds: [...new Set(allForecasts.flatMap((item) => item.region_id == null ? [] : [item.region_id]))],
-        customerIds: [...new Set(allForecasts.flatMap((item) => item.customer_id == null ? [] : [item.customer_id]))],
-      }, 'Forecasts')
+      const references = await loadMonthlyReferences(supabase, allForecasts.map((item) => item.id), 'saved')
       if (request !== savedActualRequest.current) return
-      if (error) {
-        setSavedActualsError(true)
-        setSavedActualRecords([])
-        setSavedError('Unable to load saved forecast actuals. ' + error.message)
-        return
-      }
-
-      setSavedActualRecords(data ?? [])
+      setSavedMonthlyReferences(references)
 
     } catch (error) {
       if (request !== savedActualRequest.current) return
@@ -955,74 +937,17 @@ export default function SalesInputPage() {
       .reduce((total, item) => total + Number(item.volume || 0), 0)
   }
 
-  // Saved forecast reference values are calculated from lookup records.
-
-  function getSavedActualMonthly(
-    item: SalesForecast,
-    previous = false,
-    customerLevel = false
-  ) {
-    if (
-      (!customerLevel && !item.product_id) ||
-      !item.customer_id ||
-      !item.region_id
-    ) {
-      return 0
-    }
-
-    const period = referencePeriod(item.year, getMonthForWeek(item.year, item.week), previous)
-
-    return savedActualRecords
-      .filter(
-        (actual) =>
-          actual.customer_id === item.customer_id &&
-          actual.region_id === item.region_id &&
-          (customerLevel || actual.product_id === item.product_id) &&
-          actual.year === period.year &&
-          actual.month === period.month
-      )
-      .reduce(
-        (total, actual) => total + (Number(actual.volume) || 0),
-        0
-      )
+  function getSavedActualMonthly(item: SalesForecast, previous = false, customerLevel = false) {
+    const reference = savedMonthlyReferences.get(monthlyReferenceKey(item.id, customerLevel ? 'customer' : 'product'))
+    return Number((previous ? reference?.previous_actual_volume : reference?.actual_volume) ?? NaN)
   }
 
   function getSavedMonthlyBudget(item: SalesForecast) {
-    return getMonthlyBudget(
-      item.year,
-      getMonthForWeek(item.year, item.week),
-      item.region_id,
-      item.subregion_id,
-      item.customer_id,
-      item.product_id
-    )
+    return Number(savedMonthlyReferences.get(monthlyReferenceKey(item.id, 'product'))?.budget_volume ?? NaN)
   }
 
   function getSavedForecastMonthly(item: SalesForecast, customerLevel = false) {
-    if (
-      (!customerLevel && !item.product_id) ||
-      !item.customer_id ||
-      !item.region_id
-    ) {
-      return 0
-    }
-
-    const targetMonth = getMonthForWeek(item.year, item.week)
-
-    return forecasts
-      .filter(
-        (forecast) =>
-          forecast.status === 'Approved' &&
-          forecast.year === item.year &&
-          forecast.region_id === item.region_id &&
-          forecast.customer_id === item.customer_id &&
-          (customerLevel || forecast.product_id === item.product_id) &&
-          getMonthForWeek(forecast.year, forecast.week) === targetMonth
-      )
-      .reduce(
-        (total, forecast) => total + (Number(forecast.volume) || 0),
-        0
-      )
+    return Number(savedMonthlyReferences.get(monthlyReferenceKey(item.id, customerLevel ? 'customer' : 'product'))?.forecast_volume ?? NaN)
   }
 
   const totalForecast = rows.reduce(
@@ -1225,7 +1150,6 @@ export default function SalesInputPage() {
 
     const revised = rows.some((row) => row.status === 'Rejected')
     setMessage(editingSharedForecast ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts for RSM review.' : revised ? 'Changes saved as Draft. Use Submit in Saved Forecasts to send the corrected forecasts back to your RSM.' : 'Forecasts saved successfully.')
-    if (revised) setSavedStatusFilter('Draft')
     setSelectedCustomerId('')
 
     setRows([
@@ -1292,13 +1216,18 @@ export default function SalesInputPage() {
   }
 
   function canSubmitItem(item: SalesForecast) {
+    if (isAdmin) return authorization.can('Forecasts', 'edit') && item.status === 'Draft'
+    if (isRsmSavedViewer) return canSubmitRsmForecast(item, {
+      role, position: salesPosition, regionId: assignedRegionId, subregionId: assignedSubregionId,
+      userId, canEdit: authorization.can('Forecasts', 'edit'),
+    })
     return item.status === 'Draft' && item.user_id === userId &&
       (!customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
       item.region_id !== null &&
       (isAdmin || (item.region_id === assignedRegionId && item.subregion_id === assignedSubregionId))
   }
 
-  async function handleSubmitCustomer(items: SalesForecast[]) {
+  async function handleSubmitCustomer(items: SalesForecast[], scopeLabel?: string) {
     let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
     try {
     const rsmResubmission = authorization.can('Forecasts', 'edit') && items.length > 0 && items.every((item) =>
@@ -1319,15 +1248,14 @@ export default function SalesInputPage() {
         return
       }
     }
-    if (!(actionConfirmation = await confirmAction(forecastSubmissionConfirmation(eligibleItems, getCustomerName(eligibleItems[0].customer_id), getCustomerName, getProductName)))) return
+    if (!(actionConfirmation = await confirmAction(forecastSubmissionConfirmation(eligibleItems, scopeLabel ?? getCustomerName(eligibleItems[0].customer_id), getCustomerName, getProductName)))) return
     setPendingAction('submit')
     setSavedError('')
     setSavedMessage('')
-    const { data, error } = rsmResubmission || adminSubmission ? await supabase.rpc(adminSubmission ? 'revise_admin_saved_forecasts' : 'revise_rsm_returned_forecasts', {
+    const { data, error } = rsmResubmission || adminSubmission ? await supabase.rpc(adminSubmission ? 'submit_admin_saved_forecasts' : 'submit_rsm_returned_forecasts', {
       p_records: rsmRevisionPayload(eligibleItems, eligibleItems.map((item) => ({
         id: item.id, product_id: Number(item.product_id), forecast: Number(item.forecast),
       }))),
-      p_submit: true,
     }) : await supabase.rpc('transition_forecast_review', {
       p_ids: eligibleItems.map((item) => item.id),
       p_action: 'submit',
@@ -1343,7 +1271,7 @@ export default function SalesInputPage() {
     } finally { actionConfirmation?.finish() }
   }
 
-  async function handleDeleteMany(items: SalesForecast[], scope: 'customer' | 'product' = 'customer') {
+  async function handleDeleteMany(items: SalesForecast[], scope: 'customer' | 'product' | 'kam' = 'customer', scopeLabel?: string) {
     let actionConfirmation: Awaited<ReturnType<typeof confirmAction>> = null
     try {
     if (!authorization.can('Forecasts', 'delete') || items.length === 0) return
@@ -1357,7 +1285,10 @@ export default function SalesInputPage() {
         return
       }
     }
-    const confirmed = (actionConfirmation = await confirmAction({ message: `Remove ${items.length} forecast record(s) ${scope === 'customer' ? 'for this customer' : 'for this product'}?`, details: confirmationRecordDetails(items, 'Total volume (50kg)') }))
+    const confirmed = (actionConfirmation = await confirmAction({
+      message: `Remove ${items.length} draft forecast record(s) ${scope === 'kam' ? 'for this KAM and week' : scope === 'customer' ? 'for this customer' : 'for this product'}?`,
+      details: [...(scope === 'kam' ? [{ label: 'KAM', value: scopeLabel ?? 'Selected KAM' }] : []), ...confirmationRecordDetails(items, 'Total volume (50kg)')],
+    }))
     if (!confirmed) return
     const deletion = supabase.from('forecasts').delete().in('id', items.map((item) => item.id))
     if (role !== 'Admin') deletion.eq('user_id', userId)
@@ -1380,7 +1311,7 @@ export default function SalesInputPage() {
     setSavedError('')
     setSavedMessage('')
 
-    const draftForecasts = forecasts.filter(canSubmitItem)
+    const draftForecasts = visibleSavedForecasts.filter(canSubmitItem)
 
     if (draftForecasts.length === 0) {
       setSavedError('There are no eligible forecasts to submit.')
@@ -1427,14 +1358,18 @@ export default function SalesInputPage() {
       return
     }
 
-    const confirmed = (actionConfirmation = await confirmAction(forecastSubmissionConfirmation(draftForecasts, 'All Draft Forecasts', getCustomerName, getProductName)))
+    const confirmed = (actionConfirmation = await confirmAction(forecastSubmissionConfirmation(draftForecasts, 'All Filtered Draft Forecasts', getCustomerName, getProductName)))
 
     if (!confirmed) {
       setPendingAction(null)
       return
     }
 
-    const { data, error: submitError } = await supabase.rpc('transition_forecast_review', {
+    const { data, error: submitError } = isRsmSavedViewer || isAdmin ? await supabase.rpc(isAdmin ? 'submit_admin_saved_forecasts' : 'submit_rsm_returned_forecasts', {
+      p_records: rsmRevisionPayload(draftForecasts, draftForecasts.map((item) => ({
+        id: item.id, product_id: Number(item.product_id), forecast: Number(item.forecast),
+      }))),
+    }) : await supabase.rpc('transition_forecast_review', {
       p_ids: draftForecasts.map((item) => item.id),
       p_action: 'submit',
     })
@@ -1456,8 +1391,10 @@ export default function SalesInputPage() {
 
   const visibleSavedForecasts = useMemo(() => forecasts.filter((item) =>
     (isAdmin || !customerAssignmentRestricted || customers.some((customer) => customer.id === item.customer_id)) &&
-    savedForecastMatchesStatus(item, savedStatusFilter)
-  ), [forecasts, savedStatusFilter, customerAssignmentRestricted, customers, isAdmin])
+    savedForecastMatchesStatus(item, savedStatusFilter) &&
+    (effectiveSavedRegion === 'all' || (effectiveSavedRegion !== '' && item.region_id === Number(effectiveSavedRegion))) &&
+    (!savedMonthFilter || (item.year === Number(savedMonthFilter.slice(0, 4)) && getMonthForWeek(item.year, item.week) === Number(savedMonthFilter.slice(5, 7))))
+  ), [forecasts, savedStatusFilter, savedMonthFilter, effectiveSavedRegion, customerAssignmentRestricted, customers, isAdmin])
 
   // Group by week and customer, keeping each review status separate.
   const savedWeekGroups = useMemo<SavedWeekGroup[]>(() => {
@@ -1560,7 +1497,7 @@ export default function SalesInputPage() {
         }
       ),
     }))
-  }, [visibleSavedForecasts, forecasts, budgets, savedActualRecords, groupSavedByKam, savedOwnerNames])
+  }, [visibleSavedForecasts, forecasts, budgets, savedMonthlyReferences, groupSavedByKam, savedOwnerNames])
 
   function toggleCustomer(key: string) {
     setExpandedCustomers((current) => {
@@ -1597,11 +1534,10 @@ export default function SalesInputPage() {
   const canSubmitForecasts =
     authorization.can('Forecasts', 'edit') &&
     (isAdmin || (
-      (salesPosition === 'KAM' || salesPosition === 'Supervisor') &&
+      (salesPosition === 'KAM' || salesPosition === 'Supervisor' || isRsmSavedViewer) &&
       assignedRegionId !== null && assignedSubregionId !== null
     ))
-  const eligibleSubmissionCount = forecasts.filter(canSubmitItem).length
-  const eligibleSubmissionCustomers = actionGroupCount(forecasts.filter(canSubmitItem), 'customer')
+  const eligibleSubmissionCount = visibleSavedForecasts.filter(canSubmitItem).length
 
   const savedCustomers = savedWeekGroups.flatMap((group) => group.customers)
   const totalSavedCustomers = new Set(savedCustomers.map((customer) => customer.customer_id)).size
@@ -1635,10 +1571,68 @@ export default function SalesInputPage() {
     })
   }
 
-  const canShowActions =
-    authorization.can('Forecasts', 'edit') ||
-    authorization.can('Forecasts', 'delete')
-  const savedColumnCount = 9 + Number(canShowActions) + Number(groupSavedByKam)
+
+
+  function savedHierarchyRows(): SalesHierarchyRow[] {
+    const result: SalesHierarchyRow[]=[]
+    const statuses=(items:SalesForecast[])=>[...new Set(items.map(item=>item.status))].map(status=><StatusBadge key={status} status={savedStatusLabels[status as keyof typeof savedStatusLabels]} compact />)
+    const area=(items:SalesForecast[])=>[...new Set(items.map(item=>subregions.find(value=>value.id===item.subregion_id)?.name??regions.find(value=>value.id===item.region_id)?.name??'—'))].join(', ')
+    const groupValues=(items:SalesForecast[],level:'kam'|'customer')=>{
+      const scopes=[...new Map(items.map(item=>[JSON.stringify([item.region_id,item.subregion_id]),item])).values()]
+      return [items.reduce((sum,item)=>sum+Number(item.forecast||0),0),items.reduce((sum,item)=>sum+Number(item.volume||0),0),
+        ...(['budget_volume','actual_volume','previous_actual_volume','forecast_volume'] as const).map(field=>scopes.reduce((sum,item)=>sum+Number(savedMonthlyReferences.get(monthlyReferenceKey(item.id,level))?.[field]??NaN),0))]
+    }
+    const actions=(items:SalesForecast[])=>{
+      const editable=items.every(item=>(isAdmin||item.user_id===userId)&&isEditableForecast(item))
+      const canRevise=authorization.can('Forecasts','edit')&&items.every(item=>isAdmin?isEditableForecast(item):canReviseRsmForecast(item,{role,position:salesPosition,regionId:assignedRegionId,subregionId:assignedSubregionId}))
+      const canEdit=canRevise||(!groupSavedByKam&&editable&&authorization.can('Forecasts','edit'))
+      const canDelete=(isAdmin||!groupSavedByKam)&&editable&&items.every(item=>canDeleteSavedForecastStatus(item.status))&&authorization.can('Forecasts','delete')
+      const canSubmit=(!groupSavedByKam&&canSubmitForecasts&&items.some(canSubmitItem))||(canRevise&&items.every(item=>item.status==='Draft'))
+      return <>
+        {canEdit&&<TableActionButton compact action="edit" onClick={()=>handleEditCustomer(items)} disabled={loading} title="Edit customer forecasts"/>}
+        {canDelete&&<TableActionButton compact action="delete" onClick={()=>handleDeleteMany(items)} disabled={loading} title="Delete customer forecasts"/>}
+        {canSubmit&&<TableActionButton compact action="submit" onClick={()=>handleSubmitCustomer(items)} disabled={loading} title="Submit customer forecasts"/>}
+      </>
+    }
+    for(const weekGroup of savedWeekGroups){
+      result.push({key:'week-'+weekGroup.key,kind:'week',label:<>Week {weekGroup.week}, {weekGroup.year} ({getWeekDateLabel(weekGroup.year,weekGroup.week)})</>})
+      const seen=new Set<string>()
+      for(const customer of weekGroup.customers){
+        const owner=customer.items[0].user_id
+        const kamKey=savedKamGroupKey(weekGroup.key,owner)
+        if(groupSavedByKam&&!seen.has(owner)){
+          seen.add(owner)
+          const items=weekGroup.customers.filter(group=>group.items[0].user_id===owner).flatMap(group=>group.items)
+          const eligible=items.filter(canSubmitItem)
+          const deletable=authorization.can('Forecasts','delete') ? items.filter(item=>
+            canDeleteSavedForecastStatus(item.status) && (isAdmin || (item.user_id===userId && (role!=='Manager'||item.region_id===assignedRegionId)))) : []
+          const canSubmitKam=(isAdmin||isRsmSavedViewer)&&eligible.length>0
+          const values=groupValues(items,'kam')
+          result.push({key:kamKey,kind:'group',depth:0,label:'KAM: '+(savedOwnerNames[owner]??'Unknown KAM'),area:area(items),status:statuses(items),values,
+            expanded:!collapsedKams.has(kamKey),onToggle:()=>setCollapsedKams(current=>{const next=new Set(current);if(next.has(kamKey))next.delete(kamKey);else next.add(kamKey);return next}),
+            actions:deletable.length>0||canSubmitKam ? <>
+              {deletable.length>0&&<TableActionButton compact action="delete" disabled={loading} title="Delete KAM drafts" onClick={()=>handleDeleteMany(deletable,'kam',savedOwnerNames[owner]??'Unknown KAM')}/>}
+              {canSubmitKam&&<TableActionButton compact action="submit" disabled={loading} title="Submit KAM forecasts" onClick={()=>handleSubmitCustomer(eligible,'KAM: '+(savedOwnerNames[owner]??'Unknown KAM'))}/>}
+            </>:null,
+            referenceLoading:savedActualsLoading,referenceError:savedActualsError,volumeBudget:weeklyBudget(values[2],weekGroup.year,getMonthForWeek(weekGroup.year,weekGroup.week)),
+          })
+        }
+        if(groupSavedByKam&&collapsedKams.has(kamKey))continue
+        const values=groupValues(customer.items,'customer')
+        result.push({key:customer.key,kind:'group',depth:groupSavedByKam?1:0,label:getCustomerName(customer.customer_id),area:groupSavedByKam?'':area(customer.items),status:statuses(customer.items),actions:actions(customer.items),values,
+          expanded:expandedCustomers.has(customer.key),onToggle:()=>toggleCustomer(customer.key),referenceLoading:savedActualsLoading,referenceError:savedActualsError,
+          volumeBudget:weeklyBudget(values[2],weekGroup.year,getMonthForWeek(weekGroup.year,weekGroup.week)),
+        })
+        if(!expandedCustomers.has(customer.key))continue
+        for(const product of customer.products)result.push({key:product.key,kind:'product',depth:groupSavedByKam?2:1,label:getProductName(product.product_id),
+          values:[product.forecast,product.volume,product.budget,product.actualMonthly,product.actualPreviousMonth,product.forecastMonthly],referenceLoading:savedActualsLoading,referenceError:savedActualsError||forecastLoadError,
+          volumeBudget:weeklyBudget(product.budget,weekGroup.year,getMonthForWeek(weekGroup.year,weekGroup.week)),
+        })
+      }
+    }
+    return result
+  }
+
   const returnNotices = uniqueReturnNotices(rows.filter((row) => row.status === 'Rejected').map((row) => {
     const info = attention?.returned.find((record) => record.id === row.id)
     const saved = forecasts.find((record) => record.id === row.id)
@@ -1672,7 +1666,7 @@ export default function SalesInputPage() {
           title={rows.some((row) => row.id !== null) ? 'Edit Forecast' : 'Add Forecast'} busy={loading} wide maxWidth="75rem">
         <div data-forecast-form className="app-tables min-w-0">
 
-          <div data-section-header="" className="border-b py-4 pr-10">
+          <div data-section-header="" data-aligned-toolbar="" className="border-b py-4 pr-10">
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
               <div>
                 <h2 data-section-title="" className="text-base font-semibold"><HeadingClipboardPlus className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
@@ -2008,24 +2002,10 @@ export default function SalesInputPage() {
         </RecordDialog>
       ) : null}
 
-      {canCreateForecast && (
-        <div className="flex shrink-0 justify-end">
-          <button type="button" data-action-tone="primary" data-action-fill=""
-            disabled={loading || initializing || workspaceOwner !== userId}
-            onClick={() => {
-              if (rows.some((row) => row.id !== null)) handleClear()
-              setForecastDialogOpen(true)
-            }}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
-            <Plus className="size-4" aria-hidden="true" />Add Forecast
-          </button>
-        </div>
-      )}
-
       {/* SAVED FORECASTS */}
 
       <div id="saved-forecasts" className="scroll-mt-4 rounded-xl border bg-card shadow-sm md:flex md:min-h-0 md:flex-[0_1_auto] md:flex-col">
-        <div data-section-header="" className="flex shrink-0 flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 data-section-title="" className="text-base font-semibold"><HeadingArchive className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
               Saved Forecasts
@@ -2034,12 +2014,44 @@ export default function SalesInputPage() {
 
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm">
-              Status
+        <div data-action-toolbar="" className="flex items-center gap-2">
+{canCreateForecast && (
+          <button type="button" data-action-tone="primary" data-action-fill=""
+            disabled={loading || initializing || workspaceOwner !== userId}
+            onClick={() => {
+              if (rows.some((row) => row.id !== null)) handleClear()
+              setForecastDialogOpen(true)
+            }}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+            <Plus className="size-4" aria-hidden="true" />Add Forecast
+          </button>
+      )}
+</div>
+</div>
+        <div data-filter-toolbar="" className="flex shrink-0 flex-nowrap items-end justify-between gap-4 overflow-x-auto border-b px-6 py-4">
+          <div className="app-field-row shrink-0 !flex-nowrap">
+            <div data-field-size="compact" className="space-y-1.5">
+              <label htmlFor="saved-forecast-month" className="block text-xs font-medium text-muted-foreground">Month</label>
+              <input id="saved-forecast-month" type="month" value={savedMonthFilter} onChange={event=>setSavedMonthFilter(event.target.value)}
+                className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="saved-forecast-region" className="block text-xs font-medium text-muted-foreground">Region</label>
+              <SelectionField id="saved-forecast-region" aria-label="Saved Forecasts region" placeholder="Region" value={effectiveSavedRegion}
+                loading={initializing} loadingText="Loading region…"
+                onValueChange={setSavedRegionFilter} disabled={!canFilterAllSavedRegions}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted">
+                {canFilterAllSavedRegions && <option value="all">All Regions</option>}
+                {!canFilterAllSavedRegions && assignedRegionId === null && <option value="">No assigned region</option>}
+                {regions.filter(region=>canFilterAllSavedRegions||region.id===assignedRegionId).map(region=><option key={region.id} value={region.id}>{region.name}</option>)}
+              </SelectionField>
+            </div>
+            <div data-field-size="compact" className="space-y-1.5">
+              <label htmlFor="saved-forecast-status" className="block text-xs font-medium text-muted-foreground">Status</label>
               <SelectionField value={savedStatusFilter}
+                  id="saved-forecast-status"
                   onValueChange={(selectionValue) => setSavedStatusFilter(selectionValue)}
-                  className="h-9 w-44 rounded-md border bg-background px-3 text-sm"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                   aria-label="Status">
                 <option value="">All open statuses</option>
                 <option value="all">All statuses</option>
@@ -2047,9 +2059,13 @@ export default function SalesInputPage() {
                   <option key={status} value={status}>{label}</option>
                 ))}
               </SelectionField>
-            </label>
-          {!groupSavedByKam && canSubmitForecasts &&
-            (!savedStatusFilter || savedStatusFilter === 'Draft') &&
+            </div>
+          </div>
+          <div data-action-toolbar="" className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap">
+
+
+          {canSubmitForecasts &&
+            (!savedStatusFilter || savedStatusFilter === 'Draft' || savedStatusFilter === 'all') &&
             eligibleSubmissionCount > 0 && (
               <button data-action-tone="transfer" data-action-fill=""
                 type="button"
@@ -2058,7 +2074,7 @@ export default function SalesInputPage() {
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="size-4" />
-                {pendingAction === 'submitAll' ? 'Submitting...' : eligibleSubmissionCustomers > 1 ? `Submit All (${eligibleSubmissionCustomers})` : 'Submit All'}
+                {pendingAction === 'submitAll' ? 'Submitting...' : 'Submit All'}
               </button>
             )}
           <button data-slot="expand-collapse-button"
@@ -2077,7 +2093,12 @@ export default function SalesInputPage() {
           </button>
 
 
-          </div>
+
+<button data-action-tone="neutral" type="button" onClick={loadForecasts} disabled={savedTableLoading || initializing || loading}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
+            <RefreshCw className={`size-4 ${savedTableLoading ? 'animate-spin' : ''}`} aria-hidden="true" />Refresh
+          </button>
+</div>
         </div>
 
 
@@ -2085,323 +2106,10 @@ export default function SalesInputPage() {
 
       {/* SAVED FORECAST TABLE */}
 
-        <Table summary={{ records: savedCustomers.reduce((count, customer) => count + customer.items.length, 0), customers: totalSavedCustomers }} data-volume-layout="forecast" saved aria-busy={savedTableLoading || initializing}
-          className="table-fixed"
-          containerProps={{ className: "max-h-[min(32rem,65vh)] w-full overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Forecasts table" }}
-        >
-            <colgroup>
-              {canShowActions && <col data-action-column="forecast" />}
-              <col data-volume-column="status" className="w-[6%]" />
-              {groupSavedByKam && <col data-volume-column="area" />}
-              {/* Flexible description columns absorb spare width instead of Action. */}
-              <col data-volume-column="customer" />
-              <col data-volume-column="product" />
-              {Array.from({ length: 6 }, (_, index) => <col key={index} data-volume-column="number" className="w-[6%]" />)}
-            </colgroup>
+        <SalesHierarchyTable rows={savedHierarchyRows()} loading={savedTableLoading || initializing}
+          label="Saved Forecasts table" emptyMessage="No forecasts match the current filters."
+          summary={{records:savedCustomers.reduce((count,customer)=>count+customer.items.length,0),customers:totalSavedCustomers}} />
 
-            <thead className="sticky top-0 z-10 bg-card">
-              <tr className="border-b bg-muted/40">
-                {canShowActions && (
-                  <th data-action-column="forecast" className="whitespace-nowrap px-2 py-3 text-center font-medium">
-                    Action
-                  </th>
-                )}
-
-                <th className="px-2 py-3 text-center font-medium">
-                  Status
-                </th>
-                {groupSavedByKam && <th className="px-2 py-3 text-left font-medium">Area</th>}
-
-                <th className="px-2 py-3 text-left font-medium">
-                  Customer
-                </th>
-
-                <th className="px-2 py-3 text-left font-medium">
-                  Product
-                </th>
-
-                <MonthlySalesHeaders />
-              </tr>
-            </thead>
-
-            <tbody>
-              {savedTableLoading || initializing ? (
-                <TableLoadingRow columns={savedColumnCount} label="saved forecasts" />
-              ) : savedWeekGroups.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={savedColumnCount}
-                    className="px-4 py-10 text-center text-sm text-muted-foreground"
-                  >
-                    No forecasts match the current filters.
-                  </td>
-                </tr>
-              ) : (
-                savedWeekGroups.map((weekGroup) => (
-                  <Fragment key={weekGroup.key}>
-                    {/* WEEK GROUP HEADER */}
-
-                    <tr className="border-b bg-muted/50">
-                      <td
-                        colSpan={savedColumnCount}
-                        className="px-3 py-2 font-semibold"
-                      >
-                        Week {weekGroup.week}, {weekGroup.year} (
-                        {getWeekDateLabel(
-                          weekGroup.year,
-                          weekGroup.week
-                        )})
-                      </td>
-                    </tr>
-
-                    {weekGroup.customers.map((customerGroup, index) => {
-                      const ownerId = customerGroup.items[0].user_id
-                      const kamKey = savedKamGroupKey(weekGroup.key, ownerId)
-                      const kamExpanded = !collapsedKams.has(kamKey)
-                      const startsKam = groupSavedByKam && (index === 0 || weekGroup.customers[index - 1].items[0].user_id !== ownerId)
-                      const kamCustomers = startsKam ? weekGroup.customers.filter((group) => group.items[0].user_id === ownerId) : []
-                      const kamItems = kamCustomers.flatMap((group) => group.items)
-                      const kamAreas = [...new Set(kamItems.map((item) =>
-                        subregions.find((area) => area.id === item.subregion_id)?.name
-                        ?? regions.find((area) => area.id === item.region_id)?.name ?? '—'))]
-                      const kamScopes = [...new Map(kamItems.map((item) => [JSON.stringify([item.region_id, item.customer_id]), item])).values()]
-                      const kamBudget = kamScopes.reduce((total, item) => total + customerMonthlyBudgetReference(budgets, item.year,
-                        getMonthForWeek(item.year, item.week), item.region_id, null, item.customer_id), 0)
-                      const kamTotals = [
-                        kamItems.reduce((total, item) => total + Number(item.forecast || 0), 0),
-                        kamItems.reduce((total, item) => total + Number(item.volume || 0), 0),
-                        kamBudget,
-                        kamScopes.reduce((total, item) => total + getSavedActualMonthly(item, false, true), 0),
-                        kamScopes.reduce((total, item) => total + getSavedActualMonthly(item, true, true), 0),
-                        kamScopes.reduce((total, item) => total + getSavedForecastMonthly(item, true), 0),
-                      ]
-                      const kamHeading = startsKam ? <Fragment key={kamKey}><tr className="border-b bg-muted/60">
-                        <td colSpan={savedColumnCount} className="px-3 py-2">
-                          <button type="button" aria-expanded={kamExpanded} onClick={() => setCollapsedKams((current) => {
-                            const next = new Set(current)
-                            if (next.has(kamKey)) next.delete(kamKey)
-                            else next.add(kamKey)
-                            return next
-                          })} className="flex w-full items-center gap-2 text-left font-semibold">
-                            {kamExpanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
-                            <span>KAM: {savedOwnerNames[ownerId] ?? 'Unknown KAM'}</span>
-                          </button>
-                        </td>
-                      </tr>
-                        <tr className="border-b bg-muted/30 font-semibold">
-                          {canShowActions && <td data-action-column="forecast" className="px-2 py-2" />}
-                          <td className="px-2 py-2 text-center"><div className="flex flex-wrap items-center justify-center gap-1">
-                            {[...new Set(kamItems.map((item) => item.status))].map((status) => <StatusBadge key={status} status={savedStatusLabels[status as keyof typeof savedStatusLabels]} compact={new Set(kamItems.map((item) => item.status)).size > 1} />)}
-                          </div></td>
-                          <td className="px-2 py-2">{kamAreas.join(', ')}</td>
-                          <td className="px-2 py-2">{new Set(kamItems.map((item) => item.customer_id)).size} {new Set(kamItems.map((item) => item.customer_id)).size === 1 ? 'Customer' : 'Customers'}</td>
-                          <td className="px-2 py-2">{new Set(kamItems.map((item) => item.product_id)).size} {new Set(kamItems.map((item) => item.product_id)).size === 1 ? 'Product' : 'Products'}</td>
-                          {kamTotals.map((value, index) => <td key={index} className="px-2 py-2 text-right tabular-nums">
-                            {index === 2 && budgetReferencesLoading ? <LoadingSpinner label="budget reference" />
-                              : index === 2 && budgetLoadError ? '—'
-                              : (index === 3 || index === 4) && savedActualsLoading ? <LoadingSpinner label="actual reference" />
-                              : (index === 3 || index === 4) && savedActualsError ? '—'
-                              : index === 1 || index >= 3 ? <BudgetValueIndicator value={value} budget={budgetReferencesLoading || budgetLoadError ? null : index === 1 ? weeklyBudget(kamBudget, weekGroup.year, getMonthForWeek(weekGroup.year, weekGroup.week)) : kamBudget}>{formatNumber(value)}</BudgetValueIndicator>
-                              : formatNumber(value)}
-                          </td>)}
-                        </tr>
-                      </Fragment> : null
-                      if (groupSavedByKam && !kamExpanded) return kamHeading
-                      const isExpanded = expandedCustomers.has(
-                        customerGroup.key
-                      )
-
-                      const allItems = customerGroup.items
-
-                      const customerForecast = allItems.reduce(
-                        (total, item) =>
-                          total + (Number(item.forecast) || 0),
-                        0
-                      )
-
-                      const customerVolume = allItems.reduce(
-                        (total, item) =>
-                          total + (Number(item.volume) || 0),
-                        0
-                      )
-
-                      // Customer references include every product in the month,
-                      // independent of the saved rows currently visible below.
-                      const customerScopes = [...new Map(allItems.map((item) =>
-                        [item.region_id, item])).values()]
-                      const customerBudget = customerScopes.reduce((total, item) =>
-                        total + customerMonthlyBudgetReference(budgets, item.year,
-                          getMonthForWeek(item.year, item.week), item.region_id, null, item.customer_id), 0)
-                      const customerActualMonthly = customerScopes.reduce((total, item) =>
-                        total + getSavedActualMonthly(item, false, true), 0)
-                      const customerActualPreviousMonth = customerScopes.reduce((total, item) =>
-                        total + getSavedActualMonthly(item, true, true), 0)
-                      const customerForecastMonthly = customerScopes.reduce((total, item) =>
-                        total + getSavedForecastMonthly(item, true), 0)
-
-                      const status = allItems[0].status as keyof typeof savedStatusLabels
-                      const customerStatus = savedStatusLabels[status]
-                      const editable = allItems.every((item) => (isAdmin || item.user_id === userId) && isEditableForecast(item))
-                      const rsmCanRevise = authorization.can('Forecasts', 'edit') && allItems.every((item) =>
-                        isAdmin ? isEditableForecast(item) : canReviseRsmForecast(item, { role, position: salesPosition, regionId: assignedRegionId, subregionId: assignedSubregionId }))
-
-                      const customerCanEdit =
-                        !groupSavedByKam && editable && authorization.can('Forecasts', 'edit')
-
-                      const customerCanDelete =
-                        (isAdmin || !groupSavedByKam) && editable && allItems.every((item) => canDeleteSavedForecastStatus(item.status)) && authorization.can('Forecasts', 'delete')
-                      const customerCanSubmit =
-                        (!groupSavedByKam && canSubmitForecasts && allItems.some(canSubmitItem)) ||
-                        (rsmCanRevise && allItems.every((item) => item.status === 'Draft'))
-
-                      return (
-                        <Fragment key={customerGroup.key}>
-                          {kamHeading}
-                          {/* CUSTOMER SUMMARY ROW */}
-
-                          <tr className="border-b bg-background hover:bg-muted/30">
-                            {canShowActions && (
-                              <td data-action-column="forecast" className="px-2 py-3 text-center">
-                                <div className="flex flex-wrap items-center justify-center gap-1">
-                                  {(rsmCanRevise || customerCanEdit) && <TableActionButton action="edit" data-action-tone="caution" type="button" count={actionGroupCount(allItems, 'customer')} onClick={() => handleEditCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Edit customer forecasts" />}
-                                  {customerCanDelete && <TableActionButton action="delete" data-action-tone="danger" type="button" count={actionGroupCount(allItems, 'customer')} onClick={() => handleDeleteMany(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Delete customer forecasts" />}
-                                  {customerCanSubmit && <TableActionButton action="submit" data-action-tone="transfer" type="button" count={actionGroupCount(allItems, 'customer')} onClick={() => handleSubmitCustomer(allItems)} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40" title="Submit customer forecasts" />}
-                                </div>
-                              </td>
-                            )}
-
-                            <td className="px-2 py-3 text-center">
-                              <StatusBadge status={customerStatus} />
-                            </td>
-                            {groupSavedByKam && <td className="px-2 py-3" />}
-
-                            <td className="px-2 py-3">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  toggleCustomer(customerGroup.key)
-                                }
-                                className="flex w-full min-w-0 items-center gap-2 text-left font-semibold hover:text-primary"
-                                title={
-                                  isExpanded
-                                    ? 'Collapse customer'
-                                    : 'Expand customer'
-                                }
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="size-4 shrink-0" />
-                                ) : (
-                                  <ChevronRight className="size-4 shrink-0" />
-                                )}
-
-                                <span className="min-w-0 wrap-anywhere">
-                                  {getCustomerName(
-                                    customerGroup.customer_id
-                                  )}
-                                </span>
-
-                              </button>
-                            </td>
-
-                            <td className="px-2 py-3 text-muted-foreground tabular-nums">
-                              {formatNumber(customerGroup.products.length)} {customerGroup.products.length === 1 ? 'Product' : 'Products'}
-                            </td>
-
-                            <td className="whitespace-nowrap px-2 py-3 text-right font-semibold">
-                              {formatNumber(customerForecast)}
-                            </td>
-
-                            <td className="whitespace-nowrap px-2 py-3 text-right font-semibold">
-                              <BudgetValueIndicator value={customerVolume} budgetLabel="weekly budget" budget={budgetReferencesLoading || budgetLoadError ? null : weeklyBudget(customerBudget, weekGroup.year, getMonthForWeek(weekGroup.year, weekGroup.week))}>{formatNumber(customerVolume)}</BudgetValueIndicator>
-                            </td>
-
-                            <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {budgetReferencesLoading ? <LoadingSpinner label="budget reference" /> : budgetLoadError ? '—' : formatNumber(customerBudget)}
-                            </td>
-
-                            <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={customerActualMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerActualMonthly)}</BudgetValueIndicator>}
-                            </td>
-
-                            <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={customerActualPreviousMonth} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerActualPreviousMonth)}</BudgetValueIndicator>}
-                            </td>
-
-                            <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-muted-foreground">
-                              {<BudgetValueIndicator value={forecastLoadError ? null : customerForecastMonthly} loading={savedTableLoading || initializing} budget={budgetReferencesLoading || budgetLoadError ? null : customerBudget}>{formatNumber(customerForecastMonthly)}</BudgetValueIndicator>}
-                            </td>
-                          </tr>
-
-                          {/* EXPANDED PRODUCT ROWS */}
-
-                          {isExpanded &&
-                            customerGroup.products.map((productGroup) => {
-                              return (
-                                <tr
-                                  key={productGroup.key}
-                                  className="border-b bg-muted/20 last:border-0 hover:bg-muted/40"
-                                >
-                                  {canShowActions && <td data-action-column="forecast" className="px-2 py-2" />}
-
-                                  <td className="px-2 py-2" />
-
-                                  {/* Customer is shown once on the customer row. */}
-                                  {groupSavedByKam && <td className="px-2 py-2" />}
-
-                                  <td className="px-2 py-2" />
-
-                                  <td
-                                    className="px-2 py-2"
-                                    title={getProductName(
-                                      productGroup.product_id
-                                    )}
-                                  >
-                                    <div className="flex min-w-0 items-center gap-2 pl-5">
-                                      <span className="text-muted-foreground">
-                                        ↳
-                                      </span>
-                                      <span className="min-w-0 text-xs">
-                                        {getProductName(
-                                          productGroup.product_id
-                                        )}
-                                      </span>
-                                    </div>
-                                  </td>
-
-                                  <td className="whitespace-nowrap px-2 py-2 text-right">
-                                    {formatNumber(productGroup.forecast)}
-                                  </td>
-
-                                  <td className="whitespace-nowrap px-2 py-2 text-right">
-                                    <BudgetValueIndicator value={productGroup.volume} budgetLabel="weekly budget" budget={budgetReferencesLoading || budgetLoadError ? null : weeklyBudget(productGroup.budget, weekGroup.year, getMonthForWeek(weekGroup.year, weekGroup.week))}>{formatNumber(productGroup.volume)}</BudgetValueIndicator>
-                                  </td>
-
-                                  <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {budgetReferencesLoading ? <LoadingSpinner label="budget reference" /> : budgetLoadError ? '—' : formatNumber(productGroup.budget)}
-                                  </td>
-
-                                  <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={productGroup.actualMonthly} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.actualMonthly)}</BudgetValueIndicator>}
-                                  </td>
-
-                                  <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {savedActualsLoading ? <LoadingSpinner label="actual reference" /> : savedActualsError ? '—' : <BudgetValueIndicator value={productGroup.actualPreviousMonth} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.actualPreviousMonth)}</BudgetValueIndicator>}
-                                  </td>
-
-                                  <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">
-                                    {<BudgetValueIndicator value={forecastLoadError ? null : productGroup.forecastMonthly} loading={savedTableLoading || initializing} budget={budgetReferencesLoading || budgetLoadError ? null : productGroup.budget}>{formatNumber(productGroup.forecastMonthly)}</BudgetValueIndicator>}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                        </Fragment>
-                      )
-                    })}
-                  </Fragment>
-                ))
-              )}
-            </tbody>
-        </Table>
 
       </div>
     </div>

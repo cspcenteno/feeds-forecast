@@ -1,7 +1,10 @@
 
 'use client'
 
-import { canReadAllVolumeRegions } from '@/lib/volume-visibility'
+import { findActualHeaderRow, parseOracleActualDate, resolveOracleKam, oracleSalespersonName, type ImportKam } from '@/lib/oracle-actual-import'
+
+import { volumeFilterOptions } from '@/lib/volume-filter-options'
+import { canReadAllVolumeRegions, requiresVolumeSubregion } from '@/lib/volume-visibility'
 
 import { summaryForLevel } from '@/lib/table-summary-level'
 
@@ -113,7 +116,7 @@ type ImportPreview = {
   customer: Customer | null
   product: Product | null
   volume: number | null
-  status: 'Ready' | 'Already imported' | 'Invalid' | 'Duplicate in staging'
+  status: 'Ready' | 'Already imported' | 'Invalid'
   issues: string[]
 }
 
@@ -206,6 +209,8 @@ function parseMonth(value: string | null): number | null {
 }
 
 function parseActualDate(value: unknown, date1904 = false) {
+  const oracleDate = parseOracleActualDate(value)
+  if (oracleDate) return oracleDate
   const text = String(value ?? '').trim()
   const match = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]\d{2}:\d{2}.*)?$/.exec(text)
   const slashDate = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(text)
@@ -233,8 +238,6 @@ function getImportStatusLabel(status: ImportPreview['status']) {
       return 'Invalid'
     case 'Already imported':
       return 'Already Imported'
-    case 'Duplicate in staging':
-      return 'Duplicate'
   }
 }
 
@@ -271,6 +274,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
   const canReadAllRegions = canReadAllVolumeRegions(role, position)
   const canWriteAllRegions = role === 'Admin' || (role === 'Superuser' && !isSupervisor)
   const [assignedRegionId, setAssignedRegionId] = useState<number | null>(null)
+  const [assignedSubregionId, setAssignedSubregionId] = useState<number | null>(null)
+  const subregionRestricted = requiresVolumeSubregion(role, position)
 
   const [filterYear, setFilterYear] = useState(String(currentYear))
   const [filterMonth, setFilterMonth] = useState('')
@@ -382,6 +387,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     setRole(profileRole)
     setPosition(profile.position ?? '')
     setAssignedRegionId(profileRegionId)
+    setAssignedSubregionId(profile.subregion_id == null ? null : Number(profile.subregion_id))
     setFilterRegionId(canReadAllVolumeRegions(profileRole, profile.position ?? '')
       ? ''
       : String(profileRegionId ?? ''))
@@ -637,6 +643,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       }
 
       const worksheet = workbook.Sheets[firstSheetName]
+      const headerRow = isActual ? findActualHeaderRow(worksheet) : undefined
 
       const excelRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
         worksheet,
@@ -645,6 +652,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
           raw: false,
           dateNF: 'yyyy-mm-dd',
           blankrows: false,
+          ...(isActual ? { range: headerRow } : {}),
         }
       )
 
@@ -673,29 +681,33 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         year: findHeader(['year']),
         region: findHeader(['region', 'area']),
         month: findHeader(['month']),
-        actual_date: findHeader(['date', 'actual date', 'sales date', 'transaction date']),
+        actual_date: findHeader(['date', 'actual date', 'sales date', 'transaction date', 'trans date']),
         kam: findHeader([
           'kam',
           'kam / salesman',
           'salesman',
           'sales person',
           'salesperson',
+          'salesperson w/MLO-AN',
           'key account manager',
-        ]),
+        ]) ?? headers.find(header => /^salespersonw[a-z0-9]+an$/.test(normalizeHeader(header))) ?? null,
         customer: findHeader([
           'customer',
           'customer name',
+          'partynme',
         ]),
         product_code: findHeader([
           'product code',
           'product_code',
           'code',
           'sku',
+          'item no',
         ]),
         product_name: findHeader([
           'product name',
           'product_name',
           'product description',
+          'description',
         ]),
         volume: findHeader([
           'volume',
@@ -704,12 +716,13 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
           label + ' volume',
           label + ' vol',
           'volume ' + label,
+          'at50 kg',
         ]),
       }
 
       const requiredColumns: Array<keyof typeof columnMap> = [
         ...(!isActual || !columnMap.actual_date ? ['year', 'month'] as const : []),
-        'region',
+        ...(!isActual || !columnMap.kam ? ['region'] as const : []),
         'customer',
         'product_code',
         'volume',
@@ -751,7 +764,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       }
 
       const rawDateRows = isActual
-        ? new Map(XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { raw: true })
+        ? new Map(XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { raw: true, range: headerRow })
             .map((row) => [row.__rowNum__, row]))
         : null
 
@@ -770,29 +783,49 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         return `${year}-${String(month).padStart(2, '0')}-01`
       }
 
+      let kamAssignments: ImportKam[] | null = null
+      if (isActual && columnMap.kam && excelRows.some(row => !getCellValue(row, columnMap.region))) {
+        const response = await fetch('/api/actual-import-kams', { cache: 'no-store', signal: AbortSignal.timeout(20000) })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Unable to load KAM assignments.')
+        kamAssignments = result.users
+      }
       const records = excelRows
         .filter((row) =>
           Object.values(row).some(
             (value) => String(value ?? '').trim() !== ''
           )
         )
-        .map((row) => ({
-          ...(isActual
-            ? {
-                actual_date: getActualDate(row),
+        .map((row) => {
+          let region = getCellValue(row, columnMap.region) || null
+          let kam = getCellValue(row, columnMap.kam) || null
+          if (isActual) {
+            kam = oracleSalespersonName(kam) || null
+            if (!region && kamAssignments) {
+              try {
+                const assigned = resolveOracleKam(kam ?? '', kamAssignments)
+                region = regions.find(item => item.id === assigned.region_id)?.name ?? null
+                if (!region) throw new Error(`Assigned region is unavailable for KAM: ${kam}`)
+                kam = assigned.full_name?.trim() || kam
+              } catch (cause) {
+                throw new Error(`Excel row ${Number(row.__rowNum__) + 1}: ${cause instanceof Error ? cause.message : 'Unable to resolve KAM region.'}`)
               }
-            : { year: getCellValue(row, columnMap.year) || null, month: getCellValue(row, columnMap.month) || null }),
-          region: getCellValue(row, columnMap.region) || null,
-          asm: null,
-          rsm: null,
-          kam: getCellValue(row, columnMap.kam) || null,
-          customer: getCellValue(row, columnMap.customer) || null,
-          product_code:
-            getCellValue(row, columnMap.product_code) || null,
-          product_name:
-            getCellValue(row, columnMap.product_name) || null,
-          volume: getCellValue(row, columnMap.volume) || null,
-        }))
+            }
+          }
+          return {
+            ...(isActual
+              ? { actual_date: getActualDate(row) }
+              : { year: getCellValue(row, columnMap.year) || null, month: getCellValue(row, columnMap.month) || null }),
+            region,
+            asm: null,
+            rsm: null,
+            kam,
+            customer: getCellValue(row, columnMap.customer) || null,
+            product_code: getCellValue(row, columnMap.product_code) || null,
+            product_name: getCellValue(row, columnMap.product_name) || null,
+            volume: getCellValue(row, columnMap.volume) || null,
+          }
+        })
 
       if (records.length === 0) {
         throw new Error('No non-empty rows were found in the worksheet.')
@@ -862,29 +895,15 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     )
   }, [regions, canReadAllRegions, assignedRegionId])
 
-  const savedCustomerOptions = useMemo(() => {
-    const regionId = filterRegionId
-      ? Number(filterRegionId)
-      : canReadAllRegions ? null : assignedRegionId
-
-    return Array.from(new Set(customers
-      .filter((customer) => regionId === null || customer.region_id === regionId)
-      .map((customer) => customer.customer)))
-      .sort((a, b) => a.localeCompare(b))
-  }, [customers, filterRegionId, canReadAllRegions, assignedRegionId])
-
   const productLabels = useMemo(() => new Map(
     products.map((product) => [product.id, product.code + ' - ' + product.name])
   ), [products])
 
-  const filteredBudgets = useMemo(() => {
-    const search = filterCustomer.trim().toLowerCase()
-    const productSearch = filterProduct.trim().toLowerCase()
+  const scopedBudgets = useMemo(() => {
 
     return budgets.filter((item) => {
       if (filterYear && item.year !== Number(filterYear)) return false
       if (filterMonth && item.month !== Number(filterMonth)) return false
-      if (productSearch && (item.product_id === null || !productLabels.get(item.product_id)?.toLowerCase().includes(productSearch))) return false
 
       if (
         filterRegionId &&
@@ -893,14 +912,6 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         return false
       }
 
-      if (search) {
-        const customerName =
-          customers
-            .find((customer) => customer.id === item.customer_id)
-            ?.customer.toLowerCase() ?? ''
-
-        if (!customerName.includes(search)) return false
-      }
 
       if (
         !canReadAllRegions &&
@@ -910,6 +921,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       }
 
 
+      if (subregionRestricted && (assignedRegionId === null || assignedSubregionId === null ||
+        item.region_id !== assignedRegionId || item.subregion_id !== assignedSubregionId)) return false
+
       return true
     })
   }, [
@@ -917,23 +931,40 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     filterYear,
     filterMonth,
     filterRegionId,
-    filterCustomer,
-    filterProduct,
-    productLabels,
-    customers,
-    isActual,
     canReadAllRegions,
     assignedRegionId,
+    assignedSubregionId,
+    subregionRestricted,
   ])
+
+  const { customers: savedCustomerOptions, products: savedProductOptions } = useMemo(
+    () => volumeFilterOptions(scopedBudgets, customers, productLabels),
+    [scopedBudgets, customers, productLabels],
+  )
+
+  const filteredBudgets = useMemo(() => {
+    const customerSearch = filterCustomer.trim().toLowerCase()
+    const productSearch = filterProduct.trim().toLowerCase()
+    const customerNames = new Map(customers.map(customer => [customer.id, customer.customer.toLowerCase()]))
+    return scopedBudgets.filter(item =>
+      (!customerSearch || (item.customer_id !== null && customerNames.get(item.customer_id)?.includes(customerSearch))) &&
+      (!productSearch || (item.product_id !== null && productLabels.get(item.product_id)?.toLowerCase().includes(productSearch))),
+    )
+  }, [scopedBudgets, customers, productLabels, filterCustomer, filterProduct])
 
   const previewRecords = stagingRecords
 
   const importPreview = useMemo<ImportPreview[]>(() => {
+    const actualKey = (date: string | null | undefined, region: number | null, customer: number | null, product: number | null, kam: string | null, volume: number) =>
+      JSON.stringify([date, region, customer, product, normalizeText(kam), Number(volume)])
+    const savedActualMatches = new Map<string, number>()
+    if (isActual) for (const item of budgets) {
+      const key = actualKey(item.actual_date, item.region_id, item.customer_id, item.product_id, item.kam, item.volume)
+      savedActualMatches.set(key, (savedActualMatches.get(key) ?? 0) + 1)
+    }
     const existingKeys = new Set(
-      budgets.map((item) =>
-        isActual
-          ? [item.actual_date, item.region_id, item.customer_id, item.product_id].join('|')
-          : getBudgetImportKey(
+      (isActual ? [] : budgets).map((item) =>
+          getBudgetImportKey(
               item.year,
               item.month ?? 0,
               item.region_id ?? 0,
@@ -1044,9 +1075,15 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         matchedCustomer &&
         matchedProduct
       ) {
-        const key = isActual
-          ? [actualDate, matchedRegion.id, matchedCustomer.id, matchedProduct.id].join('|')
-          : getBudgetImportKey(
+        if (isActual) {
+          const key = actualKey(actualDate, matchedRegion.id, matchedCustomer.id, matchedProduct.id, source.kam, validBudget!)
+          const remaining = savedActualMatches.get(key) ?? 0
+          if (remaining > 0) {
+            status = 'Already imported'
+            savedActualMatches.set(key, remaining - 1)
+          }
+        } else {
+        const key = getBudgetImportKey(
               validYear,
               parsedMonth,
               matchedRegion.id,
@@ -1058,9 +1095,11 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         if (existingKeys.has(key)) {
           status = 'Already imported'
         } else if (seenStagingKeys.has(key)) {
-          status = 'Duplicate in staging'
+          status = 'Invalid'
+          issues.push('Duplicate in upload')
         } else {
           seenStagingKeys.add(key)
+        }
         }
       }
 
@@ -1099,10 +1138,6 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
 
   const alreadyImportedCount = visibleImportPreview.filter(
     (item) => item.status === 'Already imported'
-  ).length
-
-  const duplicateImportCount = visibleImportPreview.filter(
-    (item) => item.status === 'Duplicate in staging'
   ).length
 
   const importGroups = useMemo(() => {
@@ -1617,7 +1652,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       {/* BUDGET EXCEL IMPORT */}
 
       {canManageImport && <div className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div data-section-header="" data-aligned-toolbar="" className="flex flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <FileSpreadsheet className="size-5 text-muted-foreground" />
@@ -1630,24 +1665,14 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
           </div>
 
           <div data-action-toolbar="" className="flex max-w-full shrink-0 flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap [&>button]:shrink-0">
-            <button data-action-tone="neutral"
-              type="button"
-              onClick={() => downloadImportTemplate(moduleName)}
-              disabled={importBusy}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
-            >
-              <Download className="size-4" />
-              Download Template
-            </button>
-            <input
+<input
               ref={fileInputRef}
               type="file"
               accept=".xlsx,.xls,.csv"
               onChange={handleExcelUpload}
               className="hidden"
             />
-
-            <button data-action-tone="transfer" data-action-fill=""
+<button data-action-tone="transfer" data-action-fill=""
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={
@@ -1663,20 +1688,16 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               )}
               {uploadingExcel ? 'Uploading...' : 'Upload File'}
             </button>
-
-            <button data-action-tone="neutral"
+<button data-action-tone="neutral"
               type="button"
-              onClick={loadStagingRecords}
+              onClick={() => downloadImportTemplate(moduleName)}
               disabled={importBusy}
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
             >
-              <RefreshCw
-                className={`size-4 ${loadingStaging ? 'animate-spin' : ''}`}
-              />
-              Refresh
+              <Download className="size-4" />
+              Download Template
             </button>
-
-            <button data-slot="show-hide-button" data-action-tone="neutral"
+<button data-slot="show-hide-button" data-action-tone="neutral"
               type="button"
               onClick={() => {
                 setShowImportPreview(!showImportPreview)
@@ -1697,7 +1718,18 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                 </>
               )}
             </button>
-          </div>
+<button data-action-tone="neutral"
+              type="button"
+              onClick={loadStagingRecords}
+              disabled={importBusy}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`size-4 ${loadingStaging ? 'animate-spin' : ''}`}
+              />
+              Refresh
+            </button>
+</div>
         </div>
 
         {showImportPreview && (
@@ -1732,10 +1764,10 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
 
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">
-                  Already Imported / Duplicate
+                  Already Imported
                 </p>
                 <p className="mt-1 text-xl font-semibold tabular-nums">
-                  {(initializing || loadingSavedRecords || loadingStaging) && visibleImportPreview.length === 0 ? <LoadingSpinner label="already imported or duplicate records" /> : (!stagingLoaded && !loadingStaging) || stagingError ? '—' : alreadyImportedCount + duplicateImportCount}
+                  {(initializing || loadingSavedRecords || loadingStaging) && visibleImportPreview.length === 0 ? <LoadingSpinner label="already imported records" /> : (!stagingLoaded && !loadingStaging) || stagingError ? '—' : alreadyImportedCount}
                 </p>
               </div>
             </div>
@@ -1886,7 +1918,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       {/* SAVED BUDGETS */}
 
       <div className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+        <div data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
           <div>
             <h2 data-section-title="" className="text-base font-semibold"><HeadingDatabase className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
               {savedTitle}
@@ -1965,7 +1997,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
           </form>
         </RecordDialog>}
 
-        <div className="app-field-row saved-volume-filters border-b p-6">
+        <div data-filter-toolbar="" className="app-field-row saved-volume-filters border-b p-6">
           <div data-field-size="compact" className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
               Year
@@ -2016,6 +2048,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             </label>
 
             <SelectionField value={filterRegionId}
+                  loading={initializing} loadingText="Loading region…"
                   disabled={initializing || !canReadAllRegions}
                   placeholder={initializing ? 'Loading region…' : 'No assigned region'}
                   onValueChange={(selectionValue) => {
@@ -2061,7 +2094,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                   aria-label="Search product"
                   freeText>
-              {Array.from(productLabels, ([id, name]) => <option key={id} value={name} />)}
+              {savedProductOptions.map(([id, name]) => <option key={id} value={name} />)}
             </SelectionField>
 
           </div>

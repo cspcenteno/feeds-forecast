@@ -1,6 +1,6 @@
 type Viewer = { role: string | null; position: string | null; full_name: string | null }
 export function isKamCustomerScope(viewer: Viewer) {
-  return viewer.role === 'User' && viewer.position?.trim().toUpperCase() === 'KAM'
+  return viewer.position?.trim().toUpperCase() === 'KAM'
 }
 
 export function assignedForecastCustomers<Row extends { salesman: string | null }>(rows: Row[], viewer: Viewer) {

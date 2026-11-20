@@ -51,6 +51,10 @@ export default function CustomersPage() {
 
   const supabase = useMemo(() => createClient(), [])
   const authorization = useAuthorization()
+  const allRegions = authorization.role === 'Admin' || authorization.position?.trim().toUpperCase() === 'NSM'
+  const assignedRegionId = authorization.regionId
+  const [regionFilter, setRegionFilter] = useState('all')
+  const effectiveRegion = allRegions ? regionFilter : String(assignedRegionId ?? '')
   const [customers, setCustomers] = useState<Customer[]>([])
   const [regions, setRegions] = useState<Region[]>([])
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -73,14 +77,29 @@ export default function CustomersPage() {
   const [, setError] = usePopupError()
 
   const loadCustomers = useCallback(async () => {
+    if (authorization.loading) return
     setTableLoading(true)
     try {
+      if (!authorization.can('Customers', 'view')) {
+        setCustomers([])
+        setRegions([])
+        return
+      }
+      const customerQuery = supabase.from('customers')
+        .select('id, customer, salesman, region_id, is_active, segment, created_at').order('customer')
+      const regionQuery = supabase.from('regions').select('id, name').eq('is_active', true).order('name')
+      if (!allRegions) {
+        if (assignedRegionId === null) {
+          setCustomers([])
+          setRegions([])
+          return
+        }
+        customerQuery.eq('region_id', assignedRegionId)
+        regionQuery.eq('id', assignedRegionId)
+      }
       const [customersResult, regionsResult] = await Promise.all([
-        supabase
-          .from('customers')
-          .select('id, customer, salesman, region_id, is_active, segment, created_at')
-          .order('customer'),
-        supabase.from('regions').select('id, name').eq('is_active', true).order('name'),
+        customerQuery,
+        regionQuery,
       ])
 
       if (customersResult.error || regionsResult.error) {
@@ -94,7 +113,7 @@ export default function CustomersPage() {
     } finally {
       setTableLoading(false)
     }
-  }, [supabase])
+  }, [supabase, authorization, allRegions, assignedRegionId])
 
   useEffect(() => {
     void Promise.resolve().then(loadCustomers)
@@ -105,7 +124,7 @@ export default function CustomersPage() {
     setEditingId(null)
     setCustomer('')
     setSalesman('')
-    setRegionId('')
+    setRegionId(allRegions ? (regionFilter === 'all' ? '' : regionFilter) : String(assignedRegionId ?? ''))
     setIsActive(true)
     setSegment('')
     setError('')
@@ -128,6 +147,10 @@ export default function CustomersPage() {
     if (!authorization.can('Customers', action)) return
     if (!customer.trim()) {
       setError('Customer name is required.')
+      return
+    }
+    if (!allRegions && (assignedRegionId === null || regionId !== String(assignedRegionId))) {
+      setError('Customers must belong to your assigned region.')
       return
     }
 
@@ -185,7 +208,8 @@ export default function CustomersPage() {
     } finally { actionConfirmation?.finish() }
   }
 
-  const { search, setSearch, filteredRows } = useTableSearch(customers, (row) => [row.customer, row.salesman, row.segment, regions.find((region) => String(region.id) === String(row.region_id))?.name, row.is_active ? 'Active' : 'Inactive'])
+  const regionalCustomers = customers.filter((row) => effectiveRegion === 'all' || (effectiveRegion !== '' && String(row.region_id) === effectiveRegion))
+  const { search, setSearch, filteredRows } = useTableSearch(regionalCustomers, (row) => [row.customer, row.salesman, row.segment, regions.find((region) => String(region.id) === String(row.region_id))?.name, row.is_active ? 'Active' : 'Inactive'])
 
   const { sortedRows: sortedCustomers, sortHeader } = useTableSort(filteredRows, {
     customer: (row) => row.customer,
@@ -220,6 +244,7 @@ export default function CustomersPage() {
             <label className="space-y-2 text-sm font-medium">
               Region
               <SelectionField value={regionId}
+                  disabled={!allRegions}
                   onValueChange={(selectionValue) => setRegionId(selectionValue)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal"
                   aria-label="Region">
@@ -254,7 +279,33 @@ export default function CustomersPage() {
 
       <TableGroupProvider groupKeys={sortedCustomers.map((item) => item.salesman?.trim() || '')}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search customers" />{authorization.can('Customers', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Customer</button>}<TableGroupToggle disabled={tableLoading} /></div>
+
+
+        <div data-filter-toolbar="" className="flex flex-nowrap items-end justify-between gap-4 overflow-x-auto border-b px-6 py-4">
+          <div className="w-64 shrink-0">
+            <div className="app-field-row">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-muted-foreground" htmlFor="customers-region-filter">Region</label>
+          <SelectionField aria-label="Filter customers by region" value={effectiveRegion}
+            loading={tableLoading || authorization.loading} loadingText="Loading region…"
+            id="customers-region-filter"
+            onValueChange={setRegionFilter} disabled={!allRegions || tableLoading}
+            className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted">
+            {allRegions ? <option value="all">All regions</option> : null}
+            {!allRegions && assignedRegionId === null ? <option value="">No assigned region</option> : null}
+            {regions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}
+          </SelectionField>
+              </div>
+            </div>
+          </div>
+          <div data-action-toolbar="" className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap [&>[role=search]]:w-64 [&>[role=search]]:shrink-0">
+            <TableSearch value={search} onChange={setSearch} label="Search customers" />
+{authorization.can('Customers', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Customer</button>}
+
+
+            <TableGroupToggle disabled={tableLoading} />
+          </div>
+        </div>
         <Table summary={summaryForLevel(sortedCustomers.length, 'kams', sortedCustomers.map((row) => row.salesman?.trim()))} aria-busy={tableLoading}
           className="min-w-[1200px] table-fixed wrap-anywhere"
           containerProps={{ className: "max-h-[min(32rem,65vh)] overflow-auto", tabIndex: 0, role: "region", "aria-label": "Saved Customers table" }}

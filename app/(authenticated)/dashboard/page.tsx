@@ -4,9 +4,10 @@ import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { useAuthorization } from '@/lib/authorization'
 import type { DashboardType } from '@/lib/dashboard-settings'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 
 const SystemDashboard = dynamic(() => import('./system-dashboard'), {
-  loading: () => <p role="status" className="p-6 text-sm text-muted-foreground">Loading dashboard…</p>,
+  loading: () => <div className="flex justify-center p-6"><LoadingSpinner label="dashboard" /></div>,
 })
 
 export default function DashboardPage() {

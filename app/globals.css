@@ -610,6 +610,7 @@ col[data-volume-column="person"] { width: 192px; min-width: 192px; max-width: 19
 /* Use the longest selection label, including space for the dropdown trigger.
    Apply the same sizing to direct fields and fields inside label wrappers. */
 .app-field-row > :is([data-content-size="short"], :has([data-content-size="short"])) { --field-width: 120px; }
+.app-field-row > :is([data-content-size="status"], :has([data-content-size="status"])) { --field-width: 192px; }
 .app-field-row > :is([data-content-size="year"], :has([data-content-size="year"])) { --field-width: 160px; }
 .app-field-row > :is([data-content-size="month"], :has([data-content-size="month"])) { --field-width: 160px; }
 .app-field-row > :is([data-content-size="medium"], :has([data-content-size="medium"])) { --field-width: 224px; }
@@ -1346,7 +1347,10 @@ button[data-slot="expand-collapse-button"] {
 
 @media (min-width: 640px) {
   [data-record-dialog] .app-field-row.forecast-entry-fields {
-    grid-template-columns: minmax(11rem, 14rem) minmax(10rem, 12rem) minmax(0, 1fr);
+    grid-template-columns: minmax(11rem, 14rem) minmax(10rem, 12rem) minmax(0, 22rem);
+  }
+  [data-record-dialog] .forecast-entry-fields > [data-field-size="wide"] {
+    max-width: 22rem;
   }
 }
 
@@ -1447,3 +1451,37 @@ table[data-forecast-entry] > tfoot > tr > td {
   }
 }
 
+/* Compact hierarchy tables share one desktop layout across sales modules. */
+table[data-sales-hierarchy] {
+  width: 100%;
+  min-width: 900px;
+  table-layout: fixed;
+  font-size: 0.8125rem;
+}
+table[data-sales-hierarchy] :is(th, td) {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+table[data-sales-hierarchy] th { line-height: 1.35; }
+table[data-sales-hierarchy] [data-slot="table-action-button"] {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  gap: 0;
+}
+table[data-sales-hierarchy] [data-action-label] { display: none !important; }
+table[data-sales-hierarchy] [data-slot="table-action-button"] svg { width: 0.9rem; height: 0.9rem; }
+table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-content: flex-end; gap: 0.25rem; }
+@media (min-width: 1024px) {
+  table[data-sales-hierarchy] { min-width: 0; }
+}
+/* Match title/Refresh and filter/action rows in two-row module toolbars. */
+[data-section-header][data-aligned-toolbar] { padding: 1rem 1.5rem; }
+[data-filter-toolbar] { padding-inline: 1.5rem; }
+@media (max-width: 639px) {
+  [data-section-header][data-aligned-toolbar],
+  [data-filter-toolbar] { padding-inline: 1rem; }
+}

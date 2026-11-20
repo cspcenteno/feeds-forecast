@@ -135,7 +135,7 @@ test('the seven-column Forecast format imports volume without requiring a custom
 test('download templates preserve the requested column positions in Excel', () => {
   assert.deepEqual([...forecastTemplateColumns], ['region', 'year', 'week', 'kam', 'customer', 'product_code', 'product_name', 'volume'])
   assert.deepEqual([...budgetTemplateColumns], ['year', 'month', 'region', 'kam', 'customer', 'product_code', 'product_name', 'volume'])
-  assert.deepEqual([...actualTemplateColumns], ['date', 'year', 'month', 'region', 'kam', 'customer', 'product_code', 'product_name', 'volume'])
+  assert.deepEqual([...actualTemplateColumns], ['Trans Date', 'Salesperson', 'Partynme', 'Item No', 'Description', 'At50 Kg'])
   for (const columns of [forecastTemplateColumns, budgetTemplateColumns, actualTemplateColumns]) {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([[...columns]]), 'Import')

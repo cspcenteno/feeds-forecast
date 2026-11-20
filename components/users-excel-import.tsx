@@ -166,20 +166,20 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
   }
 
   return <section className="rounded-xl border bg-card shadow-sm">
-    <div data-section-header="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+    <div data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
       <div><h2 data-section-title="" className="font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Users Excel Import</h2></div>
       <div data-action-toolbar="" className="flex flex-wrap gap-2">
-        <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} />
-        <button data-action-tone="neutral" type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
-        <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
-        <button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
-        <button data-slot="show-hide-button" data-action-tone="neutral" type="button" disabled={disabled} aria-expanded={show} onClick={() => setShow(!show)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
-      </div>
+<input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} />
+<button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" />Download Template</button>
+<button data-slot="show-hide-button" data-action-tone="neutral" type="button" disabled={disabled} aria-expanded={show} onClick={() => setShow(!show)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50">{show ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}{show ? 'Hide' : 'Show'}</button>
+<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
+</div>
     </div>
 
     {show && <div className="space-y-4 p-4">
       {busy && progress && <p role="status" className="text-sm">{progress}</p>}
-      <section aria-labelledby="import-account-settings" className="overflow-hidden rounded-lg border bg-card"><header data-section-header="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
+      <section aria-labelledby="import-account-settings" className="overflow-hidden rounded-lg border bg-card"><header data-section-header="" data-aligned-toolbar="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-full space-y-1.5 sm:w-64"><label htmlFor="users-import-password" className="block text-sm font-medium">Temporary Password</label><input id="users-import-password" type="password" autoComplete="new-password" placeholder="At least 8 characters" minLength={8} maxLength={128} disabled={disabled} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="block h-10 w-full rounded-md border bg-background px-3 text-sm" /></div>

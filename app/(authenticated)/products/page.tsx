@@ -448,7 +448,11 @@ export default function ProductsPage() {
       {/* Table */}
       <TableGroupProvider groupKeys={sortedProducts.map((product) => String(product.category_id))}>
       <section className="rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search products" />{authorization.can('Products', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Product</button>}<TableGroupToggle disabled={tableLoading} /></div>
+
+
+        <div data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search products" />
+{authorization.can('Products', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Product</button>}
+<TableGroupToggle disabled={tableLoading} /></div>
 
         <div className="overflow-x-auto">
           <Table summary={summaryForLevel(sortedProducts.length, 'categories', sortedProducts.map((row) => row.category_id))} saved aria-busy={tableLoading} className="table-fixed">

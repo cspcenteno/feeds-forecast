@@ -67,7 +67,7 @@ export default function AuditLogsPage() {
   }, [load])
   if (!allowed) return <p className="text-sm text-muted-foreground">Audit Logs is available to authorized Admins.</p>
   return <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
-    <header data-section-header="" className="flex justify-end border-b">
+    <header data-section-header="" data-aligned-toolbar="" className="flex justify-end border-b">
       <button type="button" disabled={loading} onClick={() => void load()} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={'size-4 ' + (loading ? 'animate-spin' : '')} />Refresh</button>
     </header>
     <form className="grid gap-3 border-b p-4 sm:grid-cols-2 lg:grid-cols-5" onSubmit={(event) => { event.preventDefault(); setPage(0); setRecordId(search.trim()) }}>
