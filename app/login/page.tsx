@@ -160,7 +160,7 @@ export default function LoginPage() {
 
             <button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#174c36] px-4 text-sm font-semibold text-white outline-none transition hover:bg-[#103b29] focus-visible:ring-3 focus-visible:ring-emerald-600/40 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-700 dark:hover:bg-emerald-600">
-              {loading ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />Signing in…</> : <>Sign In<ArrowRight aria-hidden="true" className="size-4" /></>}
+              {loading ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /><span>Signing in…</span></> : <><span>Sign In</span><ArrowRight aria-hidden="true" className="size-4" /></>}
             </button>
           </form>
 

@@ -28,6 +28,9 @@ import { useRouter } from 'next/navigation'
 import {
   RefreshCw,
   Plus,
+  UserPlus,
+  KeyRound,
+  Save,
   Search,
   X,
 } from 'lucide-react'
@@ -1398,14 +1401,16 @@ export default function UsersPage() {
               {formBusy && (
                 <RefreshCw className="size-4 animate-spin" />
               )}
-              {selectedUser ? (saving ? 'Saving...' : 'Save Changes') : (creatingUser ? 'Creating User...' : 'Create User')}
+              {!selectedUser && !formBusy && <UserPlus className="size-4 shrink-0" aria-hidden="true" />}
+              {selectedUser && !formBusy && <Save className="size-4 shrink-0" aria-hidden="true" />}
+              <span>{selectedUser ? (saving ? 'Saving...' : 'Save Changes') : (creatingUser ? 'Creating User...' : 'Create User')}</span>
             </button>
             {selectedUser && authorization.can('Users', 'edit') && (
               <button type="button" data-action-tone="caution" onClick={handleResetPassword}
                 disabled={formBusy || resetTemporaryPassword.length < 8}
                 className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium">
-                {resettingPassword && <RefreshCw className="size-4 animate-spin" aria-hidden="true" />}
-                {resettingPassword ? 'Resetting…' : 'Reset Password'}
+                {resettingPassword ? <RefreshCw className="size-4 animate-spin" aria-hidden="true" /> : <KeyRound className="size-4 shrink-0" aria-hidden="true" />}
+                <span>{resettingPassword ? 'Resetting…' : 'Reset Password'}</span>
               </button>
             )}
           </div>

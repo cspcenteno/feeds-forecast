@@ -164,7 +164,7 @@ function isEditableForecast(item: SalesForecast) {
 export default function SalesInputPage() {
   const [forecastDialogOpen, setForecastDialogOpen] = useState(false)
   const attention = useForecastAttention()
-  const { confirmAction } = useActionDialogs()
+  const { confirmAction, notify } = useActionDialogs()
 
   const supabase = createClient()
   const authorization = useAuthorization()
@@ -1748,12 +1748,12 @@ export default function SalesInputPage() {
               if (!isLocked || target.closest('[data-forecast-week-field]') || !target.closest('input, select, [role="combobox"], [data-content-size]')) return
               event.preventDefault()
               event.stopPropagation()
-              setMessage('Select an open week first before entering forecast details.')
+              notify('Select an open week first before entering forecast details.', { tone: 'warning' })
             }}
             onFocusCapture={(event) => {
               const target = event.target as HTMLElement
               if (!isLocked || target.closest('[data-forecast-week-field]') || !target.closest('input, select, [role="combobox"], [data-content-size]')) return
-              setMessage('Select an open week first before entering forecast details.')
+              notify('Select an open week first before entering forecast details.', { tone: 'warning' })
             }}>
             <div className="mb-6 space-y-4">
               <div className="app-field-row forecast-entry-fields">
@@ -2027,7 +2027,7 @@ export default function SalesInputPage() {
                 disabled={loading || initializing || workspaceOwner !== userId}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-muted disabled:opacity-50">
                 <RotateCcw className="size-4" aria-hidden="true" />
-                Clear
+                <span>Clear</span>
               </button>
               <button data-action-tone="primary" data-action-fill=""
                 type="button"
@@ -2040,7 +2040,7 @@ export default function SalesInputPage() {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Save className="size-4" />
-                {pendingAction === 'save' ? 'Saving...' : rows.some((row) => row.status === 'Rejected') ? 'Save Changes' : 'Save as Draft'}
+                <span>{pendingAction === 'save' ? 'Saving...' : rows.some((row) => row.status === 'Rejected') ? 'Save Changes' : 'Save as Draft'}</span>
               </button>
             </div>
 

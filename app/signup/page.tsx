@@ -98,7 +98,6 @@ export default function SignupPage() {
           <h1 className="tracking-tight">
             <span className="mt-2 block text-3xl leading-tight font-semibold xl:text-4xl">Feeds Forecast</span>
           </h1>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-emerald-50/75 lg:mt-6 lg:text-base">Plan and track forecasts in one place.</p>
           <div className="mt-5 hidden flex-wrap items-center gap-x-5 gap-y-3 text-xs text-emerald-100/80 lg:mt-10 lg:flex">
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Forecast</span>
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Review</span>
@@ -108,7 +107,7 @@ export default function SignupPage() {
 
       </section>
 
-      <section className="relative flex flex-col items-center justify-start px-5 pt-8 pb-6 sm:px-10 sm:pb-10 lg:min-h-svh lg:justify-center lg:px-12 lg:pt-24">
+      <section className="flex flex-col items-center justify-start px-5 pt-8 pb-6 sm:px-10 sm:pb-10 lg:min-h-svh lg:justify-center lg:px-12 lg:pt-24">
         <button type="button" onClick={toggleTheme} aria-label="Toggle light or dark mode" className="absolute top-6 right-6 z-10 inline-flex items-center justify-center gap-2 max-md:size-11 max-md:p-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-600 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
           <Moon className="size-4 dark:hidden" aria-hidden="true" /><Sun className="hidden size-4 dark:block" aria-hidden="true" />
           <span className="hidden md:inline dark:md:hidden">Dark Mode</span><span className="hidden dark:md:inline">Light Mode</span>
@@ -228,7 +227,7 @@ export default function SignupPage() {
             disabled={loading}
             className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#174c36] px-4 text-sm font-semibold text-white outline-none transition hover:bg-[#103b29] focus-visible:ring-3 focus-visible:ring-emerald-600/40 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-700 dark:hover:bg-emerald-600"
           >
-            {loading ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />Signing up…</> : <>Sign up<ArrowRight aria-hidden="true" className="size-4" /></>}
+            {loading ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /><span>Signing up…</span></> : <><span>Sign up</span><ArrowRight aria-hidden="true" className="size-4" /></>}
           </button>
         </form>
 

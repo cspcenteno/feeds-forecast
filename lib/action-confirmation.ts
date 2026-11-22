@@ -60,6 +60,7 @@ export function confirmationPresentation(message: string) {
   if (/^add\b/i.test(text)) return { title: 'Add this customer?', confirmLabel: 'Add customer', tone: 'primary' as const, irreversible: false }
   if (/^reopen\b/i.test(text)) return { title: 'Reopen this week?', confirmLabel: 'Reopen', tone: 'positive' as const, irreversible: false }
   if (/^lock\b/i.test(text)) return { title: 'Lock this week?', confirmLabel: 'Lock week', tone: 'caution' as const, irreversible: false }
+  if (/^restore the automatic rule\b/i.test(text)) return { title: 'Restore automatic week access?', confirmLabel: 'Restore rule', tone: 'caution' as const, irreversible: false }
   return { title: 'Change week access?', confirmLabel: 'Apply changes', tone: 'caution' as const, irreversible: false }
 }
 

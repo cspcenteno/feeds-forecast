@@ -3,13 +3,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { ForecastConfirmationSummary } from '@/components/forecast-confirmation-summary'
-import { AlertTriangle, Ban, CheckCircle2, LoaderCircle, Send, X } from 'lucide-react'
+import { AlertTriangle, Ban, CheckCircle2, LoaderCircle, Lock, RotateCcw, Send, Trash2, Unlock, Upload, UserPlus, X } from 'lucide-react'
 import { confirmationPresentation, createConfirmationController, type ConfirmationOptions, type ConfirmationTicket, type ConfirmationView } from '@/lib/action-confirmation'
 
-type Notice = { id: number; message: string; success: boolean }
+type Notice = { id: number; message: string; success: boolean; warning: boolean }
 type DialogService = {
   confirmAction: (options: ConfirmationOptions) => Promise<ConfirmationTicket | null>
-  notify: (message: string, options?: { success?: boolean }) => void
+  notify: (message: string, options?: { success?: boolean; tone?: 'warning' }) => void
 }
 const Context = createContext<DialogService | null>(null)
 
@@ -26,11 +26,11 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
 
   const confirmAction = useCallback((options: ConfirmationOptions) => controller.request(options), [controller])
 
-  const notify = useCallback((message: string, options?: { success?: boolean }) => {
+  const notify = useCallback((message: string, options?: { success?: boolean; tone?: 'warning' }) => {
     if (!message.trim()) return
-    const notice = { id: ++noticeId.current, message: message.trim(), success: options?.success ?? /successfully/i.test(message) }
+    const notice = { id: ++noticeId.current, message: message.trim(), success: options?.tone === 'warning' ? false : options?.success ?? /successfully/i.test(message), warning: options?.tone === 'warning' }
     // Concurrent loaders can report the same issue; keep one visible notice.
-    setNotices((current) => current.some((item) => item.message === notice.message && item.success === notice.success)
+    setNotices((current) => current.some((item) => item.message === notice.message && item.success === notice.success && item.warning === notice.warning)
       ? current
       : [...current.slice(-2), notice])
     const timer = setTimeout(() => {
@@ -44,6 +44,11 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
   const presentation = confirmationPresentation(view?.options.message ?? '')
   const tone = view?.options.tone ?? presentation.tone
   const hasSummary = Boolean(view?.options.forecastSummary || view?.options.details?.length || view?.options.items?.length)
+  const message = view?.options.message.trim() ?? ''
+  const ConfirmIcon = view?.options.forecastSummary?.level === 'void' ? Ban
+    : /^restore\b/i.test(message) ? RotateCcw : /^reopen\b/i.test(message) ? Unlock : /^lock\b/i.test(message) ? Lock
+    : /^(delete|remove|discard)\b/i.test(message) ? Trash2 : /^import\b/i.test(message) ? Upload
+    : /^(create|add)\b/i.test(message) ? UserPlus : view?.options.layout === 'review' || /^submit\b/i.test(message) ? Send : CheckCircle2
 
   return (
     <Context.Provider value={service}>
@@ -78,12 +83,12 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
               </div>}
               {presentation.irreversible && !/cannot be undone|permanent/i.test(view.options.message) && <p className={hasSummary ? 'mt-3 text-xs text-muted-foreground' : 'text-xs text-muted-foreground'}>This action cannot be undone.</p>}
             </div>}
-            <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+            <div className="grid shrink-0 grid-cols-2 items-center gap-2 border-t px-4 py-4 sm:flex sm:justify-end sm:px-6">
               <AlertDialog.Close ref={cancelRef} disabled={view.busy} data-action-tone="neutral" className="h-10 rounded-md border px-4 text-sm"><X className="size-4 shrink-0" aria-hidden="true" /><span>Cancel</span></AlertDialog.Close>
               <button type="button" disabled={view.busy} onClick={() => controller.proceed()} data-action-tone={tone} data-action-fill="" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium">
                 {view.busy && <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-                {view.options.layout === 'review' && !view.busy && (view.options.forecastSummary?.level === 'void' ? <Ban className="size-4" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />)}
-                {view.busy ? 'Processing…' : view.options.confirmLabel ?? presentation.confirmLabel}
+                {!view.busy && <ConfirmIcon className="size-4 shrink-0" aria-hidden="true" />}
+                <span>{view.busy ? 'Processing…' : view.options.confirmLabel ?? presentation.confirmLabel}</span>
               </button>
             </div>
           </AlertDialog.Popup>
@@ -91,8 +96,8 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
       </AlertDialog.Root>
       <div className="fixed top-4 right-4 z-[220] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
         {notices.map((notice) => <div key={notice.id} role={notice.success ? 'status' : 'alert'}
-          className={'flex items-start gap-3 rounded-xl border bg-background p-4 shadow-lg ' + (notice.success ? 'border-emerald-300 dark:border-emerald-800' : 'border-red-300 dark:border-red-900')}>
-          {notice.success ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" aria-hidden="true" /> : <AlertTriangle className="mt-0.5 size-5 shrink-0 text-red-600" aria-hidden="true" />}
+          className={'flex items-start gap-3 rounded-xl border bg-background p-4 shadow-lg ' + (notice.warning ? 'border-amber-300 dark:border-amber-800' : notice.success ? 'border-emerald-300 dark:border-emerald-800' : 'border-red-300 dark:border-red-900')}>
+          {notice.success ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" aria-hidden="true" /> : <AlertTriangle className={'mt-0.5 size-5 shrink-0 ' + (notice.warning ? 'text-amber-600 dark:text-amber-400' : 'text-red-600')} aria-hidden="true" />}
           <p className="min-w-0 flex-1 text-sm wrap-anywhere">{notice.message}</p>
           <button type="button" aria-label="Dismiss notification" onClick={() => setNotices((current) => current.filter((item) => item.id !== notice.id))}
             className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2">
