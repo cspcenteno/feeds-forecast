@@ -280,11 +280,12 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
   const [filterYear, setFilterYear] = useState(currentPeriod.year)
   const [filterMonth, setFilterMonth] = useState(currentPeriod.month)
   const [filterRegionId, setFilterRegionId] = useState('')
+  const [filterSalesman, setFilterSalesman] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
   const [filterProduct, setFilterProduct] = useState('')
   const searchingSavedRecords = filterCustomer.trim() !== '' || filterProduct.trim() !== ''
   const [manualSavedSearchQuery, setManualSavedSearchQuery] = useState<string | null>(null)
-  const savedSearchQuery = JSON.stringify([filterCustomer, filterProduct, filterYear, filterMonth, filterRegionId])
+  const savedSearchQuery = JSON.stringify([filterCustomer, filterProduct, filterYear, filterMonth, filterRegionId, filterSalesman])
   const autoExpandSavedSearch = searchingSavedRecords && manualSavedSearchQuery !== savedSearchQuery
 
   const [expandedImportGroups, setExpandedImportGroups] = useState(
@@ -950,26 +951,35 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     subregionRestricted,
   ])
 
+  const savedSalesmanOptions = useMemo(() => [...new Set(scopedBudgets.map((record) => record.kam?.trim()).filter((name): name is string => Boolean(name)))].sort((a, b) => a.localeCompare(b)), [scopedBudgets])
+  const salesmanScopedBudgets = useMemo(() => filterSalesman
+    ? scopedBudgets.filter((record) => normalizeText(record.kam ?? '') === normalizeText(filterSalesman))
+    : scopedBudgets, [scopedBudgets, filterSalesman])
+
+  useEffect(() => {
+    if (filterSalesman && !savedSalesmanOptions.includes(filterSalesman)) setFilterSalesman('')
+  }, [filterSalesman, savedSalesmanOptions])
+
   const { customers: savedCustomerOptions } = useMemo(
-    () => volumeFilterOptions(scopedBudgets, customers, productLabels),
-    [scopedBudgets, customers, productLabels],
+    () => volumeFilterOptions(salesmanScopedBudgets, customers, productLabels),
+    [salesmanScopedBudgets, customers, productLabels],
   )
   const savedProductOptions = useMemo(() => {
     const search = filterCustomer.trim().toLowerCase()
     const matchingCustomerIds = new Set(customers.filter((customer) => customer.customer.toLowerCase().includes(search)).map((customer) => customer.id))
-    const records = search ? scopedBudgets.filter((record) => record.customer_id !== null && matchingCustomerIds.has(record.customer_id)) : scopedBudgets
+    const records = search ? salesmanScopedBudgets.filter((record) => record.customer_id !== null && matchingCustomerIds.has(record.customer_id)) : salesmanScopedBudgets
     return volumeFilterOptions(records, customers, productLabels).products
-  }, [scopedBudgets, customers, productLabels, filterCustomer])
+  }, [salesmanScopedBudgets, customers, productLabels, filterCustomer])
 
   const filteredBudgets = useMemo(() => {
     const customerSearch = filterCustomer.trim().toLowerCase()
     const productSearch = filterProduct.trim().toLowerCase()
     const customerNames = new Map(customers.map(customer => [customer.id, customer.customer.toLowerCase()]))
-    return scopedBudgets.filter(item =>
+    return salesmanScopedBudgets.filter(item =>
       (!customerSearch || (item.customer_id !== null && customerNames.get(item.customer_id)?.includes(customerSearch))) &&
       (!productSearch || (item.product_id !== null && productLabels.get(item.product_id)?.toLowerCase().includes(productSearch))),
     )
-  }, [scopedBudgets, customers, productLabels, filterCustomer, filterProduct])
+  }, [salesmanScopedBudgets, customers, productLabels, filterCustomer, filterProduct])
 
   const previewRecords = stagingRecords
 
@@ -1702,9 +1712,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
   return (
     <div data-volume-page className="space-y-4 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:gap-4 lg:space-y-0">
       {editingImportSalesman && <RecordDialog open onClose={() => setEditingImportSalesman(null)} title={`Edit ${isActual ? 'Actuals' : 'Budget'} Import Salesman`} busy={savingImport} fitContent maxWidth="36rem" stackLevel={1}>
-        <form onSubmit={saveImportSalesman} className="flex flex-col gap-4">
+        <form data-salesman-editor="" onSubmit={saveImportSalesman} className="flex flex-col gap-4">
           <div data-popup-form-header="" className="border-b pb-4 pr-10"><h2 data-dialog-title data-section-title=""><HeadingPencil className="size-5 text-muted-foreground" aria-hidden="true" />Edit {isActual ? 'Actuals' : 'Budget'} Import Salesman</h2><p className="mt-1 text-xs text-muted-foreground">{editingImportSalesman.items.length.toLocaleString()} uploaded records</p></div>
-          <label className="flex min-w-0 flex-col gap-2 text-sm font-medium"><span>Salesman <span className="text-destructive" aria-hidden="true">*</span></span>
+          <label className="flex min-w-0 flex-col gap-2 text-sm font-medium"><span>Salesman</span>
             <SearchableSelect aria-label="Salesman" required value={editingImportSalesman.name} disabled={savingImport} placeholder="Select salesman" onValueChange={(name) => setEditingImportSalesman((current) => current && ({ ...current, name }))} options={(actualImportKams ?? []).filter((user) => user.full_name?.trim()).map((user) => ({ value: user.full_name!.trim(), label: user.full_name!.trim() }))} />
           </label>
           <div data-action-toolbar="" data-dialog-footer="" className="flex justify-end gap-2 border-t pt-4">
@@ -1717,9 +1727,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         <form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void saveMissingCustomer() }}>
           <div data-popup-form-header=""><h2 data-section-title=""><ActionUserPlusIcon className="size-5 text-muted-foreground" aria-hidden="true" />Add Customer</h2></div>
           <div data-customer-fields="" className="app-field-row gap-4">
-            <label className="space-y-2 text-sm font-medium">Customer <span className="text-destructive">*</span><input required value={customerDraft.customer} onChange={(event) => setCustomerDraft({ ...customerDraft, customer: event.target.value })} className="h-10 w-full rounded-md border bg-background px-3 text-sm" /></label>
+            <label className="space-y-2 text-sm font-medium"><span className="text-destructive">*</span> Customer<input required value={customerDraft.customer} onChange={(event) => setCustomerDraft({ ...customerDraft, customer: event.target.value })} className="h-10 w-full rounded-md border bg-background px-3 text-sm" /></label>
             <label className="space-y-2 text-sm font-medium">Salesman<SalespersonInput value={customerDraft.salesman} onValueChange={(salesman) => setCustomerDraft({ ...customerDraft, salesman })} placeholder="Select or enter salesman name" /></label>
-            <label className="space-y-2 text-sm font-medium">Region <span className="text-destructive" aria-hidden="true">*</span><SelectionField aria-label="Region" required disabled={!canWriteAllRegions} value={customerDraft.regionId} onValueChange={(regionId) => setCustomerDraft({ ...customerDraft, regionId })}><option value="">Select region</option>{regions.filter((region) => canWriteAllRegions || region.id === assignedRegionId).map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</SelectionField></label>
+            <label className="space-y-2 text-sm font-medium"><span className="text-destructive" aria-hidden="true">*</span> Region<SelectionField aria-label="Region" required disabled={!canWriteAllRegions} value={customerDraft.regionId} onValueChange={(regionId) => setCustomerDraft({ ...customerDraft, regionId })}><option value="">Select region</option>{regions.filter((region) => canWriteAllRegions || region.id === assignedRegionId).map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}</SelectionField></label>
             <label className="space-y-2 text-sm font-medium">Segment<SearchableSelect aria-label="Segment" freeText placeholder="Select or enter segment" value={customerDraft.segment} onValueChange={(segment) => setCustomerDraft({ ...customerDraft, segment })} options={[{ value: 'DISTRIBUTOR', label: 'DISTRIBUTOR' }, { value: 'FARM', label: 'FARM' }]} /></label>
             <div data-field-size="toggle" className="flex items-end"><ActiveField checked={customerDraft.active} onChange={(event) => setCustomerDraft({ ...customerDraft, active: event.target.checked })} /></div>
           </div>
@@ -1904,7 +1914,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                     ['product_code', 'Product Code'], ['volume', volumeLabel],
                   ] as const).map(([field, label]) => (
                     <label key={field} data-import-field={field} className={`flex min-w-0 flex-col gap-1.5 text-sm font-medium ${field === 'kam' || field === 'customer' || field === 'product_name' ? 'col-span-2 sm:col-span-1' : ''}`}>
-                      <span>{label}{field === 'volume' && <span className="text-destructive" aria-hidden="true"> *</span>}</span>
+                      <span>{field === 'volume' && <span className="text-destructive" aria-hidden="true">* </span>}{label}</span>
                       {field === 'kam' ? <SalespersonInput
                         value={editingImport.kam ?? ''} disabled={importBusy}
                         onValueChange={(kam) => setEditingImport({ ...editingImport, kam: kam || null })}
@@ -1925,7 +1935,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                   ))}
                 </fieldset>
                 </div>
-                <div data-action-toolbar="" data-dialog-footer="" className="flex shrink-0 flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+                <div data-action-toolbar="" data-dialog-footer="" data-uploaded-record-actions="" className="flex shrink-0 flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
                   <button data-action-tone="neutral" type="button" disabled={savingImport} onClick={() => setEditingImport(null)} className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
                     Cancel
                   </button>
@@ -2006,17 +2016,18 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             </h2>
           </div>
           <div data-action-toolbar="" data-saved-volume-actions="" className="flex flex-wrap items-center gap-2">
-          <button data-action-tone="neutral" type="button" aria-label="Clear filters" title="Clear filters"
+          <button data-action-tone="neutral" type="button" aria-label="Reset filters" title="Reset filters"
             onClick={() => {
               setFilterCustomer('')
               setFilterProduct('')
               setFilterYear(currentPeriod.year)
+              setFilterSalesman('')
               setFilterMonth(currentPeriod.month)
               setFilterRegionId(canReadAllRegions ? '' : assignedRegionId === null ? '' : String(assignedRegionId))
               setManualSavedSearchQuery(null)
             }}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border px-3 text-sm">
-            <FilterX className="size-4 shrink-0" aria-hidden="true" /><span className="hidden md:inline">Clear filters</span>
+            <FilterX className="size-4 shrink-0" aria-hidden="true" /><span className="hidden md:inline">Reset filters</span>
           </button>
             {canManageImport && <button type="button" data-action-tone="transfer" aria-label="Excel Import" title="Excel Import" onClick={() => {
               setShowImportPreview(true)
@@ -2045,9 +2056,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         </div>
 
         {editingSavedSalesman && <RecordDialog open onClose={() => setEditingSavedSalesman(null)} title={isActual ? 'Edit Actuals Salesman' : 'Edit Budget Salesman'} busy={loading} fitContent maxWidth="36rem">
-          <form onSubmit={saveSavedSalesman} className="flex flex-col gap-4">
+          <form data-salesman-editor="" onSubmit={saveSavedSalesman} className="flex flex-col gap-4">
             <div data-popup-form-header="" className="border-b pb-4 pr-10"><h2 data-dialog-title data-section-title=""><HeadingPencil className="size-5 text-muted-foreground" aria-hidden="true" />{isActual ? 'Edit Actuals Salesman' : 'Edit Budget Salesman'}</h2></div>
-            <label className="flex min-w-0 flex-col gap-2 text-sm font-medium"><span>Salesman <span className="text-destructive" aria-hidden="true">*</span></span><SalespersonInput value={editingSavedSalesman.name} disabled={loading} onValueChange={(name) => setEditingSavedSalesman((current) => current && ({ ...current, name }))} /></label>
+          <label className="flex min-w-0 flex-col gap-2 text-sm font-medium"><span>Salesman</span><SalespersonInput value={editingSavedSalesman.name} disabled={loading} onValueChange={(name) => setEditingSavedSalesman((current) => current && ({ ...current, name }))} /></label>
             <div data-action-toolbar="" data-dialog-footer="" className="flex justify-end gap-2 border-t pt-4">
               <button data-action-tone="neutral" type="button" disabled={loading} onClick={() => setEditingSavedSalesman(null)} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium disabled:opacity-50"><ActionXIcon className="size-4" aria-hidden="true" />Cancel</button>
               <button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || !editingSavedSalesman.name.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium disabled:opacity-50"><ActionSaveIcon className="size-4" aria-hidden="true" />{loading ? 'Saving…' : 'Save Changes'}</button>
@@ -2067,7 +2078,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                 <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">Salesman
                   <SalespersonInput value={editingSavedCustomer.kam} disabled={loading} onValueChange={(kam) => setEditingSavedCustomer((current) => current && ({ ...current, kam }))} />
                 </label>
-                <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">Customer Name <span className="text-destructive" aria-hidden="true">*</span>
+                <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span className="text-destructive" aria-hidden="true">*</span> Customer Name
                   <SearchableSelect aria-label="Customer Name" freeText required value={editingSavedCustomer.customer} disabled={loading} placeholder="Select or enter customer name"
                     onValueChange={(customer) => setEditingSavedCustomer((current) => current && ({ ...current, customer }))}
                     options={customers.filter((customer) => canWriteAllRegions || customer.region_id === assignedRegionId).map((customer) => ({ value: customer.customer, label: customer.customer }))} />
@@ -2082,7 +2093,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               </fieldset>
               <Table className="min-w-[680px] table-fixed" containerProps={{ className: 'min-h-0 shrink-0 rounded-lg border sm:flex-[0_1_auto]', style: { maxHeight: 'none' }, 'aria-label': 'Customer record editor', tabIndex: 0, role: 'region' }}>
                 <colgroup><col className="w-12" /><col className="w-[168px]" /><col /><col className="w-[144px]" /></colgroup>
-                <thead className="sticky top-0 z-10 border-b bg-muted text-sm"><tr><th className="px-3 py-2 text-left font-medium">#</th><th className="px-3 py-2 text-left font-medium">{isActual ? 'Date' : 'Month'}{isActual && <span className="text-destructive" aria-hidden="true"> *</span>}</th><th className="px-3 py-2 text-left font-medium">Product</th><th className="px-3 py-2 text-right font-medium whitespace-nowrap">Volume (50kg) <span className="text-destructive" aria-hidden="true">*</span></th></tr></thead>
+                <thead className="sticky top-0 z-10 border-b bg-muted text-sm"><tr><th className="px-3 py-2 text-left font-medium">#</th><th className="px-3 py-2 text-left font-medium">{isActual && <span className="text-destructive" aria-hidden="true">* </span>}{isActual ? 'Date' : 'Month'}</th><th className="px-3 py-2 text-left font-medium">Product</th><th className="px-3 py-2 text-right font-medium whitespace-nowrap"><span className="text-destructive" aria-hidden="true">*</span> Volume (50kg)</th></tr></thead>
                 <tbody>{editingSavedCustomer.rows.map((draft, index) => {
                   const update = (change: Partial<SavedRecordDraft>) => setEditingSavedCustomer((current) => current && ({ ...current, rows: current.rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...change } : row) }))
                   return <tr key={draft.original.id} className="border-b last:border-0">
@@ -2163,11 +2174,12 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             </label>
 
             <SelectionField value={filterRegionId}
-                  loading={initializing} loadingText="Loading region…"
+                  loading={initializing} loadingText="Loading regions…"
                   disabled={initializing || !canReadAllRegions}
-                  placeholder={initializing ? 'Loading region…' : 'No assigned region'}
+                  placeholder={initializing ? 'Loading regions…' : 'No assigned region'}
                   onValueChange={(selectionValue) => {
                 setFilterRegionId(selectionValue)
+                setFilterSalesman('')
                 setFilterCustomer('')
               }}
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm"
@@ -2182,33 +2194,46 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             </SelectionField>
           </div>
 
+          <div data-salesman-filter="" className="space-y-1.5">
+            <label htmlFor="saved-volume-salesman-filter" className="text-xs font-medium text-muted-foreground">Salesman</label>
+            <SelectionField id="saved-volume-salesman-filter" aria-label="Salesman" value={filterSalesman}
+              onValueChange={(value) => { setFilterSalesman(value); setFilterCustomer(''); setFilterProduct('') }}
+              disabled={initializing || savedSalesmanOptions.length === 0} loading={initializing}
+              className="h-9 w-full" placeholder="All Salesmen">
+              <option value="">All Salesmen</option>
+              {savedSalesmanOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </SelectionField>
+          </div>
+
           <div data-field-size="wide" className="space-y-1.5">
             <label htmlFor="saved-budget-customer-search" className="text-xs font-medium text-muted-foreground">
-              Search customer
+              Customer
             </label>
 
             <SelectionField id="saved-budget-customer-search"
                   value={filterCustomer}
                   onValueChange={(selectionValue) => { setFilterCustomer(selectionValue); setFilterProduct('') }}
-                  placeholder="Search customers…"
+                  placeholder="All Customers"
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                  aria-label="Search customer"
+                  aria-label="Customer"
                   freeText>
+              <option value="">All Customers</option>
               {savedCustomerOptions.map((name) => <option key={name} value={name} />)}
             </SelectionField>
 
           </div>
           <div data-field-size="wide" className="space-y-1.5">
             <label htmlFor="saved-product-search" className="text-xs font-medium text-muted-foreground">
-              Search product
+              Product
             </label>
             <SelectionField id="saved-product-search"
                   value={filterProduct}
                   onValueChange={(selectionValue) => setFilterProduct(selectionValue)}
-                  placeholder="Search products…"
+                  placeholder="All Products"
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                  aria-label="Search product"
+                  aria-label="Product"
                   freeText>
+              <option value="">All Products</option>
               {savedProductOptions.map(([id, name]) => <option key={id} value={name} />)}
             </SelectionField>
 

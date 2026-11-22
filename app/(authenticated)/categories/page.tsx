@@ -236,7 +236,7 @@ export default function CategoriesPage() {
               htmlFor="name"
               className="text-sm font-medium"
             >
-              Category Name <span className="text-destructive" aria-hidden="true">*</span>
+              <span className="text-destructive" aria-hidden="true">*</span> Category Name
             </label>
 
             <input

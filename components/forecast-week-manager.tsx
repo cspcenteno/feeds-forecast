@@ -84,11 +84,11 @@ export function ForecastWeekManager() {
 
       {canManage && <div className="p-6"><div data-week-lock-controls="" className="max-w-3xl space-y-4">
         <div data-week-lock-fields="" className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
-          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Week <span className="text-destructive" aria-hidden="true">*</span>
+          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Week
             {weekDateRangeLabel(selectedWeek) && <span className="ml-2 text-xs font-normal text-muted-foreground">({weekDateRangeLabel(selectedWeek)})</span>}</span>
             <input type="week" disabled={busy} value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)} className={input} />
           </label>
-          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Reason <span className="text-destructive" aria-hidden="true">*</span></span>
+          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Reason</span>
             <input data-week-lock-reason="" required disabled={busy} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Enter reason…" className={input} />
           </label>
         </div>

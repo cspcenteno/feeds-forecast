@@ -3,8 +3,9 @@
 import type { ReactNode, FocusEventHandler } from 'react'
 import { collectSelectionOptions, isSelectionAllowed } from '@/lib/selection-options'
 import { SearchableSelect } from '@/components/ui/searchable-select'
+import { selectionText } from '@/lib/selection-text'
 
-export function SelectionField({ value, onValueChange, children, className = '', loading = false, loadingText = 'Loading…', ...props }: {
+export function SelectionField({ value, onValueChange, children, className = '', loading = false, loadingText, ...props }: {
   value: string | number | null | undefined
   onValueChange?: (value: string) => void
   children: ReactNode
@@ -32,7 +33,8 @@ export function SelectionField({ value, onValueChange, children, className = '',
   }))
   const prompt = collectedOptions.find((option) => option.value === '' && /^(select|choose)\b/i.test(option.label))
   const options = collectedOptions.filter((option) => option !== prompt)
-  return <SearchableSelect {...props} disabled={loading || props.disabled} placeholder={loading ? loadingText : props.placeholder ?? prompt?.label}
+  const text = selectionText(props['aria-label'] ?? props.name)
+  return <SearchableSelect {...props} disabled={loading || props.disabled} placeholder={loading ? loadingText ?? text.loading : props.placeholder ?? prompt?.label}
     inputHeightClassName={heightClasses || 'h-10'} value={loading ? '' : String(value ?? '')} options={loading ? [] : options}
     onValueChange={(nextValue) => { if (isSelectionAllowed(nextValue, options, props.freeText)) onValueChange?.(nextValue) }} className={widthClasses || 'w-full'} />
 }

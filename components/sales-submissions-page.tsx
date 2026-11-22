@@ -1155,6 +1155,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                         From week
                         {weekDateRangeLabel(fromWeek) && <span className="ml-1 text-xs font-normal">({weekDateRangeLabel(fromWeek)})</span>}
                       </label>
+                      <div data-compact-week-field="" className="relative">
                       <input id="weekly-sales-from-week" type="week" value={fromWeek}
                         onChange={(event) => {
                           const value = event.target.value
@@ -1163,12 +1164,15 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                         }}
                         className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                       />
+                      <span data-compact-week-label="" aria-hidden="true">{fromWeek ? `W${Number(fromWeek.slice(6))} · ${fromWeek.slice(0, 4)}` : 'Select week'}</span>
+                      </div>
                     </div>
                     <div data-field-size="compact" className="space-y-1.5">
                       <label htmlFor="weekly-sales-to-week" className="block text-xs font-medium text-muted-foreground">
                         To week
                         {weekDateRangeLabel(toWeek) && <span className="ml-1 text-xs font-normal">({weekDateRangeLabel(toWeek)})</span>}
                       </label>
+                      <div data-compact-week-field="" className="relative">
                       <input id="weekly-sales-to-week" type="week" value={toWeek}
                         onChange={(event) => {
                           const value = event.target.value
@@ -1177,6 +1181,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                         }}
                         className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                       />
+                      <span data-compact-week-label="" aria-hidden="true">{toWeek ? `W${Number(toWeek.slice(6))} · ${toWeek.slice(0, 4)}` : 'Select week'}</span>
+                      </div>
                     </div>
                   </>
 
@@ -1186,7 +1192,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     </label>
 
                     <SelectionField value={selectedRegion}
-                  loading={loading && regionRestricted} loadingText="Loading region…"
+                  loading={loading && regionRestricted} loadingText="Loading regions…"
                   onValueChange={(selectionValue) => setSelectedRegion(selectionValue)}
                   disabled={loading || regionRestricted}
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted"

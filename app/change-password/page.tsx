@@ -195,7 +195,7 @@ export default function ChangePasswordPage() {
           {/* New password */}
           <div className="space-y-1.5">
             <label htmlFor="newPassword" className="block text-sm leading-5 font-medium">
-              New Password <span className="text-destructive" aria-hidden="true">*</span>
+              New Password
             </label>
 
             <div className="relative">
@@ -235,7 +235,7 @@ export default function ChangePasswordPage() {
           {/* Confirm password */}
           <div className="space-y-1.5">
             <label htmlFor="confirmPassword" className="block text-sm leading-5 font-medium">
-              Confirm password <span className="text-destructive" aria-hidden="true">*</span>
+              Confirm password
             </label>
 
             <div className="relative">

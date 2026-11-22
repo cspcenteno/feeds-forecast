@@ -3,6 +3,7 @@
 import { useId, type FocusEventHandler } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { Check, ChevronsUpDown } from 'lucide-react'
+import { normalizeSelectionPrompt, selectionText } from '@/lib/selection-text'
 
 export type SearchableOption = { value: string; label: string; disabled?: boolean; group?: string }
 
@@ -37,7 +38,8 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
     : /year/.test(fieldName) ? 'year'
     : /week|status|role/.test(fieldName) ? 'short'
     : /month|^region$/.test(fieldName) ? 'month' : 'medium'
-  const hint = placeholder ?? (/^search\b/.test(fieldName) ? `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}…` : `${freeText ? 'Enter' : 'Select'} ${fieldName}…`)
+  const text = selectionText(fieldName)
+  const hint = normalizeSelectionPrompt(placeholder ?? (/^search\b/.test(fieldName) ? `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}…` : freeText ? text.select.replace('Select ', 'Select or enter ') : options.length ? text.select : text.empty))
   const grouped = options.some((option) => option.group)
   const groups = [...new Set(options.map((option) => option.group ?? 'Other options'))].map((label) => ({ label, items: options.filter((option) => (option.group ?? 'Other options') === label) }))
   const renderOption = (option: SearchableOption) => <Combobox.Item key={option.value} value={option} disabled={option.disabled}
@@ -47,7 +49,7 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
   </Combobox.Item>
   return (
     <div data-content-size={contentSize} className={'min-w-0 ' + (label ? 'space-y-1.5 ' : '') + className}>
-      {label && <label htmlFor={id} className="block text-sm font-medium">{label}{required && <span className="text-destructive" aria-hidden="true"> *</span>}</label>}
+      {label && <label htmlFor={id} className="block text-sm font-medium">{required && <span className="text-destructive" aria-hidden="true">* </span>}{label}</label>}
       <Combobox.Root items={grouped ? groups : options} value={selected} disabled={disabled} name={name} required={required} autoComplete={autoComplete}
         inputValue={freeText ? value : undefined}
         onInputValueChange={freeText ? (text, details) => {
@@ -73,10 +75,10 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
           </Combobox.Trigger>
         </Combobox.InputGroup>
         <Combobox.Portal>
-          <Combobox.Positioner sideOffset={4} className="z-[120] w-[var(--anchor-width)] max-w-[calc(100vw-2rem)]">
+          <Combobox.Positioner sideOffset={4} data-product-options={/product/.test(fieldName) ? '' : undefined} className="z-[120] w-[var(--anchor-width)] max-w-[calc(100vw-2rem)]">
             <Combobox.Popup className="max-h-[min(18rem,var(--available-height))] overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
               <Combobox.Empty>
-                <div className="px-3 py-4 text-sm text-muted-foreground">{freeText ? 'No matches. You can keep your entered text.' : 'No matches found.'}</div>
+                <div className="px-3 py-4 text-sm text-muted-foreground">{freeText ? 'No matches. You can keep your entered text.' : options.length ? text.noMatches : text.empty}</div>
               </Combobox.Empty>
               <Combobox.List>
                 {grouped ? (group: (typeof groups)[number]) => <Combobox.Group key={group.label} items={group.items}>

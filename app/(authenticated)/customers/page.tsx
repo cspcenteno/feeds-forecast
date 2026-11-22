@@ -226,8 +226,8 @@ export default function CustomersPage() {
           <div className="overflow-x-auto pb-1">
           <div data-customer-fields="" className="app-field-row">
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
-              Customer Name <span className="text-destructive">*</span>
-              <input value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
+              <span className="text-destructive">*</span> Customer Name
+              <input placeholder="Enter customer name" value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
               Salesman
@@ -279,11 +279,11 @@ export default function CustomersPage() {
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-muted-foreground" htmlFor="customers-region-filter">Region</label>
           <SelectionField aria-label="Filter customers by region" value={effectiveRegion}
-            loading={tableLoading || authorization.loading} loadingText="Loading region…"
+            loading={tableLoading || authorization.loading} loadingText="Loading regions…"
             id="customers-region-filter"
             onValueChange={setRegionFilter} disabled={!allRegions || tableLoading}
             className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted">
-            {allRegions ? <option value="all">All regions</option> : null}
+            {allRegions ? <option value="all">All Regions</option> : null}
             {!allRegions && assignedRegionId === null ? <option value="">No assigned region</option> : null}
             {regions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}
           </SelectionField>
@@ -291,7 +291,7 @@ export default function CustomersPage() {
             </div>
           </div>
           <div data-action-toolbar="" data-master-search-actions="" className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap [&>[role=search]]:w-64 [&>[role=search]]:shrink-0">
-            <TableSearch value={search} onChange={setSearch} label="Search customers" />
+            <TableSearch value={search} onChange={setSearch} label="Search customers" placeholder="Search here…" />
 {authorization.can('Customers', 'add') && <button type="button" aria-label="Add Customer" title="Add Customer" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Customer</span></button>}
 
 
@@ -304,7 +304,7 @@ export default function CustomersPage() {
         >
             <colgroup>
               {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <col data-action-column="standard" />}
-              <col />
+              <col data-directory-column="customer" />
               <col data-directory-column="salesperson" />
               <col data-directory-column="region" className="w-32" />
               <col data-directory-column="segment" className="w-32" />

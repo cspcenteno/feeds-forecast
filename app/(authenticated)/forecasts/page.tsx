@@ -1701,7 +1701,7 @@ export default function SalesInputPage() {
         <form onSubmit={handleVoidForecasts} className="flex flex-col gap-4">
           <div data-popup-form-header="" className="border-b pb-4 pr-10"><h2 data-section-title=""><Ban className="size-5 text-muted-foreground" aria-hidden="true"/>Void Sales Forecasts</h2><p className="mt-2 text-sm text-muted-foreground">Void {voidingForecasts.length} approved forecast record{voidingForecasts.length === 1 ? '' : 's'}? They will remain in history and stop contributing to forecast totals.</p></div>
           <ForecastConfirmationSummary records={voidingForecasts} scope={voidScope} level="void" customerName={getCustomerName} productName={getProductName}/>
-          <label className="flex flex-col gap-2 text-sm font-medium"><span>Reason <span className="text-destructive" aria-hidden="true">*</span></span><textarea required minLength={3} maxLength={1000} disabled={loading} value={voidReason} onChange={event=>setVoidReason(event.target.value)} className="min-h-24 rounded-md border bg-background p-3"/></label>
+          <label className="flex flex-col gap-2 text-sm font-medium"><span>Reason</span><textarea required minLength={3} maxLength={1000} disabled={loading} value={voidReason} onChange={event=>setVoidReason(event.target.value)} className="min-h-24 rounded-md border bg-background p-3"/></label>
           <div data-action-toolbar="" data-dialog-footer="" className="flex justify-end gap-2 border-t pt-4"><button type="button" data-action-tone="neutral" disabled={loading} onClick={()=>setVoidingForecasts(null)} className="inline-flex h-10 items-center gap-2 rounded-md border px-4"><X className="size-4"/>Cancel</button><button type="submit" data-action-tone="danger" data-action-fill="" disabled={loading || voidReason.trim().length < 3} className="inline-flex h-10 items-center gap-2 rounded-md border px-4"><Ban className="size-4"/>{voidBusy ? 'Voiding…' : `Void (${voidingForecasts.length})`}</button></div>
         </form>
       </RecordDialog>}
@@ -1761,7 +1761,7 @@ export default function SalesInputPage() {
 
                 <div data-forecast-week-field="" data-field-size="compact" className="space-y-2">
                   <label className="text-sm font-medium">
-                    Week <span className="text-destructive" aria-hidden="true">*</span>
+                    Week
                     {weekDateRangeLabel(selectedWeek) && <span className="ml-2 text-xs font-normal text-muted-foreground">({weekDateRangeLabel(selectedWeek)})</span>}
                   </label>
 
@@ -1778,7 +1778,7 @@ export default function SalesInputPage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Region <span className="text-destructive" aria-hidden="true">*</span>
+                    Region
                   </label>
 
                   <SelectionField value={selectedRegionId}
@@ -1808,7 +1808,7 @@ export default function SalesInputPage() {
 
                 <div data-field-size="wide" className="space-y-2">
                   <label className="text-sm font-medium">
-                    Customer <span className="text-destructive" aria-hidden="true">*</span>
+                    Customer
                   </label>
 
                   <SearchableSelect value={selectedCustomerId}
@@ -1898,10 +1898,10 @@ export default function SalesInputPage() {
         </th>
 
         <th className="break-words px-1 py-3 text-left font-medium">
-          Product <span className="text-destructive" aria-hidden="true">*</span>
+          Product
         </th>
 
-        <MonthlySalesHeaders requiredForecast />
+        <MonthlySalesHeaders />
       </tr>
     </thead>
 
@@ -2093,26 +2093,32 @@ export default function SalesInputPage() {
           <div data-saved-forecast-filters="" className="app-field-row min-w-0 w-full md:w-auto">
             <div data-field-size="compact" className="space-y-1.5">
               <label htmlFor="saved-forecast-from-week" className="block text-xs font-medium text-muted-foreground">From week {weekDateRangeLabel(savedFromWeek) && <span className="text-xs font-normal">({weekDateRangeLabel(savedFromWeek)})</span>}</label>
+              <div data-compact-week-field="" className="relative">
               <input id="saved-forecast-from-week" type="week" value={savedFromWeek} onChange={event => {
                 const value = event.target.value
                 setSavedFromWeek(value)
                 if (value && savedToWeek && value > savedToWeek) setSavedToWeek(value)
               }}
                 className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <span data-compact-week-label="" aria-hidden="true">{savedFromWeek ? `W${Number(savedFromWeek.slice(6))} · ${savedFromWeek.slice(0, 4)}` : 'Select week'}</span>
+              </div>
             </div>
             <div data-field-size="compact" className="space-y-1.5">
               <label htmlFor="saved-forecast-to-week" className="block text-xs font-medium text-muted-foreground">To week {weekDateRangeLabel(savedToWeek) && <span className="text-xs font-normal">({weekDateRangeLabel(savedToWeek)})</span>}</label>
+              <div data-compact-week-field="" className="relative">
               <input id="saved-forecast-to-week" type="week" value={savedToWeek} onChange={event => {
                 const value = event.target.value
                 setSavedToWeek(value)
                 if (value && savedFromWeek && value < savedFromWeek) setSavedFromWeek(value)
               }}
                 className="block h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <span data-compact-week-label="" aria-hidden="true">{savedToWeek ? `W${Number(savedToWeek.slice(6))} · ${savedToWeek.slice(0, 4)}` : 'Select week'}</span>
+              </div>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="saved-forecast-region" className="block text-xs font-medium text-muted-foreground">Region</label>
               <SelectionField id="saved-forecast-region" aria-label="Saved Forecasts region" placeholder="Region" value={effectiveSavedRegion}
-                loading={initializing} loadingText="Loading region…"
+                loading={initializing} loadingText="Loading regions…"
                 onValueChange={setSavedRegionFilter} disabled={!canFilterAllSavedRegions}
                 className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted">
                 {canFilterAllSavedRegions && <option value="all">All Regions</option>}
@@ -2127,8 +2133,8 @@ export default function SalesInputPage() {
                   onValueChange={(selectionValue) => setSavedStatusFilter(selectionValue)}
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                   aria-label="Status">
-                <option value="">All open statuses</option>
-                <option value="all">All statuses</option>
+                <option value="">All Open Statuses</option>
+                <option value="all">All Statuses</option>
                 {Object.entries(savedStatusLabels).map(([status, label]) => (
                   <option key={status} value={status}>{label}</option>
                 ))}

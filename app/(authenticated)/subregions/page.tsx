@@ -286,7 +286,7 @@ export default function SubregionsPage() {
               htmlFor="subregion-name"
               className="text-sm font-medium"
             >
-              Subregion Name <span className="text-destructive" aria-hidden="true">*</span>
+              <span className="text-destructive" aria-hidden="true">*</span> Subregion Name
             </label>
 
             <input
@@ -327,7 +327,7 @@ export default function SubregionsPage() {
               htmlFor="parent-region"
               className="text-sm font-medium"
             >
-              Parent Region <span className="text-destructive" aria-hidden="true">*</span>
+              <span className="text-destructive" aria-hidden="true">*</span> Parent Region
             </label>
 
             <SelectionField id="parent-region"

@@ -13,10 +13,11 @@ export function useTableSearch<Row>(rows: Row[], values: (row: Row) => unknown[]
   return { search, setSearch, filteredRows }
 }
 
-export function TableSearch({ value, onChange, label }: {
+export function TableSearch({ value, onChange, label, placeholder }: {
   value: string
   onChange: (value: string) => void
   label: string
+  placeholder?: string
 }) {
   return (
     <div role="search" aria-label={label} className="relative mr-auto w-full sm:max-w-sm">
@@ -24,7 +25,7 @@ export function TableSearch({ value, onChange, label }: {
       <input
         type="search"
         aria-label={label}
-        placeholder={label + '…'}
+        placeholder={placeholder ?? 'Search here…'}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-10 w-full rounded-md border bg-background pr-10 pl-9 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 [&::-webkit-search-cancel-button]:appearance-none"

@@ -135,7 +135,7 @@ export default function LoginPage() {
 
           <form data-login-form data-auth-form onSubmit={handleLogin} aria-busy={loading} className="mt-4 space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="email" className="block text-sm leading-5 font-medium">Email address <span className="text-destructive" aria-hidden="true">*</span></label>
+              <label htmlFor="email" className="block text-sm leading-5 font-medium">Email address</label>
               <div className="relative">
                 <Mail aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400" />
                 <input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" autoComplete="username" required disabled={loading}
@@ -144,7 +144,7 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="password" className="block text-sm leading-5 font-medium">Password <span className="text-destructive" aria-hidden="true">*</span></label>
+              <label htmlFor="password" className="block text-sm leading-5 font-medium">Password</label>
               <div className="relative">
                 <LockKeyhole aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400" />
                 <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" required disabled={loading}

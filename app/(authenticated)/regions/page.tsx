@@ -238,7 +238,7 @@ export default function RegionsPage() {
               htmlFor="name"
               className="text-sm font-medium"
             >
-              Region Name <span className="text-destructive" aria-hidden="true">*</span>
+              <span className="text-destructive" aria-hidden="true">*</span> Region Name
             </label>
 
             <input

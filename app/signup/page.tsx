@@ -131,7 +131,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="fullName" className="block text-sm leading-5 font-medium">
-              Full Name <span className="text-destructive" aria-hidden="true">*</span>
+              Full Name
             </label>
 
             <div className="relative">
@@ -151,7 +151,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="email" className="block text-sm leading-5 font-medium">
-              Email <span className="text-destructive" aria-hidden="true">*</span>
+              Email
             </label>
 
             <div className="relative">
@@ -172,7 +172,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="password" className="block text-sm leading-5 font-medium">
-              Password <span className="text-destructive" aria-hidden="true">*</span>
+              Password
             </label>
 
             <div className="relative">
@@ -196,7 +196,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="confirmPassword" className="block text-sm leading-5 font-medium">
-              Confirm Password <span className="text-destructive" aria-hidden="true">*</span>
+              Confirm Password
             </label>
 
             <div className="relative">

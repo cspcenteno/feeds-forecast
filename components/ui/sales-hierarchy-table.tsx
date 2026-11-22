@@ -29,10 +29,10 @@ export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage
     className="w-full table-fixed"
     containerProps={{ className: 'max-h-[min(36rem,70vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': label }}>
     <colgroup>
-      {showActions && <col style={{ width: '9.5rem' }} />}
-      {showStatus && <col style={{ width: '7%' }} />}
-      <col style={{ width: showStatus ? '26%' : '28%' }} /><col style={{ width: '9%' }} />
-      {columns.map(([title, unit]) => <col key={title + unit} />)}
+      {showActions && <col data-hierarchy-column="action" style={{ width: '9.5rem' }} />}
+      {showStatus && <col data-hierarchy-column="status" style={{ width: '7%' }} />}
+      <col data-hierarchy-column="structure" style={{ width: showStatus ? '26%' : '28%' }} /><col data-hierarchy-column="area" style={{ width: '9%' }} />
+      {columns.map(([title, unit]) => <col data-hierarchy-column="number" key={title + unit} />)}
     </colgroup>
     <thead className="sticky top-0 z-10 bg-card">
       <tr className="border-b bg-muted/40">
@@ -42,7 +42,7 @@ export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage
         <th scope="col" className="px-2 py-3 text-left font-semibold">Area</th>
         {columns.map(([title, unit], index) => <th key={title + unit} scope="col"
           className={'px-1.5 py-3 text-right font-semibold ' + (index >= 2 ? 'bg-muted/50 text-muted-foreground ' : '') + (index === 2 ? 'border-l' : '')}>
-          <span className="block">{title}</span><span className="block">{unit}</span>
+          <span className="block whitespace-nowrap">{title}</span><span className="block whitespace-nowrap">{unit}</span>
         </th>)}
       </tr>
     </thead>

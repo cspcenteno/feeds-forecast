@@ -17,6 +17,7 @@ import { ActiveField } from '@/components/ui/active-field'
 
 import { useActionDialogs } from '@/components/action-dialogs'
 import { SelectionField } from '@/components/ui/selection-field'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { TableActionButton } from '@/components/ui/table-action-button'
 import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { GroupedTableRows, TableGroupProvider, TableGroupToggle } from '@/components/ui/grouped-table-rows'
@@ -317,7 +318,7 @@ export default function ProductsPage() {
               htmlFor="name"
               className="text-sm font-medium"
             >
-              Product Name <span className="text-destructive" aria-hidden="true">*</span>
+              <span className="text-destructive" aria-hidden="true">*</span> Product Name
             </label>
 
             <input
@@ -335,7 +336,7 @@ export default function ProductsPage() {
               htmlFor="category"
               className="text-sm font-medium"
             >
-              Category <span className="text-destructive" aria-hidden="true">*</span>
+              <span className="text-destructive" aria-hidden="true">*</span> Category
             </label>
 
             <SelectionField id="category"
@@ -362,13 +363,13 @@ export default function ProductsPage() {
               htmlFor="code"
               className="text-sm font-medium"
             >
-              Product Code <span className="text-destructive" aria-hidden="true">*</span>
+              <span className="text-destructive" aria-hidden="true">*</span> Product Code
             </label>
 
             <input
               id="code"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter product code"
+              placeholder="ENTER CODE"
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
@@ -379,21 +380,29 @@ export default function ProductsPage() {
 
           <div className="space-y-2">
             <label htmlFor="productLine" className="text-sm font-medium">Product Line</label>
-            <input
+            <SearchableSelect
               id="productLine"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+              aria-label="Product Line"
+              placeholder="Select or enter product line…"
+              freeText
+              autoComplete="off"
               value={productLine}
-              onChange={(e) => setProductLine(e.target.value)}
+              onValueChange={setProductLine}
+              options={[...new Set(products.map((product) => product.product_line?.trim()).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)).map((value) => ({ value, label: value }))}
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="species" className="text-sm font-medium">Species</label>
-            <input
+            <SearchableSelect
               id="species"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+              aria-label="Species"
+              placeholder="Select or enter species…"
+              freeText
+              autoComplete="off"
               value={species}
-              onChange={(e) => setSpecies(e.target.value)}
+              onValueChange={setSpecies}
+              options={[...new Set(products.map((product) => product.species?.trim()).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)).map((value) => ({ value, label: value }))}
             />
           </div>
 

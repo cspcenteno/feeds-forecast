@@ -657,7 +657,7 @@ col[data-volume-column="person"] { width: 192px; min-width: 192px; max-width: 19
 @media (min-width: 1024px) {
   .app-field-row.saved-volume-filters {
     display: grid;
-    grid-template-columns: 160px minmax(140px, 0.8fr) minmax(140px, 0.8fr) minmax(180px, 1.3fr) minmax(180px, 1.3fr);
+    grid-template-columns: minmax(100px, 0.6fr) repeat(2, minmax(120px, 0.8fr)) repeat(3, minmax(160px, 1.2fr));
   }
   .app-field-row.saved-volume-filters > div {
     width: 100%;
@@ -788,6 +788,12 @@ th[data-monthly-sales-column] {
   vertical-align: middle;
   line-height: 1.4;
   overflow-wrap: normal;
+}
+
+@media (max-width: 767px) {
+  [data-product-options] {
+    width: min(22rem, calc(100vw - 2rem));
+  }
 }
 
 table[data-week-schedule] {
@@ -1620,6 +1626,21 @@ table[data-sales-hierarchy] :is(th, td) {
   overflow-wrap: anywhere;
 }
 table[data-sales-hierarchy] th { line-height: 1.35; }
+
+@media (max-width: 767px) {
+  table[data-sales-hierarchy] {
+    --hierarchy-action-width: 0px;
+    --hierarchy-status-width: 0px;
+    min-width: calc(796px + var(--hierarchy-action-width) + var(--hierarchy-status-width));
+  }
+  table[data-sales-hierarchy]:has(col[data-hierarchy-column="action"]) { --hierarchy-action-width: 64px; }
+  table[data-sales-hierarchy]:has(col[data-hierarchy-column="status"]) { --hierarchy-status-width: 72px; }
+  table[data-sales-hierarchy] col[data-hierarchy-column="action"] { width: 64px !important; }
+  table[data-sales-hierarchy] col[data-hierarchy-column="status"] { width: 72px !important; }
+  table[data-sales-hierarchy] col[data-hierarchy-column="structure"] { width: auto !important; }
+  table[data-sales-hierarchy] col[data-hierarchy-column="area"] { width: 88px !important; }
+  table[data-sales-hierarchy] col[data-hierarchy-column="number"] { width: 88px; }
+}
 table[data-sales-hierarchy] [data-slot="table-action-button"] {
   width: 1.75rem;
   min-width: 1.75rem;
@@ -1640,7 +1661,7 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   [data-filter-toolbar]:has(> [data-saved-forecast-filters]) {
     flex-wrap: nowrap;
   }
@@ -1657,10 +1678,50 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   }
 }
 
-/* Native week controls need room for both the week/year and calendar icon. */
-@media (max-width: 479px) {
-  .app-field-row[data-saved-forecast-filters] > div:has(> input[type="week"]) {
-    grid-column: 1 / -1;
+/* Keep the week range side by side, with dates below each label on mobile. */
+[data-compact-week-label] { display: none; }
+@media (max-width: 767px) {
+  :is([data-saved-forecast-filters], [data-weekly-filter-fields] .app-field-row) > div:has([data-compact-week-field]) > label > span {
+    margin-left: 0;
+    display: block;
+  }
+  .app-field-row[data-saved-forecast-filters] > div > input[type="week"] {
+    padding-inline: 0.5rem;
+  }
+  :root body [data-compact-week-field] input[type="week"] {
+    position: relative;
+    display: block;
+    padding-right: 2rem;
+    font-size: 0.8125rem !important;
+    line-height: 1.25rem;
+  }
+  [data-compact-week-field] input[type="week"]::-webkit-datetime-edit {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+  }
+  @supports selector(input::-webkit-datetime-edit) {
+    [data-compact-week-field] input::-webkit-datetime-edit { opacity: 0; }
+    [data-compact-week-label] {
+      display: flex;
+      position: absolute;
+      inset: 0 2rem 0 0.75rem;
+      align-items: center;
+      pointer-events: none;
+      white-space: nowrap;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+    }
+  }
+  [data-compact-week-field] input[type="week"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    transform: translateY(-50%);
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    padding: 0;
   }
 }
 
@@ -1782,16 +1843,15 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   }
   .app-field-row.saved-volume-filters {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem 0.5rem;
   }
   .app-field-row.saved-volume-filters > div {
-    grid-column: span 2;
+    grid-column: auto;
     width: 100%;
     min-width: 0;
     max-width: 100%;
   }
-  .app-field-row.saved-volume-filters > div:nth-child(n+4) { grid-column: span 3; }
   [data-action-toolbar][data-saved-volume-actions] {
     width: 100%;
     flex-wrap: nowrap;
@@ -1998,6 +2058,8 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    max-height: calc(100dvh - 1rem);
+    padding: 0.75rem;
   }
   [data-record-dialog]:has([data-forecast-form]) > fieldset,
   [data-forecast-form],
@@ -2022,8 +2084,8 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
 
 @media (max-width: 767px) {
   table[data-forecast-entry] {
-    width: calc(var(--table-viewport-width, 340px) + 600px);
-    min-width: calc(var(--table-viewport-width, 340px) + 600px);
+    width: calc(var(--table-viewport-width, 340px) + 440px);
+    min-width: calc(var(--table-viewport-width, 340px) + 440px);
   }
   table[data-forecast-entry] [data-action-column="single"] {
     --action-column-width: 64px;
@@ -2032,9 +2094,9 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
     max-width: 64px;
   }
   table[data-forecast-entry] col:nth-child(2) { width: 32px; }
-  /* Reserve Action (64), row number (32), and quantity (96) in view. */
-  table[data-forecast-entry] col:nth-child(3) { width: calc(var(--table-viewport-width, 340px) - 192px); }
-  table[data-forecast-entry] col[data-volume-column="number"]:nth-child(4) { width: 96px; }
+  /* Keep quantity in view; the five remaining numeric columns scroll. */
+  table[data-forecast-entry] col:nth-child(3) { width: calc(var(--table-viewport-width, 340px) - 184px); }
+  table[data-forecast-entry] col[data-volume-column="number"] { width: 88px; }
 }
 
 @media (max-width: 767px) {
@@ -2361,7 +2423,7 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
 @media (max-width: 767px) {
   [data-filter-toolbar]:has(> [data-approval-filter-actions]) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: end;
     gap: 1rem 0.5rem;
   }
@@ -2374,7 +2436,11 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
     min-width: 0;
     max-width: 100%;
   }
+  [data-filter-toolbar]:has(> [data-approval-filter-actions]) [data-weekly-filter-fields] > .app-field-row > div:last-child {
+    grid-column: 1 / -1;
+  }
   [data-action-toolbar][data-approval-filter-actions] {
+    grid-column: 1 / -1;
     width: auto;
     justify-self: end;
     justify-content: flex-end;
@@ -2473,7 +2539,7 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
     margin: 0;
   }
   :root [data-customer-toolbar] > div:first-child {
-    grid-column: 1;
+    grid-column: 1 / -1;
     width: 100%;
     min-width: 0;
   }
@@ -2594,7 +2660,7 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
 @media (max-width: 767px) {
   [data-week-lock-controls] {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     align-items: end;
     gap: 1rem 0.5rem;
   }
@@ -2609,8 +2675,8 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   [data-week-lock-fields] > label:first-child { grid-column: 1; grid-row: 1; }
   [data-week-lock-fields] > label:last-child { grid-column: 1; grid-row: 2; }
   [data-week-lock-controls] [data-week-lock-actions] {
-    grid-column: 2;
-    grid-row: 2;
+    grid-column: 1;
+    grid-row: 3;
     justify-content: flex-end;
     gap: 0.5rem;
   }
@@ -2697,6 +2763,24 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
   min-height: 2.75rem;
   align-items: center;
 }
+@media (max-width: 767px) {
+  :root body [data-record-dialog] [data-forecast-title-row] {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  :root body [data-record-dialog] [data-forecast-title-row] > div {
+    align-self: flex-start;
+  }
+  :root body [data-record-dialog] [data-forecast-title-row] [data-section-title] {
+    white-space: nowrap;
+    padding-right: 0;
+  }
+  :root body [data-record-dialog] [data-forecast-title-row] .rounded-full {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+}
 :root body [data-record-dialog] :is([data-section-header], [data-import-dialog-header]) > div:first-child {
   align-self: center;
 }
@@ -2779,11 +2863,26 @@ table[data-sales-hierarchy] td > span.inline-flex { flex-wrap: wrap; justify-con
     min-width: 0;
     max-width: 100%;
   }
+  [data-record-dialog] .app-field-row[data-product-fields] > div:has(> #name) {
+    grid-column: 1 / -1;
+  }
+  [data-record-dialog] .app-field-row[data-product-fields] > div:nth-child(2),
+  [data-record-dialog] .app-field-row[data-product-fields] > div:has(> #code) {
+    grid-column: auto;
+  }
+  [data-record-dialog] .app-field-row[data-product-fields] > div:has(> #code) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  [data-record-dialog] .app-field-row[data-product-fields] > div:nth-child(2) {
+    grid-column: 2;
+    grid-row: 2;
+  }
 }
 
 @media (max-width: 767px) {
-  [data-record-dialog] .app-field-row[data-product-fields] > div:has(> #productLine),
-  [data-record-dialog] .app-field-row[data-product-fields] > div:has(> #species) {
+  [data-record-dialog] .app-field-row[data-product-fields] > div:has(#productLine),
+  [data-record-dialog] .app-field-row[data-product-fields] > div:has(#species) {
     grid-column: auto;
     width: 100%;
     min-width: 0;
@@ -3358,4 +3457,397 @@ button:is([aria-label="Profile options"], [data-slot="sidebar-trigger"]):focus-v
   max-height: 2.5rem !important;
   flex: 0 0 2.5rem;
   padding: 0 !important;
+}
+/* Tablet layouts keep filters readable instead of squeezing them beside actions. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-page-tables] { padding: 1rem; }
+
+  [data-section-header][data-aligned-toolbar] {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  [data-section-header] > div:has([data-section-title]) { min-width: 0; }
+  [data-section-header] > [data-action-toolbar] {
+    flex-wrap: wrap;
+    max-width: 100%;
+    gap: 0.5rem;
+  }
+  [data-filter-toolbar] {
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-inline: 1rem;
+  }
+  [data-filter-toolbar] > :is([data-saved-forecast-filters], [data-weekly-filter-fields]) {
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: 100%;
+  }
+  .app-field-row[data-saved-forecast-filters],
+  [data-weekly-filter-fields] > .app-field-row,
+  .app-field-row.saved-volume-filters,
+  [data-audit-filters] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    align-items: end;
+    gap: 1rem;
+  }
+  :is(.app-field-row[data-saved-forecast-filters], [data-weekly-filter-fields] > .app-field-row, .app-field-row.saved-volume-filters, [data-audit-filters]) > div {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-filter-toolbar] > [data-action-toolbar] {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+    max-width: 100%;
+  }
+
+  /* Keep customer filters and actions together on tablets. */
+  [data-customer-toolbar] {
+    display: grid;
+    grid-template-columns: minmax(8rem, 10rem) minmax(9rem, 18rem) minmax(0, 1fr) auto auto;
+    justify-content: start;
+    align-items: end;
+    gap: 0.75rem;
+    overflow: visible;
+  }
+  [data-customer-toolbar] > div:first-child {
+    width: 100%;
+    min-width: 0;
+  }
+  [data-customer-toolbar] > div:first-child .app-field-row > div {
+    width: 100%;
+    min-width: 0;
+  }
+  [data-customer-toolbar] > [data-action-toolbar] {
+    display: contents;
+  }
+  [data-master-search-actions] { flex-wrap: wrap; }
+  :root body [data-master-search-actions] > [role="search"] {
+    flex: 0 1 18rem;
+    width: 18rem;
+    min-width: 0;
+    max-width: min(100%, 18rem);
+  }
+  [data-customer-toolbar] > [data-master-search-actions] > [role="search"] {
+    width: 100%;
+    margin: 0;
+    max-width: 100%;
+  }
+  [data-customer-toolbar] > [data-master-search-actions] > button:not([data-slot="expand-collapse-button"]) {
+    grid-column: 4;
+  }
+  [data-customer-toolbar] > [data-master-search-actions] > button[data-slot="expand-collapse-button"] {
+    grid-column: 5;
+  }
+  [data-user-account-actions] {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-user-account-actions] > label {
+    flex: 0 1 18rem;
+    width: 18rem;
+    min-width: 0;
+    max-width: min(100%, 18rem);
+  }
+
+  /* Keep long table headers readable and scroll within their own frame. */
+  table[data-sales-hierarchy] { min-width: 1100px; }
+  :root body [data-record-dialog] [data-forecast-title-row] {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  :root body [data-record-dialog] [data-forecast-title-row] [data-section-title] {
+    white-space: nowrap;
+    padding-right: 0;
+  }
+  [data-import-dialog-header] { flex-wrap: wrap; gap: 0.75rem; }
+  [data-import-dialog-header] > [data-action-toolbar] {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+}
+
+/* Salesman editors have text actions, even when the icon is the only element child. */
+@media (max-width: 767px) {
+  :root body [data-salesman-editor] > [data-dialog-footer] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+  }
+  :root body [data-record-dialog] [data-salesman-editor] > [data-dialog-footer] > button[data-action-tone] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding-inline: 0.5rem !important;
+    white-space: normal;
+    overflow-wrap: normal;
+    gap: 0.375rem;
+  }
+  [data-salesman-editor] > [data-dialog-footer] > button > svg { flex-shrink: 0; }
+}
+
+/* Tablet product lists scroll instead of compressing words into narrow columns. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-page-tables] table[data-directory-table="products"] {
+    width: 100%;
+    min-width: 1324px;
+    max-width: none;
+    --directory-category: 140px;
+    --directory-code: 160px;
+    --directory-name: 240px;
+    --directory-line: 180px;
+    --directory-species: 140px;
+    --directory-weight: 80px;
+    --directory-created: 200px;
+  }
+  [data-page-tables] table[data-directory-table="products"] > thead > tr > th:not([data-action-column]) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  [data-page-tables] table[data-directory-table="products"] > tbody > tr > td:not([data-action-column]) {
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+}
+
+/* Master-data row actions remain compact across tablet orientations. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  :root body [data-directory-table] [data-slot="table-action-button"] [data-action-label] {
+    display: none;
+  }
+  :root body [data-directory-table] button[data-slot="table-action-button"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+}
+
+/* Customer names retain usable space in both tablet orientations. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-page-tables] table[data-directory-table="customers"] {
+    width: 100%;
+    min-width: 1200px;
+    max-width: none;
+  }
+  [data-page-tables] table[data-directory-table="customers"] col[data-directory-column="customer"] { width: auto; }
+  [data-page-tables] table[data-directory-table="customers"] col[data-directory-column="salesperson"] { width: 240px; }
+  [data-page-tables] table[data-directory-table="customers"] col[data-directory-column="region"] { width: 144px; }
+  [data-page-tables] table[data-directory-table="customers"] col[data-directory-column="segment"] { width: 128px; }
+  [data-page-tables] table[data-directory-table="customers"] col[data-directory-column="created"] { width: 200px; }
+  [data-page-tables] table[data-directory-table="customers"] > thead > tr > th:not([data-action-column]) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  [data-page-tables] table[data-directory-table="customers"] > tbody > tr > td:not([data-action-column]) {
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  table[data-audit-table] {
+    min-width: 1200px;
+    --audit-time-width: 190px;
+    --audit-user-width: 180px;
+    --audit-module-width: 180px;
+    --audit-action-width: 100px;
+    --audit-record-width: 120px;
+  }
+  table[data-audit-table] > tbody > tr > td:last-child {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+}
+
+/* Replace the Users table's oversized saved-table fallback on tablets. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-page-tables] table[data-directory-table="users"] {
+    width: 100%;
+    min-width: 1128px;
+    max-width: none;
+    --directory-name: 208px;
+    --directory-email: 240px;
+    --directory-role: 104px;
+    --directory-position: 128px;
+    --directory-region: 112px;
+    --directory-subregion: 144px;
+  }
+  [data-page-tables] table[data-directory-table="users"] [data-action-column="standard"] {
+    --action-column-width: 96px;
+  }
+  [data-page-tables] table[data-directory-table="users"] > :is(thead, tbody) > tr > :is(th, td) {
+    padding-inline: 0.5rem;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  [data-page-tables] table[data-directory-table="users"] > thead > tr > th {
+    white-space: nowrap;
+  }
+}
+
+/* Tablet schedule controls use a field row followed by a wrapping action row. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-week-lock-controls] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    width: 100%;
+  }
+  [data-week-lock-controls] > [data-week-lock-fields] {
+    flex: none;
+    width: 100%;
+    grid-template-columns: minmax(11rem, 0.8fr) minmax(0, 1fr);
+    align-items: end;
+  }
+  [data-week-lock-fields] > label:first-child > span > span {
+    display: inline;
+    margin-left: 0.5rem;
+  }
+  [data-week-lock-controls] > div:has(> [data-week-lock-actions]) {
+    width: 100%;
+    min-width: 0;
+  }
+  [data-week-lock-controls] [data-week-lock-actions] {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  [data-week-lock-controls] [data-week-lock-actions] > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* Match the wider Users column sizes on phones, with horizontal scrolling. */
+@media (max-width: 767px) {
+  [data-page-tables] table[data-directory-table="users"] {
+    --user-mobile-actions: 0px;
+    --directory-name: 208px;
+    --directory-email: 240px;
+    --directory-role: 104px;
+    --directory-position: 128px;
+    --directory-region: 112px;
+    --directory-subregion: 144px;
+    width: calc(1016px + var(--user-mobile-actions));
+    min-width: calc(1016px + var(--user-mobile-actions));
+    table-layout: fixed;
+  }
+  [data-page-tables] table[data-directory-table="users"]:has(col[data-action-column]) {
+    --user-mobile-actions: 96px;
+  }
+  [data-page-tables] table[data-directory-table="users"] [data-action-column="standard"] {
+    --action-column-width: 96px;
+    padding-inline: 0.25rem;
+  }
+  [data-page-tables] table[data-directory-table="users"] [data-fixed-column="status"] {
+    width: 80px;
+    min-width: 80px;
+    max-width: 80px;
+  }
+  [data-page-tables] table[data-directory-table="users"] > :is(thead, tbody) > tr > :is(th, td) {
+    padding-inline: 0.5rem;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  [data-page-tables] table[data-directory-table="users"] > thead > tr > th {
+    white-space: nowrap;
+  }
+  [data-page-tables] table[data-directory-table="users"] > :is(thead, tbody) > tr > :is(th, td):is([data-action-column], :nth-last-child(7)) {
+    padding-inline: 0.25rem;
+  }
+}
+
+@media (max-width: 767px) {
+  table[data-week-schedule] {
+    width: 520px;
+    min-width: 520px;
+  }
+  table[data-week-schedule] col:nth-child(1) { width: 96px !important; }
+  table[data-week-schedule] col:nth-child(2) { width: 144px !important; }
+  table[data-week-schedule] col:nth-child(3) { width: 104px !important; }
+  table[data-week-schedule] col:nth-child(4) { width: 176px !important; }
+  table[data-week-schedule] > :is(thead, tbody) > tr > :is(th, td) {
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (max-width: 1279px) {
+  [data-week-lock-fields] > label:first-child > span {
+    white-space: nowrap;
+  }
+  [data-week-lock-fields] > label:first-child > span > span {
+    display: inline;
+    margin-left: 0.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  :root body [data-action-toolbar][data-user-account-actions] {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 0.5rem;
+  }
+  :root body [data-user-account-actions] > label {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  :root body [data-user-account-actions] > button {
+    flex: 0 0 2.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-customer-toolbar] > div:first-child > .app-field-row > div {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  :root body [data-record-dialog] [data-uploaded-record-actions][data-dialog-footer] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 0.5rem;
+  }
+  :root body [data-record-dialog] [data-uploaded-record-actions][data-dialog-footer] > button[data-action-tone] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding-inline: 0.5rem !important;
+    white-space: normal;
+    gap: 0.375rem;
+  }
+  [data-uploaded-record-actions] > button > svg { margin-right: 0; }
+}
+
+/* Keep totals visible on phones instead of wrapping against the right edge. */
+@media (max-width: 767px) {
+  [data-slot="table-summary"]:has([data-summary-total]) {
+    gap: 0.5rem;
+  }
+  [data-slot="table-summary"] > [data-summary-total] {
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    text-align: left;
+  }
+  [data-slot="table-summary"] [data-summary-total] > span {
+    justify-content: flex-start;
+    gap: 0.75rem;
+  }
 }

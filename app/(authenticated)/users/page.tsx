@@ -1053,7 +1053,7 @@ export default function UsersPage() {
           <div data-filter-toolbar="" className="app-field-row p-6">
             <div data-field-size="wide" className="space-y-2">
               <label htmlFor="newFullName" className="text-sm font-medium">
-                Full Name <span className="text-destructive">*</span>
+                <span className="text-destructive">*</span> Full Name
               </label>
               <input
                 id="newFullName"
@@ -1072,7 +1072,7 @@ export default function UsersPage() {
             <div data-user-email-active-row="">
             <div data-user-email-field="" data-field-size="wide" className="space-y-2">
               <label htmlFor="newEmail" className="text-sm font-medium">
-                Email <span className="text-destructive">*</span>
+                <span className="text-destructive">*</span> Email
               </label>
               <input
                 id="newEmail"
@@ -1096,7 +1096,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <label htmlFor="newTemporaryPassword" className="text-sm font-medium">
-                Temporary Password {!selectedUser && <span className="text-destructive" aria-hidden="true">*</span>}
+                {!selectedUser && <span className="text-destructive" aria-hidden="true">* </span>}Temporary Password
               </label>
               <input
                 id="newTemporaryPassword"
@@ -1114,14 +1114,14 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <label htmlFor="newRole" className="text-sm font-medium">
-                Role <span className="text-destructive">*</span>
+                <span className="text-destructive">*</span> Role
               </label>
               <SelectionField id="newRole"
                   value={formRole}
                   onValueChange={(selectionValue) => (selectedUser ? handleRoleChange : handleNewRoleChange)(selectionValue)}
                   disabled={formBusy}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                  aria-label="Role *">
+                  aria-label="* Role">
                 {roles.map((item) => (
                   <option key={item} value={item}>
                     {item}
@@ -1132,7 +1132,7 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <label htmlFor="newPosition" className="text-sm font-medium">
-                Sales Position {formRole !== 'Admin' && <span className="text-destructive" aria-hidden="true">*</span>}
+                {formRole !== 'Admin' && <span className="text-destructive" aria-hidden="true">* </span>}Sales Position
               </label>
               <SelectionField id="newPosition"
                   value={selectedUser ? position : newPosition}
@@ -1147,10 +1147,9 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <label htmlFor="newRegion" className="text-sm font-medium">
-                Region{' '}
                 {formRole !== 'Admin' && (selectedUser ? position : newPosition) !== 'NSM' && (
-                  <span className="text-destructive">*</span>
-                )}
+                  <span className="text-destructive">* </span>
+                )}Region
               </label>
 
               {formRole === 'Admin' || (selectedUser ? position : newPosition) === 'NSM' ? (
@@ -1186,7 +1185,7 @@ export default function UsersPage() {
             <div className="space-y-2">
               <label htmlFor="newSubregion" className="text-sm font-medium">
                 {requiresUserSubregion(formRole, selectedUser ? position : newPosition)
-                  ? <>Subregion <span className="text-destructive">*</span></>
+                  ? <><span className="text-destructive">*</span> Subregion</>
                   : 'Subregion (Optional)'}
               </label>
               {formRole === 'Admin' || (selectedUser ? position : newPosition) === 'NSM' ? (
@@ -1431,7 +1430,7 @@ export default function UsersPage() {
               <span className="sr-only">Search user accounts by name or email</span>
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input type="search" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)}
-                placeholder="Search name or email…" autoComplete="off"
+                placeholder="Search here…" autoComplete="off"
                 className="h-10 w-full rounded-md border bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             </label>
       {isAdmin && authorization.can('Users', 'add') && authorization.can('Users', 'import') && <UsersExcelImport

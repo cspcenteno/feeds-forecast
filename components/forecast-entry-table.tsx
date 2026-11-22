@@ -16,7 +16,7 @@ export function ForecastEntryTable({ scrollToLastRowRequest = 0, ...props }: Com
     const updateHeight = () => {
       // Use the space inside the vertical scrollbar for the mobile columns.
       container.style.setProperty('--table-viewport-width', `${container.clientWidth}px`)
-      const rows = Array.from(table.tBodies[0]?.rows ?? []).slice(0, window.matchMedia('(max-width: 767px)').matches ? 2 : 4)
+      const rows = Array.from(table.tBodies[0]?.rows ?? []).slice(0, window.matchMedia('(max-width: 767px)').matches ? 3 : 4)
       const bodyHeight = rows.reduce((height, row) => height + row.getBoundingClientRect().height, 0)
       const headerHeight = table.tHead?.getBoundingClientRect().height ?? 0
       const footerHeight = table.tFoot?.getBoundingClientRect().height ?? 0

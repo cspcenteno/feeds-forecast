@@ -65,20 +65,20 @@ export default function AuditLogsPage() {
   if (!allowed) return <p className="text-sm text-muted-foreground">Audit Logs is available to authorized Admins.</p>
   return <section className="overflow-hidden rounded-xl border bg-card shadow-sm md:flex md:max-h-full md:min-h-0 md:flex-col">
     <form data-audit-filters="" data-filter-toolbar="" className="grid shrink-0 gap-4 border-b px-6 py-4 sm:grid-cols-2" onSubmit={(event) => event.preventDefault()}>
-      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">Module<SelectionField aria-label="Module" className={field} value={module} onValueChange={(value) => { setModule(value); setPage(0) }}><option value="">All modules</option>{modules.filter((item) => item !== 'Audit Logs' && item !== 'Dashboard' && item !== 'Weekly Sales' && item !== 'Approvals').map((item) => <option key={item}>{item}</option>)}</SelectionField></label>
-      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">Action<SelectionField aria-label="Action" className={field} value={action} onValueChange={(value) => { setAction(value); setPage(0) }}><option value="">All actions</option><option value="INSERT">Created</option><option value="UPDATE">Updated</option><option value="DELETE">Deleted</option></SelectionField></label>
+      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">Module<SelectionField aria-label="Module" className={field} value={module} onValueChange={(value) => { setModule(value); setPage(0) }}><option value="">All Modules</option>{modules.filter((item) => item !== 'Audit Logs' && item !== 'Dashboard' && item !== 'Weekly Sales' && item !== 'Approvals').map((item) => <option key={item}>{item}</option>)}</SelectionField></label>
+      <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">Action<SelectionField aria-label="Action" className={field} value={action} onValueChange={(value) => { setAction(value); setPage(0) }}><option value="">All Actions</option><option value="INSERT">Created</option><option value="UPDATE">Updated</option><option value="DELETE">Deleted</option></SelectionField></label>
       <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">From date<input type="date" className={field} value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} /></label>
       <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">To date<input type="date" className={field} value={to} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></label>
 
     </form>
 
-    <Table className="w-full min-w-[1000px] table-fixed text-sm md:min-w-0" containerProps={{ className: 'min-h-0 max-h-[65vh] overflow-auto md:flex-[0_1_auto] md:max-h-none', 'aria-label': 'Audit activity', tabIndex: 0 }}>
+    <Table data-audit-table="" className="w-full min-w-[1000px] table-fixed text-sm md:min-w-0" containerProps={{ className: 'min-h-0 max-h-[65vh] overflow-auto md:flex-[0_1_auto] md:max-h-none', 'aria-label': 'Audit activity', tabIndex: 0 }}>
       <colgroup>
-        <col style={{ width: '18%' }} />
-        <col style={{ width: '16%' }} />
-        <col style={{ width: '19%' }} />
-        <col style={{ width: '5rem' }} />
-        <col style={{ width: '7rem' }} />
+        <col style={{ width: 'var(--audit-time-width, 18%)' }} />
+        <col style={{ width: 'var(--audit-user-width, 16%)' }} />
+        <col style={{ width: 'var(--audit-module-width, 19%)' }} />
+        <col style={{ width: 'var(--audit-action-width, 5rem)' }} />
+        <col style={{ width: 'var(--audit-record-width, 7rem)' }} />
         <col />
       </colgroup>
       <thead className="sticky top-0 bg-card"><tr>{['Time', 'User', 'Module / Table', 'Action', 'Record ID', 'Details'].map((title) => <th key={title} className="whitespace-nowrap px-3 py-3 text-left font-semibold">{title}</th>)}</tr></thead>

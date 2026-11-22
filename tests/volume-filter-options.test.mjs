@@ -47,3 +47,37 @@ test('filter options exclude absent master records and deduplicate represented c
     [...customers,{id:99,customer:'Unrelated customer'}],new Map([...products,[99,'Unrelated product']]))
   assert.deepEqual(result,{customers:['Customer 1'],products:[[1,'Product 1']]})
 })
+
+test('Salesman selection narrows accessible rows and their customer/product choices', async () => {
+  const source = await readFile(new URL('../components/volume-import-page.tsx', import.meta.url), 'utf8')
+  const file = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let predicate, normalize
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(file) === 'salesmanScopedBudgets') predicate = node.initializer.arguments[0].getText(file)
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'normalizeText') normalize = node.getText(file)
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  const javascript = ts.transpileModule(normalize, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+  const scopedBudgets = [{ ...records[0], kam: 'Alice' }, { ...records[1], kam: 'Bob' }, { ...records[5], kam: null }]
+  const select = filterSalesman => new Function('scopedBudgets', 'filterSalesman', `${javascript}; return (${predicate})()`)(scopedBudgets, filterSalesman)
+  assert.deepEqual(select('').map(row => row.customer_id), [1, 2, 6])
+  assert.deepEqual(select(' ALICE ').map(row => row.customer_id), [1])
+  assert.deepEqual(volumeFilterOptions(select('Bob'), customers, products), { customers: ['Customer 2'], products: [[2, 'Product 2']] })
+  assert.deepEqual(select('Unavailable salesman'), [])
+})
+
+test('Salesman dropdown is rendered between Region and customer search', async () => {
+  const source = await readFile(new URL('../components/volume-import-page.tsx', import.meta.url), 'utf8')
+  const file = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let dropdown
+  function visit(node) {
+    if (ts.isJsxOpeningElement(node) && node.tagName.getText(file) === 'SelectionField' && node.attributes.properties.some(prop => prop.name?.getText(file) === 'id' && prop.initializer?.text === 'saved-volume-salesman-filter')) dropdown = node
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  assert.ok(dropdown, 'Salesman dropdown must be present in the rendered JSX')
+  assert.match(dropdown.getText(file), /value=\{filterSalesman\}/)
+  assert.match(dropdown.parent.getText(file), /savedSalesmanOptions\.map/)
+  assert.ok(dropdown.pos < source.indexOf('<label htmlFor="saved-budget-customer-search"'))
+})

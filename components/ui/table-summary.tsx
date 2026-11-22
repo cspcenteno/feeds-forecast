@@ -11,7 +11,7 @@ export function TableSummary({ records, customers, products, kams, rsms, asms, s
       {index > 0 && <span aria-hidden="true">·</span>}
       <span>{count?.toLocaleString('en-PH')} {count === 1 ? singular : plural}</span>
     </span>)}
-    {end && <div ref={endRef} className="ml-auto lg:mr-[var(--summary-end-inset,0px)]">{end}</div>}
+    {end && <div data-summary-total="" ref={endRef} className="ml-auto lg:mr-[var(--summary-end-inset,0px)]">{end}</div>}
   </div>
 }
 
