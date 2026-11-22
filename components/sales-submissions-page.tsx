@@ -147,8 +147,8 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   // -----------------------------------------
 
   const [userId, setUserId] = useState('')
-  const [userRole, setUserRole] = useState('')
-  const [reviewPosition, setReviewPosition] = useState('')
+  const [userRole, setUserRole] = useState(authorization.role)
+  const [reviewPosition, setReviewPosition] = useState(authorization.position ?? '')
   const [reviewStage, setReviewStage] = useState<ReviewStage | null>(null)
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('stage')
@@ -194,6 +194,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   const [referencesLoading, setReferencesLoading] = useState(true)
   const [referencesError, setReferencesError] = useState(false)
   const referenceRequest = useRef(0)
+  const salesLoadRequest = useRef(0)
   const [processing, setProcessing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [excelPreview, setExcelPreview] = useState<ExportInput | null>(null)
@@ -223,7 +224,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     : !canApprove ? [] : isAsmReview
       ? ['approve', 'return']
       : ['endorse', 'return', 'undo']
-  const [reviewAssignment, setReviewAssignment] = useState<{ region: number | null; subregion: number | null }>({ region: null, subregion: null })
+  const [reviewAssignment, setReviewAssignment] = useState<{ region: number | null; subregion: number | null }>({ region: authorization.regionId, subregion: authorization.subregionId })
   const regionRestricted = customerOnly || (userRole === 'Manager' && reviewPosition !== 'NSM') ||
     (userRole === 'Superuser' && ['Supervisor', 'SV'].includes(reviewPosition))
   const canShowActions = availableReviewActions.length > 0
@@ -362,13 +363,14 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
   }
 
   async function loadData() {
+    const loadRequest = ++salesLoadRequest.current
     setLoading(true)
     try {
       await fetchSalesData()
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to load sales records.')
     } finally {
-      setLoading(false)
+      if (loadRequest === salesLoadRequest.current) setLoading(false)
     }
   }
 
@@ -583,7 +585,6 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
       salesData = salesData.map((item) => ({ ...item, ...asmForRegion(item.region_id, result.users) }))
       setAsmNames(Object.fromEntries(((regionsResult.data ?? []) as Region[]).map((region) => [region.id, asmForRegion(region.id, result.users).asm_name])))
     }
-    setSales(salesData)
     window.dispatchEvent(new Event('forecast-workflow-changed'))
     setRegions(sortRegions((regionsResult.data ?? []) as Region[]))
     setSubregions((subregionsResult.data ?? []) as Subregion[])
@@ -637,6 +638,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
     }
     // Keep the initial hierarchy loading until its person labels are resolved.
     await loadReportingNames()
+    if (request === referenceRequest.current) setSales(salesData)
 
   }
 
@@ -1068,7 +1070,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
             {/* TITLE */}
 
-            {!weekly && <div data-section-header="" data-aligned-toolbar="" className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+            {!weekly && <div data-section-header="" data-aligned-toolbar="" data-approvals-header="" className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <h2 data-section-title="" className="text-base font-semibold"><HeadingClipboardCheck className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />
@@ -1082,6 +1084,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
               <div data-action-toolbar="" className="flex flex-wrap items-center gap-2">
                 {!weekly && authorization.can('Approvals', 'view') && <button type="button" data-action-tone="transfer"
+                  aria-label="Excel View" title="Excel View"
                   disabled={loading || exporting || !filteredSales.length}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
                   onClick={async () => {
@@ -1117,18 +1120,20 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                       setExcelPreview({ ...assignedInput, ...references })
                     } catch (cause) { if (request === excelRequest.current) setExcelError(cause instanceof Error ? cause.message : 'Unable to open Excel report.') }
                     finally { if (request === excelRequest.current) setExporting(false) }
-                  }}><FileSpreadsheet className="size-4" />Excel View</button>}
+                  }}><FileSpreadsheet className="size-4" aria-hidden="true" /><span className="hidden md:inline">Excel View</span></button>}
                   {!weekly && (userRole === 'Admin' || userRole === 'Superuser') && (
                     <button
                       type="button"
                       data-action-tone="neutral"
+                      aria-label={`Switch to ${stage === 'Endorsed' ? 'RSM' : 'ASM'}`}
+                      title={`Switch to ${stage === 'Endorsed' ? 'RSM' : 'ASM'}`}
                       onClick={() => {
                         setReviewStage(stage === 'Endorsed' ? 'Pending' : 'Endorsed')
                         setExpandedGroups(new Set())
                       }}
                       className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-muted"
-                    ><ActionArrowLeftRightIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-                      Switch to {stage === 'Endorsed' ? 'RSM' : 'ASM'}
+                    ><ActionArrowLeftRightIcon className="inline-block size-4 shrink-0 align-middle md:mr-1.5" aria-hidden="true" />
+                      <span className="hidden md:inline">Switch to {stage === 'Endorsed' ? 'RSM' : 'ASM'}</span>
                     </button>
                   )}
 
@@ -1181,9 +1186,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     </label>
 
                     <SelectionField value={selectedRegion}
-                  loading={loading} loadingText="Loading region…"
+                  loading={loading && regionRestricted} loadingText="Loading region…"
                   onValueChange={(selectionValue) => setSelectedRegion(selectionValue)}
-                  disabled={regionRestricted}
+                  disabled={loading || regionRestricted}
                   className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted"
                   aria-label="Region">
                       {!regionRestricted && (
@@ -1207,8 +1212,9 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
               {/* BULK ACTIONS */}
 
-              <div data-action-toolbar="" data-weekly-filter-actions="" data-approval-filter-actions={!weekly ? '' : undefined} className="flex flex-wrap items-center gap-2">
+              <div data-action-toolbar="" data-weekly-filter-actions="" data-weekly-icon-actions={weekly ? '' : undefined} data-approval-filter-actions={!weekly ? '' : undefined} className="flex flex-wrap items-center gap-2">
 {weekly && authorization.can('Weekly Sales', 'view') && authorization.can('Weekly Sales', 'export') && <button type="button" data-action-tone="transfer"
+                  aria-label={exporting ? 'Exporting Excel' : 'Excel Export'} title="Excel Export"
                   onClick={async () => {
                     setExporting(true)
                     try {
@@ -1254,7 +1260,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                     }
                   }} disabled={loading || exporting || filteredSales.length === 0}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
-                  <Download className="size-4" aria-hidden="true" />{exporting ? 'Exporting…' : 'Excel Export'}
+                  <Download className="size-4" aria-hidden="true" /><span className="hidden md:inline">{exporting ? 'Exporting…' : 'Excel Export'}</span>
                 </button>}
 {availableReviewActions.filter((action) => action !== 'undo').map((action) => {
                   const { label, icon: Icon, tone } = reviewActions[action]
@@ -1263,12 +1269,14 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                       key={action}
                       type="button"
                       data-action-tone={tone}
+                      aria-label={`${action === 'return' ? 'Return' : label} All`}
+                      title={`${action === 'return' ? 'Return' : label} All`}
                       onClick={() => openBulkAction(filteredSales, action, 'All Filtered Submissions')}
                       disabled={loading || !filteredSales.some((item) => canReviewItem(item, action))}
                       className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
                     >
                       <Icon className="size-4" aria-hidden="true" />
-                      {action === 'return' ? 'Return' : label} All
+                      <span className="hidden md:inline">{action === 'return' ? 'Return' : label} All</span>
                     </button>
                   )
                 })}

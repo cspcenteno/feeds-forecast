@@ -353,7 +353,7 @@ export function AppSidebar() {
             <div className="flex min-w-0 flex-1 items-center gap-2.5 group-data-[collapsible=icon]:hidden">
               <Image src="/vitarich-logo.png" alt="Vitarich Corporation" width={40} height={40} className="size-10 shrink-0 object-contain" />
               <p className="shrink-0 whitespace-nowrap text-lg leading-tight font-bold tracking-tight">
-                Feed Sales<br /><span className="font-semibold">Forecast</span>
+                Feeds<br /><span className="font-semibold">Forecast</span>
               </p>
             </div>
 

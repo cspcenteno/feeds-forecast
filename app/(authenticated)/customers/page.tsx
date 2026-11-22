@@ -14,13 +14,13 @@ import { Users as HeadingUsers } from 'lucide-react'
 
 import { RecordDialog } from '@/components/ui/record-dialog'
 import { SalespersonInput } from '@/components/ui/salesperson-input'
-import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Plus as AddRecordIcon } from 'lucide-react'
 import { UserPlus as ActionUserPlusIcon, X as ActionXIcon } from 'lucide-react'
 import { ActiveField } from '@/components/ui/active-field'
 
 import { useActionDialogs } from '@/components/action-dialogs'
 import { SelectionField } from '@/components/ui/selection-field'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { TableActionButton } from '@/components/ui/table-action-button'
 import { TableLoadingRow } from '@/components/ui/loading-spinner'
 import { GroupedTableRows, TableGroupProvider, TableGroupToggle } from '@/components/ui/grouped-table-rows'
@@ -64,14 +64,6 @@ export default function CustomersPage() {
   const [regionId, setRegionId] = useState('')
   const [isActive, setIsActive] = useState(true)
   const [segment, setSegment] = useState('')
-  const segmentOptions = useMemo(() => {
-    const names = new Map<string, string>()
-    for (const item of customers) {
-      const name = item.segment?.trim()
-      if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name)
-    }
-    return [...names.values()].sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, label: name }))
-  }, [customers])
   const [loading, setLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(true)
   const [, setError] = usePopupError()
@@ -232,9 +224,9 @@ export default function CustomersPage() {
           </div>
 
           <div className="overflow-x-auto pb-1">
-          <div className="app-field-row">
+          <div data-customer-fields="" className="app-field-row">
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
-              Customer <span className="text-destructive">*</span>
+              Customer Name <span className="text-destructive">*</span>
               <input value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
@@ -255,7 +247,7 @@ export default function CustomersPage() {
             <label className="space-y-2 text-sm font-medium">
               Segment
               <SearchableSelect aria-label="Segment" freeText value={segment} onValueChange={setSegment}
-                options={segmentOptions} placeholder="Select or enter segment" />
+                options={[{ value: 'DISTRIBUTOR', label: 'DISTRIBUTOR' }, { value: 'FARM', label: 'FARM' }]} placeholder="Select or enter segment" />
             </label>
             <div data-field-size="toggle" className="flex items-end">
               <ActiveField checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
@@ -269,10 +261,10 @@ export default function CustomersPage() {
           <div data-action-toolbar="" className="mt-5 flex gap-2" data-dialog-footer="">
             {authorization.can('Customers', editingId === null ? 'add' : 'edit') && (
               <button data-action-tone="primary" data-action-fill="" onClick={() => void saveCustomer()} disabled={loading} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-                {loading ? 'Saving...' : editingId === null ? 'Add Customer' : 'Save Changes'}
+                <span>{loading ? 'Saving...' : editingId === null ? 'Add Customer' : 'Save Changes'}</span>
               </button>
             )}
-            <button data-action-tone="neutral" onClick={resetForm} disabled={loading} className="h-10 rounded-md border px-4 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Cancel</button>
+            <button data-action-tone="neutral" onClick={resetForm} disabled={loading} className="h-10 rounded-md border px-4 text-sm"><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" /><span>Cancel</span></button>
           </div>
         </RecordDialog>
       ) : null}
@@ -298,9 +290,9 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
-          <div data-action-toolbar="" className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap [&>[role=search]]:w-64 [&>[role=search]]:shrink-0">
+          <div data-action-toolbar="" data-master-search-actions="" className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap [&>[role=search]]:w-64 [&>[role=search]]:shrink-0">
             <TableSearch value={search} onChange={setSearch} label="Search customers" />
-{authorization.can('Customers', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Customer</button>}
+{authorization.can('Customers', 'add') && <button type="button" aria-label="Add Customer" title="Add Customer" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Customer</span></button>}
 
 
             <TableGroupToggle disabled={tableLoading} />
@@ -321,7 +313,7 @@ export default function CustomersPage() {
             </colgroup>
             <thead><tr className="border-b bg-muted/40">
               {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <th data-action-column="standard" className="px-1.5 py-3 sm:px-3 text-left font-medium">Action</th>}
-              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer</SortableHeader>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer Name</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>Salesman</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('segment')}>Segment</SortableHeader>

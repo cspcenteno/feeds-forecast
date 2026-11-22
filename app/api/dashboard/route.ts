@@ -18,7 +18,9 @@ type Dashboard = {
 
 export async function GET(request: Request) {
   try {
-    const month = new URL(request.url).searchParams.get('month') ?? ''
+    const params = new URL(request.url).searchParams
+    const month = params.get('month') ?? ''
+    const part = params.get('part')
     if (!/^(20\d{2}|2100)-(0[1-9]|1[0-2])$/.test(month)) return NextResponse.json({ error: 'Select a valid month.' }, { status: 400 })
     const client = await createClient()
     const { data: { user }, error: authError } = await client.auth.getUser()
@@ -41,6 +43,47 @@ export async function GET(request: Request) {
     const isSupervisor = profile.role === 'Superuser' && ['SV', 'SUPERVISOR'].includes(String(profile.position ?? '').trim().toUpperCase())
     if (isSupervisor) dashboard.details = dashboard.details.filter((row) => profile.region_id != null && row.region_id === profile.region_id)
     else if (dashboard.scope === 'rsm') dashboard.details = dashboard.details.filter((row) => profile.region_id != null && profile.subregion_id != null && row.region_id === profile.region_id && row.subregion_id === profile.subregion_id)
+    async function loadDetails() {
+      const first = month + '-01'
+      const names = new Map<number, string>()
+      const regionIds = [...new Set(dashboard.details.map((row) => row.region_id).filter((id): id is number => id !== null))]
+      if (regionIds.length) {
+        const { data, error } = await supabaseAdmin.from('regions').select('id, name').in('id', regionIds)
+        if (error) throw new Error(error.message)
+        for (const region of data ?? []) names.set(region.id, region.name)
+      }
+      const areaLevel = profile.role !== 'Admin' && String(profile.position ?? '').trim().toUpperCase() === 'KAM' ? 'subregion' : 'region'
+      const showAsm = profile.role === 'Admin' || profile.position === 'NSM'
+      let asmUsers: AsmUser[] = []
+      if (showAsm) {
+        const { data, error } = await supabaseAdmin.from('users').select('id,full_name,region_id').eq('position','ASM').eq('is_active',true).order('id')
+        if (error) throw new Error('Unable to load ASM assignments.')
+        asmUsers = data ?? []
+      }
+      const anchors: DashboardReferenceKey[] = []
+      if (dashboard.details.length) {
+        for (let offset = 0; ; offset += 500) {
+          const { data, error } = await client.rpc('get_dashboard_monthly_reference_keys', { p_month: first })
+            .order('id').range(offset, offset + 499).abortSignal(AbortSignal.timeout(45000))
+          if (error) throw new Error('Unable to load Dashboard monthly reference scopes. ' + error.message)
+          anchors.push(...(data ?? []) as DashboardReferenceKey[])
+          if (!data || data.length < 500) break
+        }
+      }
+      const references = await loadMonthlyReferences(client, anchors.map((row) => row.id), 'dashboard')
+      const referencesByRow = new Map(anchors.map((row) => [dashboardReferenceRowKey(row), dashboardMonthlyReferences(row, references)]))
+      const details = dashboard.details.map((row) => ({ ...row,
+        monthly_references: referencesByRow.get(dashboardReferenceRowKey(row)),
+        ...(showAsm ? asmForRegion(row.region_id,asmUsers) : {}), region: row.region_id === null ? null : names.get(row.region_id) ?? null }))
+      let assignedSubregion: string | null = null
+      if (dashboard.scope === 'kam' && profile.subregion_id !== null) {
+        const { data, error } = await supabaseAdmin.from('subregions').select('name').eq('id',profile.subregion_id).maybeSingle()
+        if (error) throw new Error('Unable to load assigned subregion.')
+        assignedSubregion = data?.name ?? null
+      }
+      return { showAsm, details, assignedSubregion, areaLevel }
+    }
+    if (part === 'details') return NextResponse.json(await loadDetails(), { headers: { 'Cache-Control': 'no-store' } })
     const kamKeys = new Set(dashboard.details.map((row) => JSON.stringify([row.region_id, row.customer_id, row.product_id])))
     let ownsImportedVolume: ReturnType<typeof buildKamVolumeScope> = () => false
     if (dashboard.scope === 'kam' && profile.region_id !== null) {
@@ -160,36 +203,8 @@ export async function GET(request: Request) {
       // Keep the legacy regional field scoped consistently as well.
       regions = buildDashboardPerformance('region', dashboard.details, budgets, actualRows, labelMaps)
     }
-    const areaLevel = profile.role !== 'Admin' && String(profile.position ?? '').trim().toUpperCase() === 'KAM' ? 'subregion' : 'region'
-    const showAsm = profile.role === 'Admin' || profile.position === 'NSM'
-    let asmUsers: AsmUser[] = []
-    if (showAsm) {
-      const { data, error } = await supabaseAdmin.from('users').select('id,full_name,region_id').eq('position','ASM').eq('is_active',true).order('id')
-      if (error) throw new Error('Unable to load ASM assignments.')
-      asmUsers = data ?? []
-    }
-    const anchors: DashboardReferenceKey[] = []
-    if (dashboard.details.length) {
-      for (let offset = 0; ; offset += 500) {
-        const { data, error } = await client.rpc('get_dashboard_monthly_reference_keys', { p_month: first })
-          .order('id').range(offset, offset + 499).abortSignal(AbortSignal.timeout(45000))
-        if (error) throw new Error('Unable to load Dashboard monthly reference scopes. ' + error.message)
-        anchors.push(...(data ?? []) as DashboardReferenceKey[])
-        if (!data || data.length < 500) break
-      }
-    }
-    const references = await loadMonthlyReferences(client, anchors.map((row) => row.id), 'dashboard')
-    const referencesByRow = new Map(anchors.map((row) => [dashboardReferenceRowKey(row), dashboardMonthlyReferences(row, references)]))
-    const details = dashboard.details.map((row) => ({ ...row,
-      monthly_references: referencesByRow.get(dashboardReferenceRowKey(row)),
-      ...(showAsm ? asmForRegion(row.region_id,asmUsers) : {}), region: row.region_id === null ? null : names.get(row.region_id) ?? null }))
-    let assignedSubregion: string | null = null
-    if (dashboard.scope === 'kam' && profile.subregion_id !== null) {
-      const { data, error } = await supabaseAdmin.from('subregions').select('name').eq('id',profile.subregion_id).maybeSingle()
-      if (error) throw new Error('Unable to load assigned subregion.')
-      assignedSubregion = data?.name ?? null
-    }
-    return NextResponse.json({ ...dashboard, showAsm, details, assignedSubregion, areaLevel, regions, actualRecordCount: actualRows.length, performance: { level, rows: performanceRows } }, { headers: { 'Cache-Control': 'no-store' } })
+    const detailData = part === 'overview' ? { details: [] } : await loadDetails()
+    return NextResponse.json({ ...dashboard, ...detailData, regions, actualRecordCount: actualRows.length, performance: { level, rows: performanceRows } }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load dashboard data.' }, { status: 500 })
   }

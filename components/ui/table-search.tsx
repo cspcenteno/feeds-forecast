@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { FilterX, Search } from 'lucide-react'
 
 export function useTableSearch<Row>(rows: Row[], values: (row: Row) => unknown[]) {
   const [search, setSearch] = useState('')
@@ -30,7 +30,7 @@ export function TableSearch({ value, onChange, label }: {
         className="h-10 w-full rounded-md border bg-background pr-10 pl-9 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 [&::-webkit-search-cancel-button]:appearance-none"
       />
       {value && <button type="button" aria-label="Clear search" onClick={() => onChange('')} className="absolute top-1/2 right-1 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
-        <X aria-hidden="true" className="size-4" />
+        <FilterX aria-hidden="true" className="size-4" />
       </button>}
     </div>
   )

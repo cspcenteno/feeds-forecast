@@ -77,19 +77,19 @@ export function ForecastWeekManager() {
   const button = 'h-10 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50'
   return <main className="space-y-4">
     <section className="overflow-hidden rounded-xl border bg-card">
-      <div data-section-header="" data-aligned-toolbar="" className="flex flex-col items-start justify-between gap-3 border-b sm:flex-row sm:items-center">
+      <div data-week-settings-header="" data-section-header="" data-aligned-toolbar="" className="flex flex-col items-start justify-between gap-3 border-b sm:flex-row sm:items-center">
         <h2 data-section-title="" className="font-semibold"><HeadingSettings className="size-5 text-muted-foreground" aria-hidden="true" />Schedule Settings</h2>
 
       </div>
 
-      {canManage && <div className="p-6"><div className="max-w-3xl space-y-4">
-        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
-          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Week
+      {canManage && <div className="p-6"><div data-week-lock-controls="" className="max-w-3xl space-y-4">
+        <div data-week-lock-fields="" className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
+          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Week <span className="text-destructive" aria-hidden="true">*</span>
             {weekDateRangeLabel(selectedWeek) && <span className="ml-2 text-xs font-normal text-muted-foreground">({weekDateRangeLabel(selectedWeek)})</span>}</span>
             <input type="week" disabled={busy} value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)} className={input} />
           </label>
-          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Reason</span>
-            <input data-week-lock-reason="" disabled={busy} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required for Reopen or Lock week" className={input} />
+          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium"><span>Reason <span className="text-destructive" aria-hidden="true">*</span></span>
+            <input data-week-lock-reason="" required disabled={busy} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Enter reason…" className={input} />
           </label>
         </div>
         <div className="space-y-3">
@@ -100,7 +100,7 @@ export function ForecastWeekManager() {
             <div className="space-y-2">
               <button data-week-lock-icon="" aria-label="Lock week" title="Lock week" data-action-tone="caution" type="button" disabled={busy || loading || !selectedWeek} onClick={() => void save('lock')} className={button}><ActionLockIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" /><span className="hidden md:inline">Lock week</span></button>
             </div>
-            <div className="space-y-2"><button data-action-tone="neutral" type="button" disabled={busy || loading} onClick={() => void save('reset')} className={button}><ActionRotateCcwIcon className="mr-1.5 inline-block size-4 align-middle" aria-hidden="true" />Use Automatic Rule</button></div>
+            <div className="space-y-2"><button data-week-lock-icon="" aria-label="Use Automatic Rule" title="Use Automatic Rule" data-action-tone="neutral" type="button" disabled={busy || loading} onClick={() => void save('reset')} className={button}><ActionRotateCcwIcon className="mr-1.5 inline-block size-4 align-middle" aria-hidden="true" /><span className="hidden md:inline">Use Automatic Rule</span></button></div>
           </div>
         </div>
       </div></div>}

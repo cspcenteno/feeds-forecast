@@ -4,17 +4,19 @@ import { supabaseAdmin } from '@/lib/admin'
 import { savedPermissions } from '@/lib/authorization-rules'
 import { canReadAllVolumeRegions, requiresVolumeSubregion } from '@/lib/volume-visibility'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const moduleName = new URL(request.url).searchParams.get('module') ?? 'Actuals'
+  if (moduleName !== 'Actuals' && moduleName !== 'Budgets') return NextResponse.json({ error: 'Invalid module.' }, { status: 400 })
   const client = await createClient()
   const { data: { user } } = await client.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Sign in to import Actuals.' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'Sign in to import records.' }, { status: 401 })
   const [profile, grants] = await Promise.all([
     supabaseAdmin.from('users').select('role,position,is_active,region_id,subregion_id').eq('id', user.id).single(),
     supabaseAdmin.from('user_permissions').select('module,can_view,can_add,can_edit,can_import,can_export,can_delete').eq('user_id', user.id),
   ])
-  if (profile.error || grants.error) return NextResponse.json({ error: 'Unable to verify Actuals import access.' }, { status: 500 })
-  const viewer = profile.data, permission = savedPermissions(grants.data ?? []).Actuals
-  if (!viewer?.is_active || !permission.view || !permission.add || !permission.import) return NextResponse.json({ error: 'Actuals View, Add and Import permissions are required.' }, { status: 403 })
+  if (profile.error || grants.error) return NextResponse.json({ error: 'Unable to verify import access.' }, { status: 500 })
+  const viewer = profile.data, permission = savedPermissions(grants.data ?? [])[moduleName]
+  if (!viewer?.is_active || !permission.view || !(permission.add || permission.edit) || !permission.import) return NextResponse.json({ error: `${moduleName} View, Import and Add or Edit permissions are required.` }, { status: 403 })
   const allRegions = canReadAllVolumeRegions(viewer.role, viewer.position ?? '')
   const scopedSubregion = requiresVolumeSubregion(viewer.role, viewer.position ?? '')
   if ((!allRegions && !viewer.region_id) || (scopedSubregion && !viewer.subregion_id)) return NextResponse.json({ error: 'Your account needs an assigned region/subregion.' }, { status: 403 })
@@ -29,5 +31,6 @@ export async function GET() {
     users.push(...(data ?? []))
     if (!data || data.length < 500) break
   }
+  users.sort((a, b) => (a.full_name ?? '').trim().localeCompare((b.full_name ?? '').trim(), 'en', { sensitivity: 'base', numeric: true }) || a.id.localeCompare(b.id))
   return NextResponse.json({ users }, { headers: { 'Cache-Control': 'no-store' } })
 }

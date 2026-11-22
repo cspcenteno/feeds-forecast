@@ -1,0 +1,1167 @@
+[
+  {
+    "table": "subregions",
+    "required": [
+      "id",
+      "name",
+      "region_id"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "code",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "region_id",
+        "description": "Note:\nThis is a Foreign Key to `regions.id`.<fk table='regions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "is_active",
+        "default": true,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "actuals",
+    "required": [
+      "id",
+      "region_id",
+      "category_id",
+      "product_id",
+      "customer_id",
+      "volume",
+      "created_at",
+      "updated_at"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "region_id",
+        "description": "Note:\nThis is a Foreign Key to `regions.id`.<fk table='regions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "category_id",
+        "description": "Note:\nThis is a Foreign Key to `categories.id`.<fk table='categories' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "product_id",
+        "description": "Note:\nThis is a Foreign Key to `products.id`.<fk table='products' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "customer_id",
+        "description": "Note:\nThis is a Foreign Key to `customers.id`.<fk table='customers' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "volume",
+        "default": 0,
+        "format": "numeric",
+        "type": "number"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "updated_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "kam",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "asm",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "rsm",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "actual_date",
+        "format": "date",
+        "type": "string"
+      },
+      {
+        "column": "subregion_id",
+        "description": "Note:\nThis is a Foreign Key to `subregions.id`.<fk table='subregions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      }
+    ]
+  },
+  {
+    "table": "customers",
+    "required": [
+      "id",
+      "customer",
+      "created_at",
+      "updated_at",
+      "is_active"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "customer",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "salesman",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "segment",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "updated_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "region_id",
+        "description": "Note:\nThis is a Foreign Key to `regions.id`.<fk table='regions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "is_active",
+        "default": true,
+        "format": "boolean",
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "table": "forecast_week_audit",
+    "required": [
+      "id",
+      "action",
+      "reason",
+      "details",
+      "created_at"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "actor_id",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "action",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "reason",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "details",
+        "format": "jsonb"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "forecast_week_policy",
+    "required": [
+      "id",
+      "open_ahead_weeks",
+      "updated_at"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "default": true,
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "open_ahead_weeks",
+        "default": 4,
+        "format": "int32",
+        "type": "integer"
+      },
+      {
+        "column": "updated_by",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "updated_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "budget_import_staging",
+    "required": [
+      "id"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "region",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "month",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "customer",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "product_code",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "product_name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "volume",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "year",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "asm",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "rsm",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "kam",
+        "format": "text",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "products",
+    "required": [
+      "id",
+      "code",
+      "name"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "category_id",
+        "description": "Note:\nThis is a Foreign Key to `categories.id`.<fk table='categories' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "code",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "weight",
+        "default": 0,
+        "format": "numeric",
+        "type": "number"
+      },
+      {
+        "column": "is_active",
+        "default": true,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "product_line",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "species",
+        "format": "text",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "actual_import_staging",
+    "required": [
+      "id"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "actual_date",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "region",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "subregion",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "customer",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "product_code",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "product_name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "volume",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "kam",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "asm",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "rsm",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "uploaded_by",
+        "default": "auth.uid()",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "forecasts",
+    "required": [
+      "id",
+      "year",
+      "week"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "year",
+        "format": "int32",
+        "type": "integer"
+      },
+      {
+        "column": "week",
+        "format": "int32",
+        "type": "integer"
+      },
+      {
+        "column": "region_id",
+        "description": "Note:\nThis is a Foreign Key to `regions.id`.<fk table='regions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "category_id",
+        "description": "Note:\nThis is a Foreign Key to `categories.id`.<fk table='categories' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "product_id",
+        "description": "Note:\nThis is a Foreign Key to `products.id`.<fk table='products' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "forecast",
+        "default": 0,
+        "format": "numeric",
+        "type": "number"
+      },
+      {
+        "column": "status",
+        "default": "Draft",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "submitted_by",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "submitted_at",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "approved_by",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "approved_at",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "remarks",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "updated_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "user_id",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "subregion_id",
+        "description": "Note:\nThis is a Foreign Key to `subregions.id`.<fk table='subregions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "volume",
+        "default": 0,
+        "format": "numeric",
+        "type": "number"
+      },
+      {
+        "column": "customer_id",
+        "description": "Note:\nThis is a Foreign Key to `customers.id`.<fk table='customers' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "endorsed_by",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "endorsed_at",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "returned_by",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "returned_at",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "kam",
+        "format": "text",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "regions",
+    "required": [
+      "id",
+      "name"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "code",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "is_active",
+        "default": true,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "forecast_import_staging",
+    "required": [
+      "id",
+      "uploaded_by",
+      "created_at"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "uploaded_by",
+        "default": "auth.uid()",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "year",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "week",
+        "description": "Week number or date range such as Jan 1 - Jan 4, resolved to an ISO week using the Year column.",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "region",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "subregion",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "customer",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "product_code",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "product_name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "forecast",
+        "description": "Optional forecast quantity. If omitted, calculate quantity as volume divided by product weight.",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "volume",
+        "description": "Optional volume from the file. Provide Volume or Forecast quantity; calculate the other using product weight.",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "kam",
+        "format": "text",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "users",
+    "required": [
+      "id",
+      "email",
+      "must_change_password",
+      "dashboard_type"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "email",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "full_name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "role",
+        "default": "User",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "is_active",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "region_id",
+        "description": "Note:\nThis is a Foreign Key to `regions.id`.<fk table='regions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "subregion_id",
+        "description": "Note:\nThis is a Foreign Key to `subregions.id`.<fk table='subregions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "position",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "must_change_password",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "dashboard_type",
+        "default": "system",
+        "format": "text",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "user_permissions",
+    "required": [
+      "id",
+      "user_id",
+      "module",
+      "can_view",
+      "can_add",
+      "can_edit",
+      "can_delete",
+      "created_at",
+      "updated_at",
+      "is_default",
+      "can_export",
+      "can_import"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "user_id",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "module",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "can_view",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "can_add",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "can_edit",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "can_delete",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "updated_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "is_default",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "can_export",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "can_import",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "table": "categories",
+    "required": [
+      "id",
+      "name"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "code",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "is_active",
+        "default": true,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "week_locks",
+    "required": [
+      "id",
+      "year",
+      "week",
+      "status",
+      "is_override"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "year",
+        "format": "int32",
+        "type": "integer"
+      },
+      {
+        "column": "week",
+        "format": "int32",
+        "type": "integer"
+      },
+      {
+        "column": "status",
+        "default": "Open",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "locked_by",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "locked_at",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "is_override",
+        "default": false,
+        "format": "boolean",
+        "type": "boolean"
+      },
+      {
+        "column": "override_reason",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "override_by",
+        "description": "Note:\nThis is a Foreign Key to `users.id`.<fk table='users' column='id'/>",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "override_expires_at",
+        "format": "timestamp with time zone",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "audit_logs",
+    "required": [
+      "id",
+      "created_at",
+      "actor_name",
+      "module",
+      "table_name",
+      "action",
+      "changed_fields",
+      "summary"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "created_at",
+        "default": "clock_timestamp()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "actor_id",
+        "format": "uuid",
+        "type": "string"
+      },
+      {
+        "column": "actor_name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "module",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "table_name",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "record_id",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "action",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "changed_fields",
+        "format": "text[]",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      {
+        "column": "summary",
+        "format": "text",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "table": "budgets",
+    "required": [
+      "id",
+      "year"
+    ],
+    "columns": [
+      {
+        "column": "id",
+        "description": "Note:\nThis is a Primary Key.<pk/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "year",
+        "format": "int32",
+        "type": "integer"
+      },
+      {
+        "column": "region_id",
+        "description": "Note:\nThis is a Foreign Key to `regions.id`.<fk table='regions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "category_id",
+        "description": "Note:\nThis is a Foreign Key to `categories.id`.<fk table='categories' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "product_id",
+        "description": "Note:\nThis is a Foreign Key to `products.id`.<fk table='products' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "volume",
+        "default": 0,
+        "format": "numeric",
+        "type": "number"
+      },
+      {
+        "column": "created_at",
+        "default": "now()",
+        "format": "timestamp with time zone",
+        "type": "string"
+      },
+      {
+        "column": "month",
+        "format": "int32",
+        "type": "integer"
+      },
+      {
+        "column": "subregion_id",
+        "description": "Note:\nThis is a Foreign Key to `subregions.id`.<fk table='subregions' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "customer_id",
+        "description": "Note:\nThis is a Foreign Key to `customers.id`.<fk table='customers' column='id'/>",
+        "format": "int64",
+        "type": "integer"
+      },
+      {
+        "column": "kam",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "asm",
+        "format": "text",
+        "type": "string"
+      },
+      {
+        "column": "rsm",
+        "format": "text",
+        "type": "string"
+      }
+    ]
+  }
+]

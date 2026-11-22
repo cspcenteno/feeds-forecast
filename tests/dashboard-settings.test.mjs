@@ -69,7 +69,7 @@ test('dashboard settings render System, Power BI, or a switch without mounting h
     vm.runInNewContext(pageSource, { exports: module.exports, require(name) {
       if (name === 'react') return React
       if (name === 'react/jsx-runtime') return jsxRuntime
-      if (name === 'next/dynamic') return {default: () => () => React.createElement('p', null, 'Existing system dashboard')}
+      if (name === './system-dashboard') return {default: () => React.createElement('p', null, 'Existing system dashboard')}
       if (name === '@/lib/authorization') return {useAuthorization: () => ({dashboardType, powerBiEmbedUrl:'https://app.powerbi.com/view?r=test', can: () => view})}
       throw Error(name)
     } })
@@ -83,4 +83,45 @@ test('dashboard settings render System, Power BI, or a switch without mounting h
   assert.match(render('both'), /Existing system dashboard/)
   assert.doesNotMatch(render('both'), /iframe/)
   assert.equal(render('both', false), '')
+})
+
+test('overview skips monthly references and details skip the Actual scan', async () => {
+  for (const part of ['overview', 'details']) {
+    const tables = []
+    const rpcCalls = []
+    let referenceLoads = 0
+    const module = { exports: {} }
+    vm.runInNewContext(compiled, { exports: module.exports, URL, AbortSignal, require(name) {
+      if (name === 'next/server') return { NextResponse: { json: (body, options) => ({body, status: options?.status ?? 200}) } }
+      if (name === '@/lib/dashboard-settings') return { dashboardTypeOrDefault }
+      if (name === '@/lib/dashboard-performance') return { dashboardLevel: () => 'company' }
+      if (name === '@/lib/dashboard-comparisons') return { mergeRegionalActuals: rows => rows }
+      if (name === '@/lib/sales-monthly-references') return { loadMonthlyReferences: async () => { referenceLoads++; return new Map() } }
+      if (name === '@/lib/server') return { createClient: async () => ({
+        auth: { getUser: async () => ({data:{user:{id:'viewer'}}}) },
+        rpc: async (rpcName, args) => { rpcCalls.push([rpcName, args]); return {data:{scope:'global', regions:[{region:'North',budget:100,forecast:80}], details:[]},error:null} },
+      }) }
+      if (name === '@/lib/admin') return { supabaseAdmin: { from(table) {
+        tables.push(table)
+        return { select() {return this}, eq() {return this}, gte() {return this}, lt() {return this}, order() {return this}, limit() {return this},
+          abortSignal: async () => ({data:[],error:null}),
+          maybeSingle: async () => ({data:{is_active:true,dashboard_type:'system',role:'Manager',position:'NSM'},error:null}),
+          then(resolve) { return Promise.resolve({data:[],error:null}).then(resolve) },
+        }
+      } } }
+      return {}
+    } })
+    const result = await module.exports.GET({url:`https://example.com/api/dashboard?month=2026-11&part=${part}`})
+    assert.equal(result.status, 200, JSON.stringify(result.body))
+    assert.equal(rpcCalls[0][1].p_month, '2026-11-01')
+    if (part === 'overview') {
+      assert.equal(referenceLoads, 0)
+      assert.equal(result.body.performance.rows[0].forecast, 80)
+      assert.equal(result.body.details.length, 0)
+    } else {
+      assert.equal(referenceLoads, 1)
+      assert.equal(tables.includes('actuals'), false)
+      assert.equal(result.body.performance, undefined)
+    }
+  }
 })

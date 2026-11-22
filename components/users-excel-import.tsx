@@ -167,33 +167,33 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
   }
 
   return <>
-    <button data-action-tone="transfer" type="button" disabled={disabled} onClick={() => {
+    <button data-action-tone="transfer" type="button" title="Excel Import" aria-label="Excel Import" disabled={disabled} onClick={() => {
       setShow(true)
       void run(async () => { await loadReferences() })
-    }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" />Excel Import</button>
+    }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" /><span className="hidden md:inline">Excel Import</span></button>
     <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Users Excel Import" busy={busy} wide contained maxWidth="90rem">
     <section className="app-tables flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <div data-import-dialog-header data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b pb-4">
       <div><h2 data-section-title="" className="font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Users Excel Import</h2></div>
       <div data-action-toolbar="" className="flex flex-wrap gap-2">
 <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file) }} />
-<button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Download Template</span></button>
+<button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} title="Upload File" aria-label="Upload File" onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Upload File</span></button>
+<button data-action-tone="neutral" type="button" disabled={disabled} title="Download Template" aria-label="Download Template" onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Template</span></button>
 
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
+<button data-action-tone="neutral" type="button" disabled={disabled} title="Refresh" aria-label="Refresh" onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
 </div>
     </div>
 
     <div data-volume-import-body className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pt-4 sm:flex sm:flex-col sm:gap-4 sm:space-y-0 sm:overflow-hidden">
       {busy && progress && <p role="status" className="text-sm">{progress}</p>}
-      <section aria-labelledby="import-account-settings" className="shrink-0 overflow-hidden rounded-lg border bg-card"><header data-section-header="" data-aligned-toolbar="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
+      <section aria-labelledby="import-account-settings" className="shrink-0 overflow-hidden rounded-lg border bg-card"><header data-section-header="" data-aligned-toolbar="" className="border-b px-4 py-3"><h3 data-section-title="" id="import-account-settings" className="font-semibold"><HeadingSettings className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Account Settings</h3></header><div data-user-import-account-controls="" className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
           <div data-import-account-fields="" className="flex flex-wrap items-end gap-3">
-            <div className="w-full space-y-1.5 sm:w-64"><label htmlFor="users-import-password" className="block text-sm font-medium">Temporary Password</label><input id="users-import-password" type="password" autoComplete="new-password" placeholder="At least 8 characters" minLength={8} maxLength={128} disabled={disabled} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="block h-10 w-full rounded-md border bg-background px-3 text-sm" /></div>
+            <div className="w-full space-y-1.5 sm:w-64"><label htmlFor="users-import-password" className="block text-sm font-medium">Temporary Password <span className="text-destructive" aria-hidden="true">*</span></label><input id="users-import-password" type="password" autoComplete="new-password" placeholder="At least 8 characters" minLength={8} maxLength={128} disabled={disabled} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="block h-10 w-full rounded-md border bg-background px-3 text-sm" /></div>
             <ActiveField id="users-import-active" disabled={disabled} checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
           </div>
         </div>
-        <button data-action-tone="primary" data-action-fill="" type="button" disabled={disabled || !referencesReady || !ready.length || temporaryPassword.length < 8} onClick={() => void createUsers()} className="h-10 shrink-0 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"><ActionUserPlusIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />Create {ready.length} {ready.length === 1 ? 'User' : 'Users'}</button>
+        <button data-action-tone="primary" data-action-fill="" type="button" disabled={disabled || !referencesReady || !ready.length || temporaryPassword.length < 8} title={`Create ${ready.length} Users`} aria-label={`Create ${ready.length} Users`} onClick={() => void createUsers()} className="ml-auto h-10 shrink-0 self-end rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"><ActionUserPlusIcon className="inline-block size-4 shrink-0 align-middle md:mr-1.5" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Create {ready.length} {ready.length === 1 ? 'User' : 'Users'}</span></button>
       </div></section>
       {editing && <RecordDialog open onClose={() => setEditing(null)} title="Edit Uploaded User" busy={busy} wide contained fitContent>
         <form className="app-tables flex min-h-0 flex-1 flex-col gap-4" onSubmit={(event) => {
@@ -214,7 +214,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
           </div>
         </form>
       </RecordDialog>}
-      <Table className="w-full min-w-[1100px] table-fixed lg:min-w-0" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Users import preview', 'aria-busy': busy }}>
+      <Table data-users-import-preview="" className="w-full min-w-[1100px] table-fixed lg:min-w-0" containerProps={{ className: 'max-h-[min(32rem,65vh)] overflow-auto rounded-lg border', tabIndex: 0, role: 'region', 'aria-label': 'Users import preview', 'aria-busy': busy }}>
         <colgroup>{[8, 12, 16, 20, 8, 16, 10, 10].map((width, index) => <col data-action-column={index === 0 ? "compact" : undefined} key={index} style={{ width: index === 0 ? undefined : `${width}%` }} />)}</colgroup>
         <thead className="sticky top-0 z-10 bg-card"><tr className="border-b">{['Action', 'Status', ...userImportColumns.map((column) => userFieldLabels[column])].map((label) => <th data-action-column={label === "Action" ? "compact" : undefined} key={label} className="px-3 py-3 text-left font-medium">{label}</th>)}</tr></thead>
         <tbody>{busy && !progress ? <TableLoadingRow columns={8} label="user import preview" /> : !rows.length ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">No uploaded users to display.</td></tr> : preview.map((row) => { const outcome = outcomes[row.source.id]; return <tr key={row.source.id} className="border-b align-top">
@@ -222,9 +222,9 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
           <td className={`px-3 py-3 text-sm leading-5 wrap-anywhere ${row.status === 'Invalid' || outcome?.status === 'Failed' ? 'text-destructive' : ''}`}><div><StatusBadge compact status={outcome?.status ?? row.status} /></div>{outcome?.message ?? row.issues.join(' ')}</td>
           {userImportColumns.map((column) => <td key={column} className="px-3 py-3 wrap-anywhere">{row.source[column] || '—'}</td>)}
         </tr> })}</tbody>
-        {preview.length > 0 && <tfoot className="sticky bottom-0 z-10 border-t bg-card">
+        <tfoot className="sticky bottom-0 z-10 border-t bg-card">
           <tr><td colSpan={8} className="px-3 py-3 text-sm text-muted-foreground">{preview.length.toLocaleString('en-PH')} {preview.length === 1 ? 'record' : 'records'}</td></tr>
-        </tfoot>}
+        </tfoot>
       </Table>
     </div>
   </section>

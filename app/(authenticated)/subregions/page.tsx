@@ -280,14 +280,13 @@ export default function SubregionsPage() {
 
         </div>
 
-        <div className="app-field-row">
-          {/* Subregion Name */}
+        <div data-subregion-fields="" className="app-field-row">
           <div className="space-y-2">
             <label
               htmlFor="subregion-name"
               className="text-sm font-medium"
             >
-              Subregion Name
+              Subregion Name <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <input
@@ -306,18 +305,21 @@ export default function SubregionsPage() {
               htmlFor="subregion-code"
               className="text-sm font-medium"
             >
-              Code
+              Subregion Code
             </label>
 
             <input
               id="subregion-code"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter subregion code"
+              placeholder="Enter code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               disabled={loading}
             />
           </div>
+
+          {/* Subregion Name */}
+
 
           {/* Parent Region */}
           <div className="space-y-2">
@@ -325,7 +327,7 @@ export default function SubregionsPage() {
               htmlFor="parent-region"
               className="text-sm font-medium"
             >
-              Parent Region
+              Parent Region <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <SelectionField id="parent-region"
@@ -366,7 +368,7 @@ export default function SubregionsPage() {
               onClick={clearForm}
               disabled={loading}
             ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-              Cancel
+              <span>Cancel</span>
             </button>
 
 
@@ -375,11 +377,11 @@ export default function SubregionsPage() {
             onClick={saveSubregion}
             disabled={loading || initialLoading || !authorization.can('Subregions', editingId === null ? 'add' : 'edit')}
           ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-            {loading
+            <span>{loading
               ? 'Saving...'
               : editingId !== null
                 ? 'Save Changes'
-                : 'Add Subregion'}
+                : 'Add Subregion'}</span>
           </button>
         </div>
         {/* Error */}
@@ -391,8 +393,8 @@ export default function SubregionsPage() {
       <section className="rounded-xl border bg-card shadow-sm">
 
 
-        <div data-mobile-two-row-toolbar="" data-product-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search subregions" />
-{authorization.can('Subregions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Subregion</button>}
+        <div data-master-search-actions="" data-product-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search subregions" />
+{authorization.can('Subregions', 'add') && <button type="button" aria-label="Add Subregion" title="Add Subregion" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Subregion</span></button>}
 <TableGroupToggle disabled={initialLoading} /></div>
 
         <div className="overflow-x-auto">
@@ -400,16 +402,15 @@ export default function SubregionsPage() {
             <colgroup>
               {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <col data-action-column="standard" className="w-[20%]" />}
               <col className="w-[12%]" />
-              <col className="w-[14%]" />
               <col />
+              <col className="w-[14%]" />
             <col style={{ width: 200 }} /></colgroup>
             <TableHeader>
               <TableRow>
                 {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <TableHead data-action-column="standard" className="px-3">Action</TableHead>}
                 <TableHead data-fixed-column="status" className="px-3">Status</TableHead>
-                <SortableHeader className="px-3" {...sortHeader('code')}>Code</SortableHeader>
-
                 <SortableHeader className="px-3" {...sortHeader('name')}>Subregion Name</SortableHeader>
+                <SortableHeader className="px-3" {...sortHeader('code')}>Subregion Code</SortableHeader>
 
 
               <SortableHeader className="w-[200px] px-3" {...sortHeader('created_at')}>Date Created</SortableHeader></TableRow>
@@ -443,11 +444,8 @@ export default function SubregionsPage() {
                     <TableCell className="px-3">
                       <StatusBadge status={subregion.is_active ? 'Active' : 'Inactive'} />
                     </TableCell>
-                      <TableCell className="px-3 font-medium">
-                        {subregion.code || '—'}
-                      </TableCell>
-
-                      <TableCell className="px-3">{subregion.name}</TableCell>
+                      <TableCell className="px-3 font-medium">{subregion.name}</TableCell>
+                      <TableCell className="px-3">{subregion.code || '—'}</TableCell>
 
 
                     <TableCell className="px-3 whitespace-nowrap">{formatCreatedDate(subregion.created_at)}</TableCell></TableRow>

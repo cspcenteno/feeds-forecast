@@ -232,14 +232,13 @@ export default function RegionsPage() {
 
         </div>
 
-        <div className="app-field-row">
-          {/* Region Name */}
+        <div data-region-fields="" className="app-field-row">
           <div className="space-y-2">
             <label
               htmlFor="name"
               className="text-sm font-medium"
             >
-              Region Name
+              Region Name <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <input
@@ -257,17 +256,20 @@ export default function RegionsPage() {
               htmlFor="code"
               className="text-sm font-medium"
             >
-              Code
+              Region Code
             </label>
 
             <input
               id="code"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter region code"
+              placeholder="Enter code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
           </div>
+
+          {/* Region Name */}
+
 
           {/* Active */}
           <div data-field-size="toggle" className="flex items-end">
@@ -287,7 +289,7 @@ export default function RegionsPage() {
               onClick={clearForm}
               disabled={loading}
             ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-              Cancel
+              <span>Cancel</span>
             </button>
 
 
@@ -296,11 +298,11 @@ export default function RegionsPage() {
             onClick={saveRegion}
             disabled={loading || !authorization.can('Regions', editingId === null ? 'add' : 'edit')}
           ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-            {loading
+            <span>{loading
               ? 'Saving...'
               : editingId !== null
                 ? 'Save Changes'
-                : 'Add Region'}
+                : 'Add Region'}</span>
           </button>
         </div>
         {/* Error */}
@@ -311,8 +313,8 @@ export default function RegionsPage() {
       <section className="rounded-xl border bg-card shadow-sm">
 
 
-        <div data-mobile-two-row-toolbar="" data-category-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search regions" />
-{authorization.can('Regions', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Region</button>}
+        <div data-master-search-actions="" data-category-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search regions" />
+{authorization.can('Regions', 'add') && <button type="button" aria-label="Add Region" title="Add Region" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Region</span></button>}
 </div>
 
         <div className="overflow-x-auto">
@@ -321,9 +323,8 @@ export default function RegionsPage() {
               <TableRow>
                 {(authorization.can('Regions', 'add') || authorization.can('Regions', 'edit') || authorization.can('Regions', 'delete')) && <TableHead data-action-column="standard" className="w-[180px] text-left">Action</TableHead>}
                 <TableHead data-fixed-column="status" className="w-[120px]">Status</TableHead>
-                <SortableHeader className="pl-6 w-[150px]" {...sortHeader('code')}>Code</SortableHeader>
-
-                <SortableHeader {...sortHeader('name')}>Region Name</SortableHeader>
+                <SortableHeader className="px-3" {...sortHeader('name')}>Region Name</SortableHeader>
+                <SortableHeader className="px-3 w-[150px]" {...sortHeader('code')}>Region Code</SortableHeader>
 
               <SortableHeader className="w-[200px] px-3" {...sortHeader('created_at')}>Date Created</SortableHeader></TableRow>
             </TableHeader>
@@ -351,13 +352,10 @@ export default function RegionsPage() {
                     <TableCell>
                       <StatusBadge status={region.is_active ? 'Active' : 'Inactive'} />
                     </TableCell>
-                    <TableCell className="pl-6 font-medium">
-                      {region.code || '—'}
-                    </TableCell>
-
-                    <TableCell>
+                    <TableCell className="px-3 font-medium">
                       {region.name}
                     </TableCell>
+                    <TableCell className="px-3">{region.code || '—'}</TableCell>
 
                   <TableCell className="px-3 whitespace-nowrap">{formatCreatedDate(region.created_at)}</TableCell></TableRow>
                 ))

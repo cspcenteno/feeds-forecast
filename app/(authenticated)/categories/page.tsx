@@ -36,7 +36,6 @@ type Category = {
   id: number
   code: string | null
   name: string
-  description: string | null
   is_active: boolean
 }
 
@@ -48,7 +47,6 @@ export default function CategoriesPage() {
 
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const [isActive, setIsActive] = useState(true)
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -65,7 +63,7 @@ export default function CategoriesPage() {
 
       const { data, error } = await supabase
         .from('categories')
-        .select('id, code, name, description, is_active, created_at')
+        .select('id, code, name, is_active, created_at')
         .order('id')
 
       if (error) {
@@ -99,7 +97,6 @@ export default function CategoriesPage() {
         .update({
           code: code.trim() || null,
           name: name.trim(),
-          description: description.trim() || null,
           is_active: isActive,
         })
         .eq('id', editingId)
@@ -124,7 +121,6 @@ export default function CategoriesPage() {
         .insert({
           code: code.trim() || null,
           name: name.trim(),
-          description: description.trim() || null,
           is_active: isActive,
         })
         .select()
@@ -155,7 +151,6 @@ export default function CategoriesPage() {
     setFormOpen(true)
     setCode(category.code ?? '')
     setName(category.name)
-    setDescription(category.description ?? '')
     setIsActive(category.is_active)
     setError(null)
   }
@@ -203,7 +198,6 @@ export default function CategoriesPage() {
     setEditingId(null)
     setCode('')
     setName('')
-    setDescription('')
     setIsActive(true)
     setError(null)
   }
@@ -212,13 +206,12 @@ export default function CategoriesPage() {
     getCategories()
   }, [])
 
-  const { search, setSearch, filteredRows } = useTableSearch(categories, (row) => [row.code, row.name, row.description, row.is_active ? 'Active' : 'Inactive'])
+  const { search, setSearch, filteredRows } = useTableSearch(categories, (row) => [row.code, row.name, row.is_active ? 'Active' : 'Inactive'])
 
   const { sortedRows: sortedCategories, sortHeader } = useTableSort(filteredRows, {
     created_at: (row) => row.created_at,
     code: (row) => row.code,
     name: (row) => row.name,
-    description: (row) => row.description,
   })
 
   return (
@@ -238,31 +231,12 @@ export default function CategoriesPage() {
         </div>
 
         <div data-category-fields="" className="app-field-row">
-          {/* Code */}
-          <div data-field-size="compact" className="space-y-2">
-            <label
-              htmlFor="code"
-              className="text-sm font-medium"
-            >
-              Code <span className="text-muted-foreground">(Optional)</span>
-            </label>
-
-            <input
-              id="code"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter category code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </div>
-
-          {/* Name */}
           <div data-field-size="wide" className="space-y-2">
             <label
               htmlFor="name"
               className="text-sm font-medium"
             >
-              Name
+              Category Name <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <input
@@ -274,24 +248,26 @@ export default function CategoriesPage() {
             />
           </div>
 
-          <div data-category-description-active="">
-          {/* Description */}
-          <div data-field-size="wide" className="space-y-2">
+          {/* Code */}
+          <div data-field-size="compact" className="space-y-2">
             <label
-              htmlFor="description"
+              htmlFor="code"
               className="text-sm font-medium"
             >
-              Description
+              Category Code <span className="text-muted-foreground">(Optional)</span>
             </label>
 
             <input
-              id="description"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              id="code"
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm uppercase outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+              placeholder="Enter code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
             />
           </div>
+
+          {/* Name */}
+
 
           {/* Active */}
           <div data-field-size="toggle" className="flex items-end">
@@ -302,7 +278,6 @@ export default function CategoriesPage() {
                 }
               />
           </div>
-          </div>
         </div>
 
         {/* Buttons */}
@@ -312,7 +287,7 @@ export default function CategoriesPage() {
               onClick={clearForm}
               disabled={loading}
             ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-              Cancel
+              <span>Cancel</span>
             </button>
 
 
@@ -321,11 +296,11 @@ export default function CategoriesPage() {
             onClick={saveCategory}
             disabled={loading || !authorization.can('Categories', editingId === null ? 'add' : 'edit')}
           ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-            {loading
+            <span>{loading
               ? 'Saving...'
               : editingId !== null
                 ? 'Save Changes'
-                : 'Add Category'}
+                : 'Add Category'}</span>
           </button>
         </div>
         {/* Error */}
@@ -336,37 +311,35 @@ export default function CategoriesPage() {
       <section className="rounded-xl border bg-card shadow-sm">
 
 
-        <div data-mobile-two-row-toolbar="" data-category-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search categories" />
-{authorization.can('Categories', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Category</button>}
+        <div data-master-search-actions="" data-category-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search categories" />
+{authorization.can('Categories', 'add') && <button type="button" aria-label="Add Category" title="Add Category" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Category</span></button>}
 </div>
 
         <div className="overflow-x-auto">
-          <Table data-directory-table="categories" summary={{ records: sortedCategories.length }} className="w-full min-w-[1120px] table-fixed" aria-busy={tableLoading}
+          <Table data-directory-table="categories" summary={{ records: sortedCategories.length }} className="w-full min-w-[920px] table-fixed" aria-busy={tableLoading}
             containerProps={{ className: 'overflow-auto', tabIndex: 0, role: 'region', 'aria-label': 'Categories table' }}>
             <colgroup>
               {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <col data-action-column="standard" />}
               <col style={{ width: 112 }} />
-              <col className="w-32 lg:w-[12%]" />
-              <col style={{ width: '24%' }} />
               <col />
-              <col className="w-56 lg:w-[20%]" />
+              <col className="w-48" />
+
+              <col className="w-56" />
             </colgroup>
             <TableHeader>
               <TableRow>
                 {(authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete')) && <TableHead data-action-column="standard" className="text-left">Action</TableHead>}
                 <TableHead data-fixed-column="status" className="px-3">Status</TableHead>
-                <SortableHeader className="pl-6" {...sortHeader('code')}>Code</SortableHeader>
+                <SortableHeader className="px-3" {...sortHeader('name')}>Category Name</SortableHeader>
+                <SortableHeader className="px-3" {...sortHeader('code')}>Category Code</SortableHeader>
 
-                <SortableHeader className="px-3" {...sortHeader('name')}>Name</SortableHeader>
-
-                <SortableHeader {...sortHeader('description')}>Description</SortableHeader>
 
               <SortableHeader className="px-3" {...sortHeader('created_at')}>Date Created</SortableHeader></TableRow>
             </TableHeader>
 
             <TableBody>
               {tableLoading ? (
-                <TableLoadingRow columns={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 6 : 5} label="categories" />
+                <TableLoadingRow columns={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 5 : 4} label="categories" />
               ) : sortedCategories.length > 0 ? (
                 sortedCategories.map((category) => (
                   <TableRow key={category.id}>
@@ -387,16 +360,11 @@ export default function CategoriesPage() {
                     <TableCell>
                       <StatusBadge status={category.is_active ? 'Active' : 'Inactive'} />
                     </TableCell>
-                    <TableCell className="pl-6 font-medium">
-                      {category.code || '—'}
-</TableCell>
-
-                    <TableCell>
+                    <TableCell className="px-3 font-medium">
                       {category.name}
                     </TableCell>
-
-                    <TableCell className="text-muted-foreground">
-                      {category.description || '—'}
+                    <TableCell className="px-3">
+                      {category.code || '—'}
                     </TableCell>
 
                   <TableCell className="px-3 whitespace-nowrap">{formatCreatedDate(category.created_at)}</TableCell></TableRow>
@@ -404,7 +372,7 @@ export default function CategoriesPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 6 : 5}
+                    colSpan={authorization.can('Categories', 'add') || authorization.can('Categories', 'edit') || authorization.can('Categories', 'delete') ? 5 : 4}
                     className="h-24 text-center text-muted-foreground"
                   >
                     {search.trim() ? 'No categories match your search.' : 'No categories to display.'}

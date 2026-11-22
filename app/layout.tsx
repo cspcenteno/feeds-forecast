@@ -10,8 +10,8 @@ const geist = Geist({
 })
 
 export const metadata: Metadata = {
-  title: "Feed Sales Forecast",
-  description: "Feed Sales Forecast System",
+  title: "Feeds Forecast",
+  description: "Feeds Forecast System",
 }
 
 export default function RootLayout({

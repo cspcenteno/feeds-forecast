@@ -24,13 +24,15 @@ export function SelectionField({ value, onValueChange, children, className = '',
 }) {
   const widthClasses = className.split(/\s+/).filter((item) => /^(?:(?:sm|md|lg|xl):)?(?:w-|min-w-|max-w-)/.test(item)).join(' ')
   const heightClasses = className.split(/\s+/).filter((item) => /^(?:(?:sm|md|lg|xl):)?h-/.test(item)).join(' ')
-  const options = collectSelectionOptions(children).map((option) => ({
+  const collectedOptions = collectSelectionOptions(children).map((option) => ({
     ...option,
     label: /^\s*(select|choose)\b/i.test(option.label)
       ? option.label.trim().replace(/^(select|choose)\s+(?:an?\s+)?/i, 'Select ').replace(/[.…]+$/, '') + '…'
       : option.label,
   }))
-  return <SearchableSelect {...props} disabled={loading || props.disabled} placeholder={loading ? loadingText : props.placeholder}
+  const prompt = collectedOptions.find((option) => option.value === '' && /^(select|choose)\b/i.test(option.label))
+  const options = collectedOptions.filter((option) => option !== prompt)
+  return <SearchableSelect {...props} disabled={loading || props.disabled} placeholder={loading ? loadingText : props.placeholder ?? prompt?.label}
     inputHeightClassName={heightClasses || 'h-10'} value={loading ? '' : String(value ?? '')} options={loading ? [] : options}
     onValueChange={(nextValue) => { if (isSelectionAllowed(nextValue, options, props.freeText)) onValueChange?.(nextValue) }} className={widthClasses || 'w-full'} />
 }

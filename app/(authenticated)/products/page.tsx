@@ -311,14 +311,31 @@ export default function ProductsPage() {
 
         </div>
 
-        <div className="app-field-row">
+        <div data-product-fields="" className="app-field-row">
+          <div data-field-size="wide" className="space-y-2">
+            <label
+              htmlFor="name"
+              className="text-sm font-medium"
+            >
+              Product Name <span className="text-destructive" aria-hidden="true">*</span>
+            </label>
+
+            <input
+              id="name"
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+              placeholder="Enter product name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
           {/* Category */}
           <div className="space-y-2">
             <label
               htmlFor="category"
               className="text-sm font-medium"
             >
-              Category
+              Category <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <SelectionField id="category"
@@ -345,7 +362,7 @@ export default function ProductsPage() {
               htmlFor="code"
               className="text-sm font-medium"
             >
-              Product Code
+              Product Code <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <input
@@ -358,22 +375,7 @@ export default function ProductsPage() {
           </div>
 
           {/* Name */}
-          <div data-field-size="wide" className="space-y-2">
-            <label
-              htmlFor="name"
-              className="text-sm font-medium"
-            >
-              Product Name
-            </label>
 
-            <input
-              id="name"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter product name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
 
           <div className="space-y-2">
             <label htmlFor="productLine" className="text-sm font-medium">Product Line</label>
@@ -424,7 +426,7 @@ export default function ProductsPage() {
               onClick={clearForm}
               disabled={loading}
             ><ActionXIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-              Cancel
+              <span>Cancel</span>
             </button>
 
 
@@ -433,11 +435,11 @@ export default function ProductsPage() {
             onClick={saveProduct}
             disabled={loading || !authorization.can('Products', editingId === null ? 'add' : 'edit')}
           ><ActionSaveIcon className="mr-1.5 inline-block size-4 shrink-0 align-middle" aria-hidden="true" />
-            {loading
+            <span>{loading
               ? 'Saving...'
               : editingId !== null
                 ? 'Save Changes'
-                : 'Add Product'}
+                : 'Add Product'}</span>
           </button>
         </div>
 
@@ -450,8 +452,8 @@ export default function ProductsPage() {
       <section className="rounded-xl border bg-card shadow-sm">
 
 
-        <div data-mobile-two-row-toolbar="" data-product-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search products" />
-{authorization.can('Products', 'add') && <button type="button" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" />Add Product</button>}
+        <div data-master-search-actions="" data-product-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search products" />
+{authorization.can('Products', 'add') && <button type="button" aria-label="Add Product" title="Add Product" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Product</span></button>}
 <TableGroupToggle disabled={tableLoading} /></div>
 
         <div className="overflow-x-auto">

@@ -2,8 +2,8 @@ type StatusBadgeProps = { status: string; compact?: boolean }
 
 const tones: Record<string, string> = {
   active: 'positive', open: 'positive', approved: 'positive', ready: 'positive', created: 'positive',
-  locked: 'negative', inactive: 'negative', rejected: 'negative', returned: 'negative', invalid: 'negative', failed: 'negative',
-  pending: 'warning', submitted: 'warning', duplicate: 'warning', 'duplicate in staging': 'warning',
+  locked: 'negative', inactive: 'negative', rejected: 'negative', returned: 'negative', invalid: 'negative', failed: 'negative', voided: 'negative',
+  pending: 'warning', submitted: 'warning', duplicate: 'warning', 'duplicate in staging': 'warning', 'unmatched salesman': 'warning',
   endorsed: 'info', 'already imported': 'info',
 }
 

@@ -1,0 +1,158 @@
+FEEDS FORECAST — SUPABASE SCHEMA CLEANUP AUDIT
+Date: 22 November 2026 (Asia/Singapore)
+
+SCOPE AND CONFIDENCE
+The connected Supabase REST OpenAPI schema exposed 17 tables and 175 columns.
+live-schema.json contains the observed names and types; no row contents were read.
+The application, SQL migrations and repairs were searched for references.
+identifier-references.json is a lexical reference index, NOT proof that each
+matching identifier refers to the same database column.
+No database objects or records were changed during this audit.
+
+REST metadata does not establish that every column is unused or that all
+database objects are visible. Current functions, triggers, RLS, views, indexes,
+external integrations, BI datasets and populated data need catalog verification.
+Use verify-dependencies.sql in Supabase SQL Editor for read-only checks.
+Historical migration references are not proof of current installed functions.
+
+SUMMARY
+1. categories.description is ALREADY ABSENT from the connected live schema.
+   The Categories screen no longer selects, writes, searches or displays it.
+   No Description-removal SQL is needed on this connected project.
+2. No complete table is confirmed unused. Keep all 17 until catalog checks finish.
+3. actual_import_staging.subregion is the strongest unused-column REVIEW candidate.
+   The current volume-import pipeline does not read/write this text field; actual
+   saved-record subregion_id is resolved from the salesperson assignment instead.
+   Check installed functions, old uploads and other clients before dropping it.
+4. asm/rsm text fields are possible later simplification candidates, NOT safe
+   immediate drops. Current saved-record reads and optimistic edit checks use them.
+5. Existing plural, snake_case table names are generally consistent. Avoid broad
+   cosmetic renaming that would require changing many RPC and permission contracts.
+
+CURRENT TABLE INVENTORY — PURPOSE / RECOMMENDATION
+categories                 Product categories. Keep; description already removed.
+products                   Product catalog and weights. Keep.
+customers                  Customer catalog and salesman assignment. Keep.
+regions                    Region catalog. Keep.
+subregions                 Subregion catalog with parent region. Keep.
+users                      Application profiles linked to authentication. Keep.
+user_permissions           Per-user module permissions. Keep, including is_default.
+forecasts                  Forecast quantities, volumes and review workflow. Keep.
+budgets                    Monthly/annual customer-product budgets. Keep.
+actuals                    Date-based actual sales lines. Keep.
+budget_import_staging      Raw Budget uploads. Keep; supports validation/edit/retry.
+actual_import_staging      Raw Actual uploads. Keep; supports validation/edit/retry.
+forecast_import_staging    Raw Forecast uploads. Keep; supports validation/edit/retry.
+week_locks                 Weekly entry restrictions and overrides. Keep.
+forecast_week_policy       Automatic week policy configuration. Keep.
+forecast_week_audit        Week-policy/override history. Keep.
+audit_logs                 System audit history. Keep.
+
+NAMING REVIEW — OPTIONAL REFACTORING, NOT REQUIRED CLEANUP
+Current                         Suggested future name        Impact
+customers.customer              name                         Customer queries, matching,
+                                                             imports, exports and RPCs.
+products.weight                 weight_kg                    Product forms, forecast
+                                                             quantity/volume conversion.
+forecasts.forecast              forecast_quantity            Forecast entry/import,
+                                                             review, export and SQL RPCs.
+users.position                  sales_position               Authorization, role mapping,
+                                                             profiles and SQL helpers.
+customers.salesman              salesman_name                Text snapshot, not user ID.
+budgets.kam / actuals.kam        salesman_name                These can contain KAM/RSM/
+                                                             ASM names, not only KAMs.
+forecasts.kam                   salesman_name                Imported source name; keep
+                                                             distinct from user_id.
+staging *.kam                   salesman_name                Import templates, mappers,
+                                                             persistence and validation.
+
+Prefer these names only in a coordinated migration. UI labels can be clearer
+without renaming the database. Do not rename products.name/code to product_name/
+product_code merely for clarity: table-qualified name/code is already consistent
+with categories, regions and subregions. Staging product_name/product_code are
+appropriate because they represent raw spreadsheet fields rather than FKs.
+
+Keep existing actual_import_staging, budget_import_staging and
+forecast_import_staging names for now. Renaming them just to pluralize their
+prefixes adds churn without a functional benefit.
+Do not rename public.users without auditing authentication triggers and RLS.
+
+UNUSED / LEGACY CANDIDATES
+actual_import_staging.subregion
+  Review candidate. No use in the current volume-import page's selected staging
+  fields, spreadsheet mapping, row editor or staging payload. An old text field is
+  not equivalent to actuals.subregion_id, which remains necessary for visibility.
+
+budgets.asm, budgets.rsm, actuals.asm, actuals.rsm
+  NOT removable as-is. components/volume-import-page.tsx explicitly selects them.
+  lib/saved-volume-records.ts includes them in original snapshots and conditional
+  update checks. The customer-volume SQL function also compares these fields.
+  Existing import uploads set staging asm/rsm to null and current import payloads
+  use kam, so a future coordinated removal may be useful after profiling data.
+
+budget_import_staging.asm/rsm, actual_import_staging.asm/rsm
+  NOT removable as-is. They remain in the current staging SELECT/type/insert
+  contracts, even though current uploads initialize them to null. Remove those
+  contracts first and verify no external uploader still populates these fields.
+
+actuals.updated_at, customers.updated_at, staging created_at fields
+  Retain pending trigger/function/external integration checks. Timestamps may be
+  managed on the server or used for audit and ordering even when not shown in UI.
+
+DO NOT DELETE THESE JUST BECAUSE THEY LOOK DUPLICATED OR HIDDEN
+forecasts.user_id versus submitted_by/endorsed_by/approved_by/returned_by:
+  Distinct ownership and workflow actors. These are not interchangeable.
+forecasts.forecast versus volume; products.weight:
+  Quantity and 50kg-equivalent volume are distinct; weight drives conversion.
+actuals.actual_date versus year/month:
+  Live Actual tables already omit year/month; the app derives them from the date.
+  Budget year/month remain necessary, including month=NULL annual budgets.
+category_id versus product_id; region_id versus subregion_id:
+  Existing reporting, access scopes and update contracts depend on them. A
+  normalization refactor is different from deleting an unused column.
+users.must_change_password, dashboard_type, role, position, region_id, subregion_id:
+  Active login, dashboard, permission and visibility features.
+user_permissions.is_default / can_export / can_import:
+  Active permission-default and feature checks.
+week_locks override columns and forecast_week_policy / forecast_week_audit:
+  Automatic scheduling, overrides and audit history use these through SQL/RPCs.
+audit_logs.actor_id and workflow timestamps:
+  Server-side use exists despite no direct app identifier references for some.
+
+EVIDENCE ENTRY POINTS
+app/(authenticated)/categories/page.tsx
+  Category query and write payloads no longer contain description.
+components/volume-import-page.tsx
+  Dynamic budgets/actuals and staging queries, salesman matching, raw staging
+  writes, import_volume_records call and saved-customer edit forms.
+lib/saved-volume-records.ts
+  Original-record snapshots and concurrency checks including asm/rsm/kam.
+supabase/migrations/202611100006_customer_volume_all_fields.sql
+  Server-side field comparisons include category_id, asm, rsm and kam.
+lib/oracle-actual-import.ts
+  Salesperson assignment resolution for Actual imports.
+app/api/admin/forecast-import/route.ts and lib/forecast-import.ts
+  Forecast staging validation, product weights and quantity/volume conversion.
+app/api/admin/users/route.ts and lib/authorization*.ts
+  Profile and permission contracts.
+supabase/migrations/202611070007_automatic_forecast_week_locks.sql and later week migrations
+  Policy, override and audit functions; inspect installed definitions for truth.
+supabase/migrations/202611120012_rename_forecasts_table.sql
+  Previous table rename explicitly rewrites SQL function bodies.
+
+SAFE IMPLEMENTATION ORDER
+1. Run the supplied read-only catalog audit and inspect BI/ETL/external clients.
+2. Export schema and back up affected data before any destructive migration.
+3. For a rename, update app queries/types, API payloads, RPC return signatures,
+   SQL function source, policies/triggers, exports/templates and dependent reports
+   together. A PostgreSQL rename alone does not rewrite every SQL string.
+4. For deletion candidates, remove app and SQL dependencies before dropping the
+   column. An all-null profile is insufficient evidence by itself.
+5. Apply one change in UAT, then test all role scopes, imports, record edits,
+   approvals, dashboard, exports and week locks. Do not use DROP ... CASCADE.
+6. Reload PostgREST schema after an approved schema migration and redeploy the
+   matching application. No destructive migration is included in this report.
+
+NEXT RECOMMENDED ACTION
+Run verify-dependencies.sql and review its results before choosing a deletion.
+Start with actual_import_staging.subregion, not a broad table rename or drop.

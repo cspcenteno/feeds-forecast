@@ -1,0 +1,70 @@
+FEEDS FORECAST — LEGACY COLUMN CLEANUP STATUS
+22 November 2026
+
+LIVE READ-ONLY VERIFICATION
+actual_import_staging has 0 rows; subregion has 0 populated values.
+No current application importer, editor or query reads/writes its text subregion.
+This does not prove installed database functions or external clients have no
+dependency. The Supabase REST connection cannot read pg_depend/pg_proc catalogs.
+Run verify-actual-staging-subregion.sql for the remaining live dependency check.
+No columns have been dropped.
+
+IMPORTANT: STORED LEGACY DATA EXISTS
+actuals: 28,792 rows; asm and rsm are each populated in 17,445 rows.
+budgets: 14,412 rows; asm and rsm are each populated in all 14,412 rows.
+actual_import_staging: 0 rows.
+budget_import_staging: 3 rows; asm/rsm are null in all three.
+These are exact REST counts at the time recorded in cleanup-column-counts.json.
+Retain or export the populated values before deciding to delete those columns.
+
+APPLICATION CHANGES COMPLETED
+Removed legacy asm/rsm fields from Budget/Actual saved-record and staging types,
+SELECT lists, staging insert payloads, conditional single-row update filters,
+and customer batch-edit original snapshots.
+Retained kam, region_id, subregion_id, role/position checks, ASM/RSM reporting,
+approval workflow and permissions.
+Historical SQL migrations are intentionally unchanged; they document old states.
+
+DATABASE CHANGE PREPARED, NOT APPLIED
+supabase/migrations/202611220001_remove_legacy_volume_snapshot_fields.sql
+removes asm/rsm from the installed update_customer_volume_records snapshot
+validation. It preserves the installed function's other checks and fails if it
+does not recognize the expected snapshot contract. No table/column is dropped.
+Old clients may continue sending extra asm/rsm keys after this migration.
+
+DEPLOYMENT ORDER
+1. Review and apply the migration in Supabase SQL Editor first.
+2. Deploy the application changes.
+Without step 1, the old customer-edit RPC still requires asm/rsm in the snapshot
+and will reject batch edits from the updated application.
+3. Run verify-actual-staging-subregion.sql and inspect external BI/import clients.
+4. Only after dependency verification and backup decide whether to drop columns.
+
+VALIDATION
+TypeScript passed. Targeted application lint passed. Twelve saved-volume tests
+passed. A local PGlite/PostgreSQL integration test applied the migration twice,
+preserved populated legacy values and execute grants, retained stale-edit and
+invalid-volume rejection, and confirmed the RPC works without asm/rsm columns
+in the disposable test database. Nothing was dropped in the connected Supabase.
+
+The earlier audit.txt is a pre-cleanup snapshot; this file supersedes its claims
+about current application asm/rsm dependencies. Database dependencies remain
+pending until the prepared migration and catalog checks are run.
+
+AUTHORIZED NINE-COLUMN DELETION — READY, NOT APPLIED
+The user explicitly approved removal of these columns and their stored data:
+  budgets: asm, rsm
+  actuals: asm, rsm
+  budget_import_staging: asm, rsm
+  actual_import_staging: asm, rsm, subregion
+Apply supabase/migrations/202611220002_drop_legacy_volume_columns.sql in
+Supabase SQL Editor. It is self-contained and includes the RPC correction from
+001; running 001 separately is unnecessary. This supersedes the earlier pending
+scope decision and deployment instructions above. Apply SQL before deploying
+the matching application cleanup. No live deletion has been executed here.
+
+Validated the deletion migration twice in disposable PostgreSQL (PGlite).
+A dependent view blocked deletion and the entire transaction rolled back.
+After removing the test dependency, all nine columns disappeared, remaining
+rows and KAM/subregion_id values survived, and Budget/Actual editing worked.
+All twelve saved-volume application tests also passed.

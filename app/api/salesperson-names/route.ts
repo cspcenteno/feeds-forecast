@@ -17,5 +17,5 @@ export async function GET() {
     for (const row of data ?? []) if (row.full_name?.trim()) names.add(row.full_name.trim())
     if (!data || data.length < 500) break
   }
-  return NextResponse.json({ names: [...names].sort((a, b) => a.localeCompare(b)) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ names: [...names].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base', numeric: true })) }, { headers: { 'Cache-Control': 'no-store' } })
 }

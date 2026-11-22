@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { ForecastConfirmationSummary } from '@/components/forecast-confirmation-summary'
-import { AlertTriangle, CheckCircle2, LoaderCircle, Send, X } from 'lucide-react'
+import { AlertTriangle, Ban, CheckCircle2, LoaderCircle, Send, X } from 'lucide-react'
 import { confirmationPresentation, createConfirmationController, type ConfirmationOptions, type ConfirmationTicket, type ConfirmationView } from '@/lib/action-confirmation'
 
 type Notice = { id: number; message: string; success: boolean }
@@ -79,10 +79,10 @@ export function ActionDialogsProvider({ children }: { children: ReactNode }) {
               {presentation.irreversible && !/cannot be undone|permanent/i.test(view.options.message) && <p className={hasSummary ? 'mt-3 text-xs text-muted-foreground' : 'text-xs text-muted-foreground'}>This action cannot be undone.</p>}
             </div>}
             <div className="flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <AlertDialog.Close ref={cancelRef} disabled={view.busy} data-action-tone="neutral" className="h-10 rounded-md border px-4 text-sm">Cancel</AlertDialog.Close>
+              <AlertDialog.Close ref={cancelRef} disabled={view.busy} data-action-tone="neutral" className="h-10 rounded-md border px-4 text-sm"><X className="size-4 shrink-0" aria-hidden="true" /><span>Cancel</span></AlertDialog.Close>
               <button type="button" disabled={view.busy} onClick={() => controller.proceed()} data-action-tone={tone} data-action-fill="" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium">
                 {view.busy && <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-                {view.options.layout === 'review' && !view.busy && <Send className="size-4" aria-hidden="true" />}
+                {view.options.layout === 'review' && !view.busy && (view.options.forecastSummary?.level === 'void' ? <Ban className="size-4" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />)}
                 {view.busy ? 'Processing…' : view.options.confirmLabel ?? presentation.confirmLabel}
               </button>
             </div>

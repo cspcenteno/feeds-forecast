@@ -8,8 +8,6 @@ type Snapshot = {
   customer_id: number | null
   product_id: number | null
   category_id: number | null
-  asm: string | null
-  rsm: string | null
   kam: string | null
   year: number
   month: number | null
@@ -17,8 +15,8 @@ type Snapshot = {
 }
 
 export function validateSavedVolumePeriod(volume: string, isActual: boolean, year: string, month: string, date: string) {
-  if (!volume.trim() || !Number.isFinite(Number(volume)) || Number(volume) < 0) {
-    throw new Error('Enter a valid volume of zero or more.')
+  if (!volume.trim() || !Number.isFinite(Number(volume))) {
+    throw new Error('Enter a valid numeric volume.')
   }
   if (isActual) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
@@ -47,7 +45,7 @@ export async function persistSavedVolumeUpdate(
     region_id: original.region_id, subregion_id: original.subregion_id,
     customer_id: original.customer_id, product_id: original.product_id,
     category_id: original.category_id,
-    asm: original.asm, rsm: original.rsm, kam: original.kam,
+    kam: original.kam,
     ...(table === 'actuals' ? { actual_date: original.actual_date } : { year: original.year, month: original.month }),
   })) {
     query = value == null ? query.is(field, null) : query.eq(field, value)
@@ -63,6 +61,7 @@ export async function persistCustomerVolumeUpdates(
   rows: { original: Snapshot; volume: string; year: string; month: string; actualDate: string;
     kam?: string | null; customerId?: number | null; regionId?: number | null;
     productId?: number | null; categoryId?: number | null }[],
+  operation: 'update_customer_volume_records' | 'update_salesman_volume_records' = 'update_customer_volume_records',
 ) {
   const changes = rows.filter((row) => Number(row.volume) !== Number(row.original.volume)
     || (row.kam !== undefined && row.kam !== row.original.kam)
@@ -75,10 +74,10 @@ export async function persistCustomerVolumeUpdates(
   if (!changes.length) return 0
   const records = changes.map((row) => {
     validateSavedVolumePeriod(row.volume, module === 'Actuals', row.year, row.month, row.actualDate)
-    const { id, volume, region_id, subregion_id, customer_id, product_id, category_id, asm, rsm, kam } = row.original
+    const { id, volume, region_id, subregion_id, customer_id, product_id, category_id, kam } = row.original
     return {
       id,
-      original: { volume, region_id, subregion_id, customer_id, product_id, category_id, asm, rsm, kam,
+      original: { volume, region_id, subregion_id, customer_id, product_id, category_id, kam,
         ...(module === 'Actuals' ? { actual_date: row.original.actual_date } : { year: row.original.year, month: row.original.month }) },
       volume: Number(row.volume),
       ...(row.kam !== undefined ? { kam: row.kam } : {}),
@@ -89,7 +88,7 @@ export async function persistCustomerVolumeUpdates(
       ...(module === 'Actuals' ? { actual_date: row.actualDate } : { year: Number(row.year), month: row.month === '' ? null : Number(row.month) }),
     }
   })
-  const { data, error } = await client.rpc('update_customer_volume_records', { p_module: module, p_records: records })
+  const { data, error } = await client.rpc(operation, { p_module: module, p_records: records })
   if (error) throw new Error(error.message)
   return Number(data)
 }

@@ -4,7 +4,7 @@ import { useId, type FocusEventHandler } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { Check, ChevronsUpDown } from 'lucide-react'
 
-export type SearchableOption = { value: string; label: string; disabled?: boolean }
+export type SearchableOption = { value: string; label: string; disabled?: boolean; group?: string }
 
 export function SearchableSelect({ label, value, options, onValueChange, disabled = false, placeholder, id: providedId, name, required, className = '', inputHeightClassName = 'h-10', multiline = false, freeText = false, onBlur, autoComplete = 'off', 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }: {
   label?: string
@@ -38,10 +38,17 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
     : /week|status|role/.test(fieldName) ? 'short'
     : /month|^region$/.test(fieldName) ? 'month' : 'medium'
   const hint = placeholder ?? (/^search\b/.test(fieldName) ? `${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}…` : `${freeText ? 'Enter' : 'Select'} ${fieldName}…`)
+  const grouped = options.some((option) => option.group)
+  const groups = [...new Set(options.map((option) => option.group ?? 'Other options'))].map((label) => ({ label, items: options.filter((option) => (option.group ?? 'Other options') === label) }))
+  const renderOption = (option: SearchableOption) => <Combobox.Item key={option.value} value={option} disabled={option.disabled}
+    className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-highlighted:bg-sidebar-accent data-highlighted:text-sidebar-accent-foreground data-disabled:cursor-default data-disabled:opacity-50">
+    <span className={"min-w-0 flex-1 whitespace-normal break-words " + (multiline ? "text-xs leading-4" : "")}>{option.label}</span>
+    <Combobox.ItemIndicator className="shrink-0"><Check className="size-4" aria-hidden="true" /></Combobox.ItemIndicator>
+  </Combobox.Item>
   return (
     <div data-content-size={contentSize} className={'min-w-0 ' + (label ? 'space-y-1.5 ' : '') + className}>
-      {label && <label htmlFor={id} className="block text-sm font-medium">{label}</label>}
-      <Combobox.Root items={options} value={selected} disabled={disabled} name={name} required={required} autoComplete={autoComplete}
+      {label && <label htmlFor={id} className="block text-sm font-medium">{label}{required && <span className="text-destructive" aria-hidden="true"> *</span>}</label>}
+      <Combobox.Root items={grouped ? groups : options} value={selected} disabled={disabled} name={name} required={required} autoComplete={autoComplete}
         inputValue={freeText ? value : undefined}
         onInputValueChange={freeText ? (text, details) => {
           // Closing or blurring the list must not replace custom text with the
@@ -72,11 +79,10 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
                 <div className="px-3 py-4 text-sm text-muted-foreground">{freeText ? 'No matches. You can keep your entered text.' : 'No matches found.'}</div>
               </Combobox.Empty>
               <Combobox.List>
-                {(option: SearchableOption) => <Combobox.Item key={option.value} value={option} disabled={option.disabled}
-                  className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-highlighted:bg-sidebar-accent data-highlighted:text-sidebar-accent-foreground data-disabled:cursor-default data-disabled:opacity-50">
-                  <span className={"min-w-0 flex-1 whitespace-normal break-words " + (multiline ? "text-xs leading-4" : "")}>{option.label}</span>
-                  <Combobox.ItemIndicator className="shrink-0"><Check className="size-4" aria-hidden="true" /></Combobox.ItemIndicator>
-                </Combobox.Item>}
+                {grouped ? (group: (typeof groups)[number]) => <Combobox.Group key={group.label} items={group.items}>
+                  <Combobox.GroupLabel className="px-3 py-2 text-xs font-semibold text-muted-foreground">{group.label}</Combobox.GroupLabel>
+                  <Combobox.Collection>{renderOption}</Combobox.Collection>
+                </Combobox.Group> : renderOption}
               </Combobox.List>
             </Combobox.Popup>
           </Combobox.Positioner>

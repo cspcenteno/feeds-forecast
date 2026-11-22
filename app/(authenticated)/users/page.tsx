@@ -169,7 +169,7 @@ export default function UsersPage() {
   const [deleting, setDeleting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(authorization.role === 'Admin')
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [userDialogOpen, setUserDialogOpen] = useState(false)
@@ -1046,6 +1046,7 @@ export default function UsersPage() {
 
           </div>
 
+          <div data-user-editor-body="">
           <div data-filter-toolbar="" className="app-field-row p-6">
             <div data-field-size="wide" className="space-y-2">
               <label htmlFor="newFullName" className="text-sm font-medium">
@@ -1065,7 +1066,8 @@ export default function UsersPage() {
               />
             </div>
 
-            <div data-field-size="wide" className="space-y-2">
+            <div data-user-email-active-row="">
+            <div data-user-email-field="" data-field-size="wide" className="space-y-2">
               <label htmlFor="newEmail" className="text-sm font-medium">
                 Email <span className="text-destructive">*</span>
               </label>
@@ -1083,9 +1085,15 @@ export default function UsersPage() {
               />
             </div>
 
+            <ActiveField
+                checked={selectedUser ? isActive : newIsActive}
+                onChange={(event) => (selectedUser ? setIsActive : setNewIsActive)(event.target.checked)}
+                disabled={formBusy}
+              />
+            </div>
             <div className="space-y-2">
               <label htmlFor="newTemporaryPassword" className="text-sm font-medium">
-                Temporary Password
+                Temporary Password {!selectedUser && <span className="text-destructive" aria-hidden="true">*</span>}
               </label>
               <input
                 id="newTemporaryPassword"
@@ -1098,7 +1106,7 @@ export default function UsersPage() {
                 required={!selectedUser}
                 disabled={formBusy || (Boolean(selectedUser) && !authorization.can('Users', 'edit'))}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                placeholder={selectedUser ? 'Enter a new temporary password' : 'At least 8 characters'}
+                placeholder="Minimum 8 characters"
               />
             </div>
             <div className="space-y-2">
@@ -1121,7 +1129,7 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <label htmlFor="newPosition" className="text-sm font-medium">
-                Sales Position
+                Sales Position {formRole !== 'Admin' && <span className="text-destructive" aria-hidden="true">*</span>}
               </label>
               <SelectionField id="newPosition"
                   value={selectedUser ? position : newPosition}
@@ -1216,17 +1224,13 @@ export default function UsersPage() {
                 {dashboardTypes.map((type) => <option key={type} value={type}>{dashboardTypeLabels[type]}</option>)}
               </SelectionField>
               </div>
-            <ActiveField
-                checked={selectedUser ? isActive : newIsActive}
-                onChange={(event) => (selectedUser ? setIsActive : setNewIsActive)(event.target.checked)}
-                disabled={formBusy}
-              />
+
             </div>
           </div>
 
           {/* Create User Permissions */}
           <div data-user-permissions className="flex flex-col gap-3 border-t px-4 pt-4 pb-2 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-row items-center justify-between gap-3">
               <div>
                 <h3 data-section-title="" className="font-semibold"><HeadingShieldCheck className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />User Permissions</h3>
 
@@ -1234,10 +1238,10 @@ export default function UsersPage() {
 
               <div data-action-toolbar="" data-permissions-toolbar="" className="flex flex-wrap gap-2">
                 {selectedUser && authorization.can('Users', 'edit') && <button
-                  type="button" data-action-tone="neutral" onClick={() => void applyExistingRoleDefaults()}
+                  type="button" data-action-tone="neutral" aria-label="Apply role defaults" title="Apply role defaults" onClick={() => void applyExistingRoleDefaults()}
                   disabled={permissionsBusy} className="rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-50">
                   <ActionRefreshCwIcon className="size-4 shrink-0" aria-hidden="true" />
-                  Apply role defaults
+                  <span className="hidden md:inline">Apply role defaults</span>
                 </button>}
 
               </div>
@@ -1381,8 +1385,10 @@ export default function UsersPage() {
             </div>
           </div>
 
+          </div>
+
           <div data-action-toolbar="" className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-6 py-4" data-dialog-footer="">
-            <button type="button" data-action-tone="neutral" disabled={formBusy} onClick={() => { clearSelection(); resetCreateUserForm() }} className="inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm"><X className="size-4" aria-hidden="true" />Cancel</button>
+            <button type="button" data-action-tone="neutral" disabled={formBusy} onClick={() => { clearSelection(); resetCreateUserForm() }} className="inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm"><X className="size-4" aria-hidden="true" /><span>Cancel</span></button>
             <button data-action-tone="primary" data-action-fill=""
               type="button"
               onClick={selectedUser ? handleSave : handleCreateUser}
@@ -1431,11 +1437,12 @@ export default function UsersPage() {
             {isAdmin && authorization.can('Users', 'add') && <button data-action-tone="primary" data-action-fill=""
               type="button"
               onClick={openCreateUserForm}
-              disabled={formBusy || loadingPermissions}
+              title="Create User" aria-label="Create User"
+              disabled={loading || formBusy || loadingPermissions}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              <Plus className="size-4" />
-              Create User
+              <Plus className="size-4" aria-hidden="true" />
+              <span className="hidden md:inline">Create User</span>
             </button>}
 
             <button data-action-tone="neutral"

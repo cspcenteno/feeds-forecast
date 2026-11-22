@@ -25,11 +25,11 @@ export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage
   const columnCount = 8 + Number(showActions) + Number(showStatus)
   return <Table data-sales-hierarchy="" aria-busy={loading} summary={summary}
     summaryAlignColumn={Number(showActions) + Number(showStatus) + 3}
-    summaryEnd={totalVolume === undefined ? undefined : <span className="inline-flex flex-wrap items-baseline justify-end gap-2 text-sm leading-5" aria-busy={loading}><span>Grand Total</span><strong className="text-sm leading-5 font-semibold tabular-nums text-foreground">{loading ? '—' : number.format(totalVolume)}</strong></span>}
+    summaryEnd={totalVolume === undefined ? undefined : <span className="inline-flex flex-wrap items-baseline justify-end gap-3 text-sm leading-5" aria-busy={loading}><span>Grand Total</span><strong className="text-sm leading-5 font-semibold tabular-nums text-foreground">{loading ? '—' : number.format(totalVolume)}</strong></span>}
     className="w-full table-fixed"
     containerProps={{ className: 'max-h-[min(36rem,70vh)] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': label }}>
     <colgroup>
-      {showActions && <col style={{ width: '6.5rem' }} />}
+      {showActions && <col style={{ width: '9.5rem' }} />}
       {showStatus && <col style={{ width: '7%' }} />}
       <col style={{ width: showStatus ? '26%' : '28%' }} /><col style={{ width: '9%' }} />
       {columns.map(([title, unit]) => <col key={title + unit} />)}

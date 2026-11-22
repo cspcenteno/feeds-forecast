@@ -3,6 +3,7 @@
 import { usePopupError } from '@/components/action-dialogs'
 
 import { useEffect, useMemo, useState } from 'react'
+import { PackagePlus, X } from 'lucide-react'
 import { createClient } from '@/lib/client'
 import { useAuthorization } from '@/lib/authorization'
 import { RecordDialog } from '@/components/ui/record-dialog'
@@ -44,8 +45,8 @@ export function ImportProductDialog({ code: initialCode, name: initialName, onCl
     void load()
     return () => { cancelled = true }
   }, [client, setError])
-  return <RecordDialog open onClose={onClose} title="Add to Products" busy={saving}>
-    <form className="space-y-4" onSubmit={async (event) => {
+  return <RecordDialog open onClose={onClose} title="Add to Products" busy={saving} stackLevel={1}>
+    <form data-import-product-form="" className="flex flex-col gap-4" onSubmit={async (event) => {
       event.preventDefault()
       if (saving || loading || !authorization.can('Products', 'add')) return
       setError('')
@@ -63,14 +64,14 @@ export function ImportProductDialog({ code: initialCode, name: initialName, onCl
       finally { setSaving(false) }
     }}>
       <h3 data-dialog-title className="pr-8 text-lg font-semibold" data-popup-form-header="">Add to Products</h3>
-      <div className="app-field-row">
-        <label className="space-y-1 text-sm">Product code<input required value={code} onChange={(event) => setCode(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
-        <label className="space-y-1 text-sm">Product name<input required value={name} onChange={(event) => setName(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
-        <label className="space-y-1 text-sm">Category<SelectionField aria-label="Category" value={category} onValueChange={setCategory} disabled={loading} required placeholder={loading ? 'Loading categories…' : 'Select category…'}><option value="">Select category</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectionField></label>
-        <label className="space-y-1 text-sm">Weight (kg)<input required type="number" min="0" step="any" value={weight} onChange={(event) => setWeight(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
+      <div className="app-field-row gap-x-4 gap-y-4">
+        <label className="space-y-1 text-sm">Product name <span className="text-destructive" aria-hidden="true">*</span><input required value={name} onChange={(event) => setName(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
+        <label className="space-y-1 text-sm">Product code <span className="text-destructive" aria-hidden="true">*</span><input required value={code} onChange={(event) => setCode(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
+        <label className="space-y-1 text-sm">Category <span className="text-destructive" aria-hidden="true">*</span><SelectionField aria-label="Category" value={category} onValueChange={setCategory} disabled={loading} required placeholder={loading ? 'Loading categories…' : 'Select category…'}>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectionField></label>
+        <label className="space-y-1 text-sm">Weight (kg) <span className="text-destructive" aria-hidden="true">*</span><input required type="number" min="0" step="any" value={weight} onChange={(event) => setWeight(event.target.value)} className="h-10 w-full rounded-md border px-3" /></label>
       </div>
 
-      <div data-action-toolbar="" data-dialog-footer="" className="flex flex-wrap justify-end gap-2 border-t pt-4"><button data-action-tone="neutral" type="button" onClick={onClose} disabled={saving} className="h-10 rounded-md border px-4 text-sm">Cancel</button><button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || saving || !authorization.can('Products', 'add')} className="h-10 rounded-md border px-4 text-sm font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Add Product'}</button></div>
+      <div data-action-toolbar="" data-dialog-footer="" className="flex flex-wrap justify-end gap-2 border-t pt-4"><button data-action-tone="neutral" type="button" onClick={onClose} disabled={saving} className="h-10 rounded-md border px-4 text-sm"><X className="size-4 shrink-0" aria-hidden="true" />Cancel</button><button data-action-tone="primary" data-action-fill="" type="submit" disabled={loading || saving || !authorization.can('Products', 'add')} className="h-10 rounded-md border px-4 text-sm font-medium disabled:opacity-50"><PackagePlus className="size-4 shrink-0" aria-hidden="true" />{saving ? 'Saving…' : 'Add Product'}</button></div>
     </form>
   </RecordDialog>
 }

@@ -27,3 +27,12 @@ test('approved forecasts remain read-only and returned drafts stay discoverable'
   assert.equal(canEditSavedForecastStatus('Draft'), true)
   assert.equal(savedForecastMatchesStatus({status:'Draft',returned_at:'2026-11-10'}, 'Rejected'), true)
 })
+
+test('voided forecasts are history only and cannot be edited or deleted', () => {
+  assert.equal(savedForecastMatchesStatus(row('Voided'),'all'),true)
+  assert.equal(savedForecastMatchesStatus(row('Voided'),'Voided'),true)
+  assert.equal(savedForecastMatchesStatus(row('Voided'),''),false)
+  assert.equal(savedForecastMatchesStatus(row('Voided'),'Approved'),false)
+  assert.equal(canEditSavedForecastStatus('Voided'),false)
+  assert.equal(canDeleteSavedForecastStatus('Voided'),false)
+})

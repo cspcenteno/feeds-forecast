@@ -84,7 +84,7 @@ export default function SignupPage() {
 
   return (
     <main className="relative min-h-svh bg-background text-foreground lg:grid lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative flex flex-col justify-between overflow-hidden bg-[#153f30] px-5 pt-6 pb-8 text-white sm:px-10 lg:min-h-svh lg:p-10 xl:p-14" aria-label="Vitarich Corporation Feed Sales Forecast">
+      <section className="relative flex flex-col justify-between overflow-hidden bg-[#153f30] px-5 pt-6 pb-8 text-white sm:px-10 lg:min-h-svh lg:p-10 xl:p-14" aria-label="Vitarich Corporation Feeds Forecast">
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-52 -left-36 size-[42rem] rounded-full border border-white/10" />
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-36 -left-20 size-[34rem] rounded-full border border-white/10" />
         <div aria-hidden="true" className="pointer-events-none absolute -right-36 top-20 size-96 rounded-full bg-[#bfa34f]/10 blur-3xl" />
@@ -96,9 +96,9 @@ export default function SignupPage() {
         <div className="relative my-auto max-w-lg pt-6 lg:py-16">
           <div className="mb-5 h-1 w-12 rounded-full bg-[#bfa34f] lg:mb-4" />
           <h1 className="tracking-tight">
-            <span className="mt-2 block text-3xl leading-tight font-semibold xl:text-4xl">Feed Sales Forecast</span>
+            <span className="mt-2 block text-3xl leading-tight font-semibold xl:text-4xl">Feeds Forecast</span>
           </h1>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-emerald-50/75 lg:mt-6 lg:text-base">Plan and track sales forecasts in one place.</p>
+          <p className="mt-4 max-w-sm text-sm leading-relaxed text-emerald-50/75 lg:mt-6 lg:text-base">Plan and track forecasts in one place.</p>
           <div className="mt-5 hidden flex-wrap items-center gap-x-5 gap-y-3 text-xs text-emerald-100/80 lg:mt-10 lg:flex">
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Forecast</span>
             <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#cfb65f]" />Review</span>
@@ -109,9 +109,9 @@ export default function SignupPage() {
       </section>
 
       <section className="relative flex flex-col items-center justify-start px-5 pt-8 pb-6 sm:px-10 sm:pb-10 lg:min-h-svh lg:justify-center lg:px-12 lg:pt-24">
-        <button type="button" onClick={toggleTheme} aria-label="Toggle light or dark mode" className="absolute top-6 right-6 z-10 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-600 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+        <button type="button" onClick={toggleTheme} aria-label="Toggle light or dark mode" className="absolute top-6 right-6 z-10 inline-flex items-center justify-center gap-2 max-md:size-11 max-md:p-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-600 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
           <Moon className="size-4 dark:hidden" aria-hidden="true" /><Sun className="hidden size-4 dark:block" aria-hidden="true" />
-          <span className="dark:hidden">Dark Mode</span><span className="hidden dark:inline">Light Mode</span>
+          <span className="hidden md:inline dark:md:hidden">Dark Mode</span><span className="hidden dark:md:inline">Light Mode</span>
         </button>
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 sm:p-6">
 
@@ -132,7 +132,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="fullName" className="block text-sm leading-5 font-medium">
-              Full Name
+              Full Name <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <div className="relative">
@@ -152,7 +152,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="email" className="block text-sm leading-5 font-medium">
-              Email
+              Email <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <div className="relative">
@@ -173,7 +173,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="password" className="block text-sm leading-5 font-medium">
-              Password
+              Password <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <div className="relative">
@@ -197,7 +197,7 @@ export default function SignupPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="confirmPassword" className="block text-sm leading-5 font-medium">
-              Confirm Password
+              Confirm Password <span className="text-destructive" aria-hidden="true">*</span>
             </label>
 
             <div className="relative">

@@ -317,10 +317,10 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
 
   return (
     <>
-      <button data-action-tone="transfer" type="button" disabled={disabled} onClick={() => {
+      <button data-action-tone="transfer" type="button" aria-label="Excel Import" title="Excel Import" disabled={disabled} onClick={() => {
         setShow(true)
         void run(async () => { await refreshPreview() })
-      }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" />Excel Import</button>
+      }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" /><span data-forecast-action-label="">Excel Import</span></button>
       <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Forecasts Excel Import" busy={busy} wide contained maxWidth="90rem">
       <section className="app-tables flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div data-import-dialog-header data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b pb-4">
@@ -334,10 +334,10 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             event.target.value = ''
             if (file) void upload(file)
           }} />
-<button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" />Upload File</button>
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Download Template</span></button>
+<button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} title="Upload File" aria-label="Upload File" onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Upload File</span></button>
+<button data-action-tone="neutral" type="button" disabled={disabled} title="Download Template" aria-label="Download Template" onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Template</span></button>
 
-<button data-action-tone="neutral" type="button" disabled={disabled} onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
+<button data-action-tone="neutral" type="button" disabled={disabled} title="Refresh" aria-label="Refresh" onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
 </div>
       </div>
 
@@ -346,15 +346,15 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
             {[['Total Records', rows.length], ['Ready to Import', ready.length], ['Invalid', invalidCount], ['Already Imported', preview.length - invalidCount - ready.length]].map(([label, value]) => <div key={label} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums">{rows.length > 0 ? value : busy ? <LoadingSpinner label={String(label).toLowerCase()} /> : referencesReady && stagingReady ? value : '—'}</p></div>)}
           </div>
           <div className="flex shrink-0 justify-end">
-            <div data-action-toolbar="" className="flex shrink-0 flex-wrap items-center gap-2">
-              <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || !referencesReady || !stagingReady || !ready.length || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} onClick={() => void importReady()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-                <Upload className="size-4" />Import Ready
+            <div data-action-toolbar="" data-import-preview-actions="" className="flex shrink-0 flex-wrap items-center gap-2">
+              <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || !referencesReady || !stagingReady || !ready.length || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} title="Import Ready" aria-label="Import Ready" onClick={() => void importReady()} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                <Upload className="size-4" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Import Ready</span>
               </button>
-              {authorization.can('Forecasts', 'delete') && <button data-action-tone="danger" type="button" disabled={disabled || !stagingReady || !rows.length} onClick={() => void discardUploadedRows(rows.map((row) => row.id))} className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50">
-                <Trash2 className="size-4" aria-hidden="true" />Discard All
+              {authorization.can('Forecasts', 'delete') && <button data-action-tone="danger" type="button" disabled={disabled || !stagingReady || !rows.length} title="Discard All" aria-label="Discard All" onClick={() => void discardUploadedRows(rows.map((row) => row.id))} className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50">
+                <Trash2 className="size-4" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Discard All</span>
               </button>}
             <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !rows.length}
-              aria-expanded={allPreviewGroupsExpanded} aria-controls="forecast-import-records" onClick={toggleAllPreviewGroups}
+              title={allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'} aria-label={allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'} aria-expanded={allPreviewGroupsExpanded} aria-controls="forecast-import-records" onClick={toggleAllPreviewGroups}
               className="rounded-md border px-3 py-2 text-sm"><ExpandCollapseIcon expanded={allPreviewGroupsExpanded} />
               <span className="hidden md:inline">{allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
             </button>
@@ -409,10 +409,10 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
                   </ForecastPreviewGroup>)} 
               </ForecastPreviewGroup>
             })}</tbody>
-            {preview.length > 0 && <tfoot className="sticky bottom-0 z-10 border-t bg-card">
+            <tfoot className="sticky bottom-0 z-10 border-t bg-card">
               <tr><td colSpan={previewColumnCount - 1} className="px-3 py-3 text-sm text-muted-foreground"><div className="flex items-center justify-between gap-3"><span>{preview.length.toLocaleString('en-PH')} {preview.length === 1 ? 'record' : 'records'}</span><span>Grand Total</span></div></td>
                 <td className="px-3 py-3 text-right font-semibold tabular-nums" aria-busy={busy}>{referencesReady && stagingReady ? numberLabel(volumes.total) : '—'}</td></tr>
-            </tfoot>}
+            </tfoot>
           </Table>
       </div>
     </section>

@@ -4,7 +4,7 @@ import { persistSavedVolumeUpdate, persistCustomerVolumeUpdates, validateSavedVo
 import { getBudgetImportKey } from '../lib/budget-import-key.ts'
 
 const record = { id: 12, volume: 25, region_id: 1, subregion_id: null, customer_id: 3,
-  product_id: 4, category_id: 5, asm: null, rsm: 'RSM', kam: 'KAM', year: 2026, month: null, actual_date: '2026-11-08' }
+  product_id: 4, category_id: 5, kam: 'KAM', year: 2026, month: null, actual_date: '2026-11-08' }
 
 test('Budget editor sorts years and months chronologically without changing the source list', () => {
   const rows = [{...record,id:1,month:12},{...record,id:2,month:1},{...record,id:3,month:6},{...record,id:4,year:2025,month:12}]
@@ -29,9 +29,12 @@ function clientReturning(result) {
   return { client: { from: (table) => { calls.push(['from', table]); return query } }, calls }
 }
 
-test('saved volumes accept zero and decimals but reject empty, negative and nonfinite values', () => {
-  for (const volume of ['0', '12.5']) assert.doesNotThrow(() => validateSavedVolumePeriod(volume, false, '2026', '', ''))
-  for (const volume of ['', ' ', '-1', 'NaN', 'Infinity']) assert.throws(() => validateSavedVolumePeriod(volume, false, '2026', '', ''), /valid volume/)
+test('saved volumes accept signed decimals but reject empty and nonfinite values', () => {
+  for (const volume of ['0', '12.5', '-1', '-12.5']) {
+    assert.doesNotThrow(() => validateSavedVolumePeriod(volume, false, '2026', '', ''))
+    assert.doesNotThrow(() => validateSavedVolumePeriod(volume, true, '', '', '2026-11-08'))
+  }
+  for (const volume of ['', ' ', 'NaN', 'Infinity']) assert.throws(() => validateSavedVolumePeriod(volume, false, '2026', '', ''), /valid numeric volume/)
 })
 
 test('budget periods retain annual support and reject invalid years or months', () => {
@@ -57,6 +60,7 @@ test('saved budget updates target one original snapshot and preserve null dimens
   assert.ok(calls.some((call) => JSON.stringify(call) === JSON.stringify(['is', 'month', null])))
   assert.ok(calls.some((call) => JSON.stringify(call) === JSON.stringify(['is', 'subregion_id', null])))
   assert.ok(calls.some((call) => JSON.stringify(call) === JSON.stringify(['select', 'id'])))
+  assert.equal(calls.some((call) => ['asm', 'rsm'].includes(call[1])), false)
 })
 
 test('actual updates filter by original date, and failed or unmatched updates never report success', async () => {
@@ -81,13 +85,18 @@ test('customer editing submits only changed rows in one atomic call with origina
   assert.equal(sent.args.p_records[0].volume,30.5)
   assert.equal(sent.args.p_records[0].month,null)
   assert.equal(sent.args.p_records[1].volume,0)
+  for (const row of sent.args.p_records) {
+    assert.equal(Object.hasOwn(row.original, 'asm'), false)
+    assert.equal(Object.hasOwn(row.original, 'rsm'), false)
+    assert.equal(row.original.kam, 'KAM')
+  }
 })
 
 test('unchanged customer records make no writes and invalid input stops before the RPC', async()=>{
   const client={rpc:async()=>{throw Error('Unexpected write')}}
   const draft={original:record,volume:'25',year:'2026',month:'',actualDate:record.actual_date}
   assert.equal(await persistCustomerVolumeUpdates(client,'Budgets',[draft]),0)
-  await assert.rejects(persistCustomerVolumeUpdates(client,'Actuals',[{...draft,volume:'-1'}]),/valid volume/)
+  await assert.rejects(persistCustomerVolumeUpdates(client,'Actuals',[{...draft,volume:''}]),/valid numeric volume/)
 })
 
 test('Actual customer edits send dates and preserve database conflict messages',async()=>{

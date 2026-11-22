@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { currentVolumePeriod, volumeLoadPhases } from '../lib/volume-load-period.ts'
+import { actualVolumeCursor, currentVolumePeriod, volumeLoadPhases } from '../lib/volume-load-period.ts'
 
 test('year and month defaults use Singapore time at month/year boundaries', () => {
   assert.deepEqual(currentVolumePeriod(new Date('2026-10-31T16:00:00Z')), { year:'2026', month:'11' })
@@ -8,10 +8,16 @@ test('year and month defaults use Singapore time at month/year boundaries', () =
 })
 test('Actuals loads the selected period before all other dates', () => {
   assert.deepEqual(volumeLoadPhases(true,'2026','11'), [
-    {from:'2026-11-01',to:'2026-12-01'}, {or:'actual_date.lt.2026-11-01,actual_date.gte.2026-12-01'},
+    {from:'2026-11-01',to:'2026-12-01'}, {to:'2026-11-01'}, {from:'2026-12-01'},
   ])
   assert.equal(volumeLoadPhases(true,'2026','12')[0].to, '2027-01-01')
   assert.deepEqual(volumeLoadPhases(true,'2026','')[0], {from:'2026-01-01',to:'2027-01-01'})
+})
+
+test('Actuals cursor retains earlier rows on the same date and earlier dates', () => {
+  assert.equal(actualVolumeCursor({actual_date:'2026-11-08',id:42}), 'actual_date.lt.2026-11-08,and(actual_date.eq.2026-11-08,id.lt.42)')
+  assert.throws(()=>actualVolumeCursor({id:42}), /Invalid/)
+  assert.throws(()=>actualVolumeCursor({actual_date:'2026-11-08',id:NaN}), /Invalid/)
 })
 test('Budgets prioritizes the selected year/month and keeps annual fallback rows in background', () => {
   assert.deepEqual(volumeLoadPhases(false,'2026','11'), [{year:2026,month:11},{or:'year.neq.2026,month.neq.11,month.is.null'}])

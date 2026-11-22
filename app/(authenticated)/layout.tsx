@@ -54,7 +54,7 @@ export default function AuthenticatedLayout({
     "/audit-logs": "Audit Logs",
   }
 
-  const pageTitle = pageTitles[pathname] || "Feed Sales Forecast"
+  const pageTitle = pageTitles[pathname] || "Feeds Forecast"
   const PageIcon = pageIcons[pathname]
   const boundedSalesPage = pathname === '/approvals' || pathname === '/weekly-sales' || pathname === '/forecasts' || pathname === '/audit-logs'
   const boundedVolumePage = pathname === '/budgets' || pathname === '/actuals'

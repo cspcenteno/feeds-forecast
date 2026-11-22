@@ -1,0 +1,69 @@
+{
+  "inspectedAt": "2026-11-22T04:35:29.196Z",
+  "method": "Read-only HEAD requests with exact counts; whitespace-only strings count as nonempty.",
+  "columns": [
+    {
+      "table": "actual_import_staging",
+      "column": "subregion",
+      "totalRows": 0,
+      "nonNullRows": 0,
+      "nonEmptyRows": 0
+    },
+    {
+      "table": "actuals",
+      "column": "asm",
+      "totalRows": 28792,
+      "nonNullRows": 17445,
+      "nonEmptyRows": 17445
+    },
+    {
+      "table": "actuals",
+      "column": "rsm",
+      "totalRows": 28792,
+      "nonNullRows": 17445,
+      "nonEmptyRows": 17445
+    },
+    {
+      "table": "budgets",
+      "column": "asm",
+      "totalRows": 14412,
+      "nonNullRows": 14412,
+      "nonEmptyRows": 14412
+    },
+    {
+      "table": "budgets",
+      "column": "rsm",
+      "totalRows": 14412,
+      "nonNullRows": 14412,
+      "nonEmptyRows": 14412
+    },
+    {
+      "table": "actual_import_staging",
+      "column": "asm",
+      "totalRows": 0,
+      "nonNullRows": 0,
+      "nonEmptyRows": 0
+    },
+    {
+      "table": "actual_import_staging",
+      "column": "rsm",
+      "totalRows": 0,
+      "nonNullRows": 0,
+      "nonEmptyRows": 0
+    },
+    {
+      "table": "budget_import_staging",
+      "column": "asm",
+      "totalRows": 3,
+      "nonNullRows": 0,
+      "nonEmptyRows": 0
+    },
+    {
+      "table": "budget_import_staging",
+      "column": "rsm",
+      "totalRows": 3,
+      "nonNullRows": 0,
+      "nonEmptyRows": 0
+    }
+  ]
+}

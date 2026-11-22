@@ -12,9 +12,14 @@ export function volumeLoadPhases(actual: boolean, yearValue: string, monthValue:
     if (!hasYear) return [{}]
     const from = `${year}-${hasMonth ? String(month).padStart(2, '0') : '01'}-01`
     const to = hasMonth && month < 12 ? `${year}-${String(month + 1).padStart(2, '0')}-01` : `${year + 1}-01-01`
-    return [{ from, to }, { or: `actual_date.lt.${from},actual_date.gte.${to}` }]
+    return [{ from, to }, { to: from }, { from: to }]
   }
   if (!hasYear && !hasMonth) return [{}]
   const exclude = [hasYear ? `year.neq.${year}` : '', hasMonth ? `month.neq.${month},month.is.null` : ''].filter(Boolean).join(',')
   return [{ ...(hasYear ? { year } : {}), ...(hasMonth ? { month } : {}) }, { or: exclude }]
+}
+
+export function actualVolumeCursor(last: { actual_date?: string | null; id: number }) {
+  if (!last.actual_date || !/^\d{4}-\d{2}-\d{2}$/.test(last.actual_date) || !Number.isSafeInteger(last.id)) throw new Error('Invalid saved Actuals cursor.')
+  return `actual_date.lt.${last.actual_date},and(actual_date.eq.${last.actual_date},id.lt.${last.id})`
 }

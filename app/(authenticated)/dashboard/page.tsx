@@ -1,14 +1,9 @@
 'use client'
 
-import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { useAuthorization } from '@/lib/authorization'
 import type { DashboardType } from '@/lib/dashboard-settings'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
-
-const SystemDashboard = dynamic(() => import('./system-dashboard'), {
-  loading: () => <div className="flex justify-center p-6"><LoadingSpinner label="dashboard" /></div>,
-})
+import SystemDashboard from './system-dashboard'
 
 export default function DashboardPage() {
   const authorization = useAuthorization()
@@ -30,7 +25,7 @@ function DashboardContent({ type, embedUrl }: { type: DashboardType; embedUrl: s
     {active === 'system' ? <SystemDashboard /> : <section aria-label="Power BI Dashboard" className="w-full min-w-0" style={{ containerType: 'inline-size' }}>
       <h1 className="sr-only">Power BI Dashboard</h1>
       {/* Preserve the 2086:1220 report canvas, plus 56px for Power BI's bottom bar. */}
-      {embedUrl ? <iframe title="Feed Sales Forecast Reports" src={embedUrl}
+      {embedUrl ? <iframe title="Feeds Forecast Reports" src={embedUrl}
         className="block w-full border-0" style={{ height: 'calc(100cqw * 1220 / 2086 + 56px)' }} allowFullScreen />
         : <p role="status" className="p-6 text-sm text-muted-foreground">The Power BI report is currently unavailable. Contact your administrator.</p>}
     </section>}

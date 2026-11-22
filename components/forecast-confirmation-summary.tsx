@@ -3,11 +3,12 @@ type RecordRow = {
   year?: number; week?: number; submitted_by?: string | null; user_id?: string | null; endorsed_by?: string | null
 }
 export type ForecastConfirmationSummaryProps = {
-  records: RecordRow[]; scope: string; level: 'submit' | 'endorse' | 'approve'
+  records: RecordRow[]; scope: string; level: 'submit' | 'endorse' | 'approve' | 'void'
   customerName: (id: number | null) => string; productName: (id: number | null) => string
   personName?: (id: string | null) => string
+  reason?: string
 }
-export function ForecastConfirmationSummary({ records, scope, level }: ForecastConfirmationSummaryProps) {
+export function ForecastConfirmationSummary({ records, scope, level, reason }: ForecastConfirmationSummaryProps) {
   const number = (value: number) => value.toLocaleString('en-PH', { maximumFractionDigits: 2 })
   const weeks = [...new Map(records.flatMap(row => row.year == null || row.week == null
     ? [] : [[`${row.year}-${row.week}`, { year: row.year, week: row.week }] as const])).values()]
@@ -26,10 +27,11 @@ export function ForecastConfirmationSummary({ records, scope, level }: ForecastC
     ...(weeks.length ? [{ label: 'Week / Date', value: weeks.map(weekLabel).join('\n') }] : []),
     { label: 'Action Scope', value: scope },
     ...(level === 'approve' ? [{ label: 'RSMs', value: number(new Set(records.map(row => row.endorsed_by ?? null)).size) }] : []),
-    ...(level !== 'submit' ? [{ label: 'KAMs', value: number(new Set(records.map(row => row.submitted_by ?? row.user_id ?? null)).size) }] : []),
+    ...(level === 'endorse' || level === 'approve' ? [{ label: 'KAMs', value: number(new Set(records.map(row => row.submitted_by ?? row.user_id ?? null)).size) }] : []),
     { label: 'Customers', value: number(new Set(records.map(row => row.customer_id)).size) },
     { label: 'Products', value: number(new Set(records.map(row => row.product_id)).size) },
     { label: 'Total Volume (50kg)', value: number(records.reduce((sum, row) => sum + (Number(row.volume) || 0), 0)) },
+    ...(reason ? [{ label: 'Reason', value: reason }] : []),
   ]
   return <div className="shrink-0 rounded-lg border bg-muted/30 p-4">
     <dl className="grid shrink-0 grid-cols-2 gap-4">

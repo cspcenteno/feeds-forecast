@@ -2,7 +2,7 @@
 
 import { SalesHierarchyTable, type SalesHierarchyRow } from '@/components/ui/sales-hierarchy-table'
 import { summaryForLevel } from '@/lib/table-summary-level'
-import { Gauge } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, ChevronDown, Gauge } from 'lucide-react'
 import { dashboardSalesTotals, type DashboardMonthlyReferences } from '@/lib/dashboard-sales-totals'
 
 import { ChartNoAxesCombined as HeadingChartNoAxesCombined, ChartColumn as HeadingChartColumn, ChartPie as HeadingChartPie, Lightbulb as HeadingLightbulb, CalendarDays as HeadingCalendarDays } from 'lucide-react'
@@ -57,6 +57,8 @@ type SalesDetail = {
 }
 
 type DashboardData = {
+  detailsError?: string
+  detailsLoaded?: boolean
   assignedSubregion?: string | null
   showAsm?: boolean
   areaLevel: 'region' | 'subregion'
@@ -178,6 +180,24 @@ const performanceLabels = {
 }
 const shortLabel = (value: string) => value.length > 26 ? value.slice(0, 25) + '…' : value
 
+function countInWords(value: number): string {
+  const small = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen']
+  if (value < 20) return small[value]
+  if (value < 100) {
+    const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']
+    return tens[Math.floor(value / 10)] + (value % 10 ? '-' + small[value % 10] : '')
+  }
+  for (const [scale, label] of [[1e12, 'trillion'], [1e9, 'billion'], [1e6, 'million'], [1000, 'thousand'], [100, 'hundred']] as const) {
+    if (value >= scale) return `${countInWords(Math.floor(value / scale))} ${label}${value % scale ? ' ' + countInWords(value % scale) : ''}`
+  }
+  return String(value)
+}
+
+function highlightCount(value: number) {
+  const words = countInWords(value)
+  return `${words.charAt(0).toUpperCase() + words.slice(1)} (${value.toLocaleString('en-PH')})`
+}
+
 function LoadingIndicator({ label }: { label: string }) {
   return (
     <div role="status" className="flex min-h-16 flex-1 items-center justify-center p-3">
@@ -203,6 +223,7 @@ export default function SystemDashboard() {
   const [performanceSort, setPerformanceSort] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null)
   const [chartSort, setChartSort] = useState('baseline')
   const [chartDescending, setChartDescending] = useState(true)
+  const [comparisonDetailsOpen, setComparisonDetailsOpen] = useState(false)
   const performanceMetrics = [comparison.baseline, comparison.measured]
   const performanceColumnCount = performanceMetrics.length + 3
 
@@ -210,7 +231,7 @@ export default function SystemDashboard() {
     const controller = new AbortController()
     async function load() {
       try {
-        const response = await fetch('/api/dashboard?month=' + encodeURIComponent(month), { signal: controller.signal, cache: 'no-store' })
+        const response = await fetch('/api/dashboard?part=overview&month=' + encodeURIComponent(month), { signal: controller.signal, cache: 'no-store' })
         const body = await response.json()
         if (!response.ok) throw new Error(body.error ?? 'Unable to load dashboard data.')
         const data = body as DashboardData
@@ -220,6 +241,19 @@ export default function SystemDashboard() {
           month, revision, data: data as DashboardData | null,
           error: data ? '' : 'Dashboard data is unavailable for this account.',
         })
+        if (!data) return
+        // Show the selected month before waiting for hierarchy references.
+        try {
+          const detailResponse = await fetch('/api/dashboard?part=details&month=' + encodeURIComponent(month), { signal: controller.signal, cache: 'no-store' })
+          const detailBody = await detailResponse.json()
+          if (!detailResponse.ok) throw new Error(detailBody.error ?? 'Unable to load monthly sales details.')
+          if (controller.signal.aborted) return
+          setResult({ month, revision, data: { ...data, ...detailBody, detailsLoaded: true }, error: '' })
+        } catch (error) {
+          if (controller.signal.aborted) return
+          reportError(error instanceof Error ? error.message : 'Unable to load monthly sales details.')
+          setResult({ month, revision, data: { ...data, detailsLoaded: true, detailsError: 'Unable to load monthly sales details. Refresh to try again.' }, error: '' })
+        }
       } catch (error) {
         if (controller.signal.aborted) return
         reportError(error instanceof Error ? error.message : 'Unable to load dashboard data.')
@@ -232,6 +266,7 @@ export default function SystemDashboard() {
 
   const current = result?.month === month && result.revision === revision ? result : null
   const loading = current === null
+  const detailsLoading = loading || (!!current?.data && !current.data.detailsLoaded)
   const data = current?.data
   const regions = [...(data?.performance.rows ?? [])].sort((a, b) => compareRegionNames(a.region, b.region))
   const performanceLevel = data?.performance.level ?? dashboardLevel(authorization)
@@ -314,7 +349,7 @@ export default function SystemDashboard() {
       <header className="rounded-lg border border-t-4 border-t-emerald-500 bg-card px-4 py-3 shadow-sm dark:border-slate-600 dark:border-t-emerald-400 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 items-center gap-3">
-            <h2 data-section-title="" className="text-base leading-6 font-semibold"><Gauge className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Sales Performance Dashboard</h2>
+            <h2 data-section-title="" className="text-base leading-6 font-semibold"><Gauge className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Sales Performance</h2>
           </div>
           <div className="flex max-w-full items-center gap-2">
             <input aria-label="Month" type="month" value={month} onChange={(event) => {
@@ -332,47 +367,70 @@ export default function SystemDashboard() {
 
       {current?.error ? null : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3" role="group" aria-label="Sales volume controls">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3" role="group" aria-label="Sales volume controls">
             {[
-              { metric: 'budget' as const, label: 'BUDGET VOLUME', comparison: dashboardComparisons[0] },
-              { metric: 'forecast' as const, label: 'FORECAST VOLUME', comparison: dashboardComparisons[2] },
-              { metric: 'actual' as const, label: 'ACTUAL VOLUME', comparison: dashboardComparisons[1] },
+              { metric: 'budget' as const, label: 'BUDGET', comparison: dashboardComparisons[0] },
+              { metric: 'forecast' as const, label: 'FORECAST', comparison: dashboardComparisons[2] },
+              { metric: 'actual' as const, label: 'ACTUAL', comparison: dashboardComparisons[1] },
             ].map(({ metric, label, comparison: cardComparison }) => {
               const targetComparison = cardComparison.id
               const active = comparisonId === targetComparison
               const values = compareVolumes(totals[cardComparison.baseline], totals[cardComparison.measured])
               return (
-              <button key={label} type="button" aria-pressed={active} aria-controls="dashboard-comparison-results"
+              <div key={label}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest('button, summary')) return
+                  setComparisonId(targetComparison)
+                  setChartSort(metric === cardComparison.baseline ? 'baseline' : 'measured')
+                  setChartDescending(true)
+                }}
+                className={`min-w-0 cursor-pointer self-start rounded-lg border border-t-4 px-2 py-3 text-left shadow-sm transition sm:px-3 sm:py-2.5 ${active ? comparisonAppearance[targetComparison] : metricAppearance[metric]}`}>
+              <button type="button" aria-pressed={active} aria-controls="dashboard-comparison-results"
                 aria-busy={loading}
                 onClick={() => {
                   setComparisonId(targetComparison)
                   setChartSort(metric === cardComparison.baseline ? 'baseline' : 'measured')
                   setChartDescending(true)
                 }}
-                className={`grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-3 gap-y-1 cursor-pointer rounded-lg border border-t-4 px-3 py-2 text-left shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 sm:block sm:py-2.5 ${active ? comparisonAppearance[targetComparison] : metricAppearance[metric]}`}>
-                <span className="col-span-2 flex items-center justify-between gap-2 text-sm font-semibold">{label}{active && <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />}</span>
-                {loading ? <div className="col-start-1 row-start-2 self-center sm:mt-1"><LoadingIndicator label={label.toLowerCase()} /></div> : <p className="col-start-1 row-start-2 mt-0 self-center whitespace-nowrap text-xl leading-tight font-bold tabular-nums sm:mt-1 sm:text-2xl">{number.format(totals[metric])} <span className="text-xs font-medium">bags</span></p>}
-                <div className="col-start-2 row-start-2 mt-0 self-center border-l border-current/20 pl-2 sm:mt-2 sm:border-l-0 sm:border-t sm:pt-2 sm:pl-0">
-                  <p className="text-right text-[11px] leading-tight font-medium sm:text-xs">{cardComparison.title}</p>
-                  <div className="mt-0.5 flex flex-col items-end gap-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
-                    <span className="text-sm font-semibold tabular-nums sm:text-base">{loading ? '—' : formatPercent(values.percent)}</span>
-                    <span className={`whitespace-nowrap text-[11px] font-semibold tabular-nums sm:text-xs ${active ? 'text-white' : values.variance < 0 ? 'text-rose-700 dark:text-rose-300' : values.variance > 0 ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
-                      {loading ? '—' : `${values.variance > 0 ? '+' : ''}${number.format(values.variance)} bags`}
-                    </span>
-                  </div>
-                </div>
+                className="block w-full min-w-0 cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500">
+                <span className="flex items-center justify-between gap-1 text-xs font-semibold sm:text-sm"><span className="sm:hidden">{metric === 'budget' ? 'BUDGET' : metric === 'forecast' ? 'FORECAST' : 'ACTUAL'}</span><span className="hidden sm:inline">{label}</span>{active && <CheckCircle2 className="size-3 shrink-0 sm:size-4" aria-hidden="true" />}</span>
+                <p className="relative mt-2 pr-6 text-[clamp(0.875rem,4vw,1.25rem)] leading-tight font-bold tabular-nums sm:mt-1 sm:text-2xl">
+                  <span className={loading ? 'invisible' : undefined}>{number.format(totals[metric])} <span className="mt-0.5 block text-xs font-medium sm:mt-0 sm:inline">bags</span></span>
+                  {loading && <span role="status" className="absolute inset-0 flex items-center justify-center"><LoaderCircle className="size-4 animate-spin" aria-hidden="true" /><span className="sr-only">Loading {label.toLowerCase()}</span></span>}
+                </p>
               </button>
+              <details open={comparisonDetailsOpen} className="group/details relative flow-root">
+                <summary onClick={(event) => { event.preventDefault(); setComparisonDetailsOpen((current) => !current) }} className="absolute -right-1 bottom-full flex size-5 cursor-pointer list-none items-center justify-center rounded focus-visible:outline-2 sm:-right-0.5 [&::-webkit-details-marker]:hidden" aria-label={`${comparisonDetailsOpen ? 'Collapse' : 'Expand'} all comparison details`} title="Toggle all comparison details"><ChevronDown className="size-4 transition-transform group-open/details:rotate-180" aria-hidden="true" /></summary>
+                <button type="button" aria-pressed={active} aria-controls="dashboard-comparison-results"
+                  onClick={() => {
+                    setComparisonId(targetComparison)
+                    setChartSort(metric === cardComparison.baseline ? 'baseline' : 'measured')
+                    setChartDescending(true)
+                  }}
+                  className="mt-2 block w-full cursor-pointer border-t border-current/20 pt-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-2 sm:gap-y-0.5 sm:pt-2">
+                  <span className="block text-[10px] leading-tight font-medium sm:text-xs">{cardComparison.title}</span>
+                  <span className="mt-1 flex flex-col items-start gap-1 sm:contents">
+                    <span className="text-[clamp(0.875rem,4vw,1.25rem)] leading-tight font-bold tabular-nums sm:col-start-1 sm:row-start-2 sm:text-2xl">{loading ? '—' : formatPercent(values.percent)}</span>
+                    <span className={`flex flex-col gap-0.5 self-start text-left text-[10px] leading-tight font-medium tabular-nums sm:contents sm:text-xs ${active ? 'text-white' : values.variance < 0 ? 'text-rose-700 dark:text-rose-300' : values.variance > 0 ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                      <span className="sm:col-start-2 sm:row-start-1 sm:text-right">Variance<span className="sm:hidden"> </span></span>
+                      <span className="whitespace-nowrap sm:col-start-2 sm:row-start-2 sm:self-end sm:text-right">{loading ? '—' : `${values.variance > 0 ? '+' : ''}${number.format(values.variance)} bags`}</span>
+                    </span>
+                  </span>
+                </button>
+              </details>
+              </div>
               )
             })}
           </div>
+
 
           <div id="dashboard-comparison-results" className="grid gap-3 xl:grid-cols-2">
             <div className="contents">
               <section aria-busy={loading} className={panel + ' order-1 flex flex-col'}>
                 <h3 data-section-title="" className={panelTitle}><HeadingChartNoAxesCombined className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />{performanceLabel.title}</h3>
-                <Table summary={{ records: regions.length }} containerProps={{ className: 'max-h-[22rem] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': `${performanceLabel.title} table` }} className="min-w-[620px] table-fixed text-xs sm:min-w-0">
+                <Table containerProps={{ className: 'max-h-[22rem] overflow-auto', tabIndex: 0, role: 'region', 'aria-label': `${performanceLabel.title} table` }} className="min-w-[620px] table-fixed text-xs sm:min-w-0">
                   <colgroup>
-                    <col className="w-[24%]" />
+                    <col className="w-28 sm:w-[24%]" />
                     {performanceMetrics.map((metric) => <col key={metric} />)}
                     <col /><col />
                   </colgroup>
@@ -397,15 +455,15 @@ export default function SystemDashboard() {
                         <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2"><AchievementIndicator value={achievement(row[comparison.measured], row[comparison.baseline])} /></td>
                       </tr>
                     })}
-                    {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className="px-3 py-3 text-center text-muted-foreground">{loading ? <LoadingIndicator label={performanceLabel.title.toLowerCase()} /> : `No volume data by ${performanceLabel.column.toLowerCase()} for the selected month.`}</td></tr>}
+                    {regions.length === 0 && <tr><td colSpan={performanceColumnCount} className={loading ? 'h-36 px-3 py-0 text-center text-muted-foreground' : 'px-3 py-3 text-center text-muted-foreground'}>{loading ? <LoadingIndicator label={performanceLabel.title.toLowerCase()} /> : `No volume data by ${performanceLabel.column.toLowerCase()} for the selected month.`}</td></tr>}
                   </tbody>
-                  {!loading && <tfoot className="sticky bottom-0 border-t-2 bg-card font-semibold">
-                    <tr><th scope="row" className="px-1.5 py-2 text-left wrap-anywhere sm:px-2">Grand total</th>
+                  <tfoot className={`sticky bottom-0 border-t-2 bg-card font-semibold ${loading ? 'invisible' : ''}`}>
+                    <tr><th scope="row" className="px-1.5 py-2 text-left wrap-anywhere sm:px-2">Grand Total</th>
                       {performanceMetrics.map((metric) => <td key={metric} className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2">{number.format(totals[metric])}</td>)}
                       <td className={'px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2 ' + varianceColor(variance)}>{number.format(variance)}</td>
                       <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap sm:px-2"><AchievementIndicator value={percent} /></td>
                     </tr>
-                  </tfoot>}
+                  </tfoot>
                 </Table>
               </section>
 
@@ -420,8 +478,9 @@ export default function SystemDashboard() {
                       <option value="measured">{metricLabels[comparison.measured]}</option>
                     </SelectionField>
                   </label>
-                  <button type="button" onClick={() => setChartDescending((value) => !value)} className="h-9 rounded-md border px-3" aria-label="Toggle chart sort direction">
-                    {chartSort === 'name' ? chartDescending ? 'Z–A' : 'A–Z' : chartDescending ? 'Highest first' : 'Lowest first'}
+                  <button type="button" onClick={() => setChartDescending((value) => !value)} className="inline-flex h-9 items-center justify-center rounded-md border px-3 max-md:w-11 max-md:px-0" aria-label="Toggle chart sort direction" title={chartSort === 'name' ? chartDescending ? 'Z–A' : 'A–Z' : chartDescending ? 'Highest first' : 'Lowest first'}>
+                    {chartDescending ? <ArrowDownWideNarrow className="size-4 md:hidden" aria-hidden="true" /> : <ArrowUpNarrowWide className="size-4 md:hidden" aria-hidden="true" />}
+                    <span className="hidden md:inline">{chartSort === 'name' ? chartDescending ? 'Z–A' : 'A–Z' : chartDescending ? 'Highest first' : 'Lowest first'}</span>
                   </button>
                 </div>
                 {loading ? <LoadingIndicator label="comparison chart" /> : chartRows.length ? (
@@ -476,9 +535,9 @@ export default function SystemDashboard() {
 
 
 
-              <section aria-busy={loading} className={panel + ' order-4 flex h-[22rem] flex-col'}>
+              <section aria-busy={loading} className={panel + ' order-4 flex max-h-[min(22rem,60dvh)] self-start flex-col md:h-[22rem] md:max-h-none md:self-stretch'}>
                 <h3 data-section-title="" className={panelTitle}><HeadingLightbulb className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Monthly Highlights</h3>
-                {loading ? <LoadingIndicator label="monthly highlights" /> : <ol className="min-h-0 flex-1 list-decimal divide-y overflow-y-auto px-4 pl-8 text-sm">
+                {loading ? <LoadingIndicator label="monthly highlights" /> : <ol className="min-h-0 list-decimal divide-y overflow-y-auto px-4 pl-8 text-sm md:flex-1">
                   {[
                     percent === null
                       ? `Check ${metricLabels[comparison.baseline].toLowerCase()} records for this month; no positive baseline is available.`
@@ -487,7 +546,7 @@ export default function SystemDashboard() {
                         : `${metricLabels[comparison.measured]} has reached ${formatPercent(percent)} of ${metricLabels[comparison.baseline].toLowerCase()}. ${comparison.measured === 'forecast' ? 'Confirm planned orders with customers.' : 'Confirm sales records are complete.'}`,
                     lowestAchievement && Number(lowestAchievement[comparison.measured]) < Number(lowestAchievement[comparison.baseline])
                       ? lowestPerformers.length > 1
-                        ? `${lowestPerformers.map((row) => row.region).join(', ')} are tied at ${formatPercent(lowestPercent)} of ${metricLabels[comparison.baseline].toLowerCase()}. Review their gaps with the sales owners.`
+                        ? `${highlightCount(lowestPerformers.length)} ${performanceLabel.plural} are tied at ${formatPercent(lowestPercent)} of ${metricLabels[comparison.baseline].toLowerCase()}: ${lowestPerformers.slice(0, 3).map((row) => row.region).join(', ')}${lowestPerformers.length > 3 ? `, and ${lowestPerformers.length - 3} others` : ''}. Review their gaps with the sales owners.`
                         : `Prioritize ${lowestAchievement.region} (${formatPercent(lowestPercent)} of ${metricLabels[comparison.baseline].toLowerCase()}). Review the gap with its sales owner.`
                       : null,
                     highestVolume && Number(highestVolume[comparison.measured]) > 0
@@ -501,7 +560,7 @@ export default function SystemDashboard() {
             </div>
           </div>
 
-          <section aria-busy={loading} className={panel}>
+          <section aria-busy={detailsLoading} className={panel}>
             <div data-monthly-sales-header="" data-section-header="" data-aligned-toolbar="" className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
               <div>
                 <h3 data-section-title="" className="text-sm font-semibold"><HeadingCalendarDays className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Monthly Sales · {monthLabel}</h3>
@@ -512,9 +571,9 @@ export default function SystemDashboard() {
                 <span className="hidden md:inline">{allExpanded ? 'Collapse All' : 'Expand All'}</span>
               </button>
             </div>
-            <SalesHierarchyTable showActions={false} showStatus={false} rows={monthlyHierarchyRows(salesGroups)} loading={loading}
+            <SalesHierarchyTable showActions={false} showStatus={false} rows={monthlyHierarchyRows(salesGroups)} loading={detailsLoading}
               totalVolume={(data?.details ?? []).reduce((sum, item) => sum + (Number(item.volume) || 0), 0)}
-              label="Monthly Sales table" emptyMessage="No approved forecasts for the selected month."
+              label="Monthly Sales table" emptyMessage={data?.detailsError || 'No approved forecasts for the selected month.'}
               summary={summaryForLevel(data?.details.length ?? 0, data?.showAsm ? 'asms' : data?.scope === 'kam' ? 'customers' : data?.scope === 'rsm' ? 'kams' : 'rsms', (data?.details ?? []).map(row => data?.showAsm ? row.asm_id : data?.scope === 'kam' ? row.customer_id : data?.scope === 'rsm' ? row.submitted_by : row.endorsed_by))} />
 
           </section>
