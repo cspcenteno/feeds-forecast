@@ -8,8 +8,9 @@ import { permissionDefaultPreview } from '@/lib/permission-default-preview'
 import { requiresUserSubregion, positionsForRole, positionForRole, validRolePosition } from '@/lib/users-import'
 
 import { StatusBadge } from '@/components/ui/status-badge'
+import { TableSearch } from '@/components/ui/table-search'
 
-import { UserRoundCog as HeadingUserRoundCog, ShieldCheck as HeadingShieldCheck, Users as HeadingUsers } from 'lucide-react'
+import { UserRoundCog as HeadingUserRoundCog, ShieldCheck as HeadingShieldCheck } from 'lucide-react'
 
 import { RefreshCw as ActionRefreshCwIcon } from 'lucide-react'
 
@@ -31,7 +32,6 @@ import {
   UserPlus,
   KeyRound,
   Save,
-  Search,
   X,
 } from 'lucide-react'
 
@@ -1030,6 +1030,10 @@ export default function UsersPage() {
   const visibleUsers = sortedUsers.filter((user) => accountSearchTerms.every((term) =>
     (user.full_name ?? '').toLocaleLowerCase('en-PH').includes(term)
       || (user.email ?? '').toLocaleLowerCase('en-PH').includes(term)
+      || (user.role ?? '').toLocaleLowerCase('en-PH').includes(term)
+      || (user.position ?? '').toLocaleLowerCase('en-PH').includes(term)
+      || getRegionName(user.region_id).toLocaleLowerCase('en-PH').includes(term)
+      || getSubregionName(user.subregion_id).toLocaleLowerCase('en-PH').includes(term)
   ))
 
   if (!isAdmin && !loading) return null
@@ -1419,20 +1423,9 @@ export default function UsersPage() {
 
       {/* User Accounts */}
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div data-section-header="" data-aligned-toolbar="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 data-section-title="" className="font-semibold"><HeadingUsers className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />User Accounts</h2>
-
-          </div>
-
-          <div data-user-account-actions="" data-action-toolbar="" className="flex flex-wrap items-center gap-2">
-            <label className="relative w-full sm:w-64">
-              <span className="sr-only">Search user accounts by name or email</span>
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <input type="search" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)}
-                placeholder="Search here…" autoComplete="off"
-                className="h-10 w-full rounded-md border bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-            </label>
+        <div data-section-header="" data-aligned-toolbar="" className="flex flex-col gap-3 border-b px-6 py-5 sm:flex-row sm:items-center">
+          <div data-master-search-actions="" data-action-toolbar="" className="flex w-full flex-wrap items-center justify-end gap-2">
+            <TableSearch value={accountSearch} onChange={setAccountSearch} label="Search user accounts by name, email, role, sales position, region, or subregion" />
       {isAdmin && authorization.can('Users', 'add') && authorization.can('Users', 'import') && <UsersExcelImport
         blocked={loading || saving || deleting || creatingUser || refreshing || resettingPassword}
         onBusyChange={setImportBusy}
@@ -1449,7 +1442,7 @@ export default function UsersPage() {
               <span className="hidden md:inline">Create User</span>
             </button>}
 
-            <button data-action-tone="neutral"
+            <button data-compact-action="" data-action-tone="neutral"
               type="button"
               onClick={handleRefresh}
               aria-label="Refresh user accounts" title="Refresh user accounts"
@@ -1459,7 +1452,7 @@ export default function UsersPage() {
               <RefreshCw
                 className={`size-4 ${refreshing ? 'animate-spin' : ''}`}
               />
-              <span className="hidden md:inline">{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+
             </button>
           </div>
         </div>

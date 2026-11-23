@@ -25,7 +25,7 @@ import { ClipboardCheck as HeadingClipboardCheck } from 'lucide-react'
 
 import { useStatusNotification, usePopupError } from '@/components/action-dialogs'
 
-import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { HeaderExpandCollapseButton } from '@/components/ui/expand-collapse-icon'
 import { ArrowLeftRight as ActionArrowLeftRightIcon, X as ActionXIcon } from 'lucide-react'
 import { SelectionField } from '@/components/ui/selection-field'
 
@@ -1287,21 +1287,10 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
                   )
                 })}
 
-<button data-slot="expand-collapse-button" data-action-tone="neutral"
-                  type="button"
-                  aria-label={allGroupsExpanded ? 'Collapse all groups' : 'Expand all groups'}
-                  title={allGroupsExpanded ? 'Collapse all groups' : 'Expand all groups'}
-                  onClick={() =>
-                    setExpandedGroups(allGroupsExpanded ? new Set() : visibleGroupKeys)
-                  }
-                  disabled={loading || visibleGroupKeys.size === 0}
-                  className="h-9 rounded-md px-3 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
-                ><ExpandCollapseIcon expanded={allGroupsExpanded} />
-                  <span className="hidden md:inline">{allGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
-                </button>
-<button type="button" data-action-tone="neutral" aria-label="Refresh sales" title="Refresh sales" onClick={loadData} disabled={loading}
+
+<button data-compact-action="" type="button" data-action-tone="neutral" aria-label="Refresh sales" title="Refresh sales" onClick={loadData} disabled={loading}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
-                  <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /><span className="hidden md:inline">Refresh</span>
+                  <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                 </button>
 </div>
             </div>
@@ -1310,7 +1299,7 @@ export function SalesSubmissionsPage({ mode }: { mode: 'approvals' | 'weekly' })
 
         {/* APPROVAL TABLE */}
 
-        <SalesHierarchyTable showActions={!weekly} showStatus={!weekly} rows={reviewHierarchyRows()} loading={loading} label={pageTitle+' table'}
+        <SalesHierarchyTable structureHeaderAction={<HeaderExpandCollapseButton expanded={allGroupsExpanded} loading={loading} empty={visibleGroupKeys.size === 0} onClick={() => setExpandedGroups(allGroupsExpanded ? new Set() : visibleGroupKeys)} />} showActions={!weekly} showStatus={!weekly} rows={reviewHierarchyRows()} loading={loading} label={pageTitle+' table'}
           totalVolume={filteredSales.reduce((sum, item) => sum + (Number(item.volume) || 0), 0)}
           emptyMessage={weekly?'No weekly sales match the current filters.':'No forecasts awaiting review match the current filters.'}
           summary={summaryForLevel(filteredSales.length,weeklyAsmLevel?'asms':nestedKamGroups||(weekly&&groupByEndorser)?'rsms':customerOnly?'customers':'kams',filteredSales.map(row=>weeklyAsmLevel?row.asm_id:nestedKamGroups||(weekly&&groupByEndorser)?row.endorsed_by:customerOnly?row.customer_id:row.submitted_by??row.user_id))} />

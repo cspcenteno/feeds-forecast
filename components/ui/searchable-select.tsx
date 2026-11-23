@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, type FocusEventHandler } from 'react'
+import { useId, useState, type FocusEventHandler } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { normalizeSelectionPrompt, selectionText } from '@/lib/selection-text'
@@ -28,8 +28,10 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
 }) {
   const generatedId = useId()
   const id = providedId ?? generatedId
+  const [searching, setSearching] = useState(false)
   const selected = options.find((option) => option.value === value)
     ?? (freeText && value ? { value, label: value } : null)
+  const showWrappedLabel = multiline && selected && !searching
   const fieldName = (label ?? ariaLabel ?? name ?? 'option').replace(/[*:]/g, '').trim().toLowerCase()
   // Width follows the field's purpose, never its currently available choices.
   const contentSize = /\bstatus\b/.test(fieldName) ? 'status'
@@ -52,19 +54,23 @@ export function SearchableSelect({ label, value, options, onValueChange, disable
       {label && <label htmlFor={id} className="block text-sm font-medium">{required && <span className="text-destructive" aria-hidden="true">* </span>}{label}</label>}
       <Combobox.Root items={grouped ? groups : options} value={selected} disabled={disabled} name={name} required={required} autoComplete={autoComplete}
         inputValue={freeText ? value : undefined}
-        onInputValueChange={freeText ? (text, details) => {
+        onInputValueChange={(text, details) => {
+          if (!freeText) {
+            setSearching(details.reason === 'input-change' && text.length > 0)
+            return
+          }
           // Closing or blurring the list must not replace custom text with the
           // last selected option (or an empty label when no option matches).
           if (details.reason === 'input-change' || details.reason === 'input-clear' || details.reason === 'clear-press') onValueChange(text)
           else details.cancel()
-        } : undefined}
+        }}
         isItemEqualToValue={(a, b) => a.value === b.value}
-        onValueChange={(option) => { if (option) onValueChange(option.value); else if (!freeText) onValueChange('') }}>
-        <Combobox.InputGroup data-multiline-selection={multiline && selected ? '' : undefined} className="group/selection relative">
-          <Combobox.Input id={id} placeholder={hint} onBlur={onBlur} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
+        onValueChange={(option) => { setSearching(false); if (option) onValueChange(option.value); else if (!freeText) onValueChange('') }}>
+        <Combobox.InputGroup data-multiline-selection={showWrappedLabel ? '' : undefined} className="group/selection relative">
+          <Combobox.Input id={id} placeholder={hint} onBlur={(event) => { setSearching(false); onBlur?.(event) }} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
             style={multiline ? { fontSize: '0.75rem', lineHeight: '1rem' } : undefined}
-            className={'block w-full min-w-0 text-ellipsis rounded-md border bg-background pr-10 pl-3 text-base font-normal outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 disabled:opacity-60 sm:text-sm ' + inputHeightClassName + (multiline && selected ? ' text-transparent sm:text-transparent group-focus-within/selection:text-foreground' : '')} />
-          {multiline && selected && (
+            className={'block w-full min-w-0 text-ellipsis rounded-md border bg-background pr-10 pl-3 text-base font-normal outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15 disabled:opacity-60 sm:text-sm ' + inputHeightClassName + (multiline ? ' min-h-12' : '') + (showWrappedLabel ? ' text-transparent sm:text-transparent' : '')} />
+          {showWrappedLabel && selected && (
             <div data-selected-label aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-10 left-3 flex items-center" title={selected.label}>
               <span className="line-clamp-2 wrap-anywhere" style={{ fontSize: '0.75rem', lineHeight: '1rem' }}>{selected.label}</span>
             </div>

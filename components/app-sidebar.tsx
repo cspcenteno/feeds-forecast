@@ -518,7 +518,7 @@ export function AppSidebar() {
 
                         <div className="mx-2 my-1 h-px bg-border" />
 
-                        <button data-action-tone="neutral"
+                        <button aria-label="Refresh App" data-action-tone="neutral"
                           data-slot="profile-menu-action"
                           type="button"
                           onClick={() => window.location.reload()}

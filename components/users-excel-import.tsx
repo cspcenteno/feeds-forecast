@@ -171,7 +171,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
       setShow(true)
       void run(async () => { await loadReferences() })
     }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" /><span className="hidden md:inline">Excel Import</span></button>
-    <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Users Excel Import" busy={busy} wide contained maxWidth="90rem">
+    <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Users Excel Import" busy={busy} wide contained fitContent maxWidth="90rem" maxHeight="min(42rem, calc(100dvh - 2rem))">
     <section className="app-tables flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <div data-import-dialog-header data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b pb-4">
       <div><h2 data-section-title="" className="font-semibold"><HeadingFileSpreadsheet className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Users Excel Import</h2></div>
@@ -180,7 +180,7 @@ export function UsersExcelImport({ blocked, onBusyChange, onCreated }: {
 <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled} title="Upload File" aria-label="Upload File" onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Upload File</span></button>
 <button data-action-tone="neutral" type="button" disabled={disabled} title="Download Template" aria-label="Download Template" onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Template</span></button>
 
-<button data-action-tone="neutral" type="button" disabled={disabled} title="Refresh" aria-label="Refresh" onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
+<button data-compact-action="" data-action-tone="neutral" type="button" disabled={disabled} title="Refresh" aria-label="Refresh" onClick={() => { setShow(true); void run(async () => { await loadReferences() }) }} className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /></button>
 </div>
     </div>
 

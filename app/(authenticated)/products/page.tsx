@@ -324,7 +324,7 @@ export default function ProductsPage() {
             <input
               id="name"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter product name"
+              placeholder="Enter name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -463,7 +463,7 @@ export default function ProductsPage() {
 
         <div data-master-search-actions="" data-product-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search products" />
 {authorization.can('Products', 'add') && <button type="button" aria-label="Add Product" title="Add Product" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Product</span></button>}
-<TableGroupToggle disabled={tableLoading} /></div>
+</div>
 
         <div className="overflow-x-auto">
           <Table data-directory-table="products" summary={summaryForLevel(sortedProducts.length, 'categories', sortedProducts.map((row) => row.category_id))} saved aria-busy={tableLoading} className="table-fixed">
@@ -482,15 +482,15 @@ export default function ProductsPage() {
                   return (
                     <Fragment key={key}>
                     {key === 'created_at' && <TableHead className="w-[8%] text-right">Weight</TableHead>}
-                    <TableHead key={key} className={className} aria-sort={active ? (sort.descending ? 'descending' : 'ascending') : undefined}>
+                    <TableHead key={key} className={className} aria-sort={active ? (sort.descending ? 'descending' : 'ascending') : undefined}><div className="flex items-center gap-1.5">{key === 'category_id' && <TableGroupToggle header disabled={tableLoading} />}
                       <button
                         type="button"
-                        className="inline-flex cursor-pointer items-center gap-1 rounded-sm focus-visible:outline-2"
+                        className={`inline-flex cursor-pointer items-center gap-1 rounded-sm focus-visible:outline-2 ${key === 'category_id' ? 'shrink-0 whitespace-nowrap' : ''}`}
                         onClick={() => setSort((current) => ({ key, descending: current?.key === key && !current.descending }))}
                       >
                         {label}
                         <SortIcon aria-hidden="true" className={active ? 'size-4 shrink-0' : 'size-4 shrink-0 text-muted-foreground'} />
-                      </button>
+                      </button></div>
                     </TableHead>
                     </Fragment>
                   )

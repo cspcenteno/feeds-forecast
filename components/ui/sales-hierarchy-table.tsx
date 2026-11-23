@@ -18,9 +18,10 @@ const columns = [['Forecast', '(Qty.)'], ['Volume', '(50kg)'], ['Budget', '(Vol.
   ['Actual', '(Cum. Vol.)'], ['Actual', '(Prev. Mo.)'], ['Forecast', '(Cum. Vol.)']]
 const number = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 })
 
-export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage, summary, totalVolume, showActions = true, showStatus = true }: {
+export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage, summary, totalVolume, showActions = true, showStatus = true, structureHeaderAction }: {
   rows: SalesHierarchyRow[]; loading?: boolean; label: string; emptyMessage: string
   summary: TableSummaryCounts; totalVolume?: number; showActions?: boolean; showStatus?: boolean
+  structureHeaderAction?: ReactNode
 }) {
   const columnCount = 8 + Number(showActions) + Number(showStatus)
   return <Table data-sales-hierarchy="" aria-busy={loading} summary={summary}
@@ -38,7 +39,12 @@ export function SalesHierarchyTable({ rows, loading = false, label, emptyMessage
       <tr className="border-b bg-muted/40">
         {showActions && <th scope="col" className="px-1 py-3 text-center font-semibold">Action</th>}
         {showStatus && <th scope="col" className="px-1 py-3 text-center font-semibold">Status</th>}
-        <th scope="col" className="px-2 py-3 text-left font-semibold">Sales Structure</th>
+        <th scope="col" className="px-2 py-3 text-left font-semibold">
+          <div className="flex items-center gap-1.5">
+            {structureHeaderAction}
+            <span>Sales Structure</span>
+          </div>
+        </th>
         <th scope="col" className="px-2 py-3 text-left font-semibold">Area</th>
         {columns.map(([title, unit], index) => <th key={title + unit} scope="col"
           className={'px-1.5 py-3 text-right font-semibold ' + (index >= 2 ? 'bg-muted/50 text-muted-foreground ' : '') + (index === 2 ? 'border-l' : '')}>

@@ -2,7 +2,7 @@
 
 import { compareRegionNames } from '@/lib/region-order'
 
-import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { ExpandCollapseIcon, HeaderExpandCollapseButton } from '@/components/ui/expand-collapse-icon'
 import { cloneElement, createContext, Fragment, isValidElement, useContext, useId, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -19,10 +19,13 @@ function useTableGroups() {
   return value
 }
 
-export function TableGroupToggle({ disabled = false }: { disabled?: boolean }) {
+export function TableGroupToggle({ disabled = false, header = false }: { disabled?: boolean; header?: boolean }) {
   const { keys, collapsed, setCollapsed } = useTableGroups()
-  const allExpanded = keys.every((key) => !collapsed.has(key))
+  const allExpanded = keys.length > 0 && keys.every((key) => !collapsed.has(key))
+  if (header) return <HeaderExpandCollapseButton expanded={allExpanded} loading={disabled} empty={!keys.length}
+    onClick={() => setCollapsed(allExpanded ? new Set(keys) : new Set())} />
   return <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !keys.length}
+    aria-label={allExpanded ? 'Collapse all groups' : 'Expand all groups'} title={disabled ? 'Loading groups…' : !keys.length ? 'No groups to expand' : allExpanded ? 'Collapse all groups' : 'Expand all groups'}
     className="shrink-0 rounded-md border px-3 py-2 text-sm"
     onClick={() => setCollapsed(allExpanded ? new Set(keys) : new Set())}><ExpandCollapseIcon expanded={allExpanded} />
     <span className="hidden md:inline">{allExpanded ? 'Collapse All' : 'Expand All'}</span>

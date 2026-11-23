@@ -20,7 +20,7 @@ import { ClipboardPlus as HeadingClipboardPlus, Archive as HeadingArchive } from
 import { useStatusNotification, usePopupError } from '@/components/action-dialogs'
 
 import { BudgetValueIndicator } from '@/components/ui/budget-value-indicator'
-import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { HeaderExpandCollapseButton } from '@/components/ui/expand-collapse-icon'
 import { useActionDialogs } from '@/components/action-dialogs'
 import { confirmationRecordDetails } from '@/lib/action-confirmation'
 import { customerMonthlyBudgetReference, monthlyBudgetReference } from '@/lib/monthly-budget-reference'
@@ -2157,28 +2157,13 @@ export default function SalesInputPage() {
                 <span className="hidden md:inline">{pendingAction === 'submitAll' ? 'Submitting...' : 'Submit All'}</span>
               </button>
             )}
-          <button data-slot="expand-collapse-button"
-            type="button"
-            aria-label={allSavedCustomersExpanded ? 'Collapse All' : 'Expand All'}
-            title={allSavedCustomersExpanded ? 'Collapse All' : 'Expand All'}
-            data-action-tone="neutral"
-            onClick={() => {
-              setExpandedCustomers(new Set(allSavedCustomersExpanded ? [] : savedCustomers.map((customer) => customer.key)))
-              setCollapsedKams(new Set(allSavedCustomersExpanded && groupSavedByKam
-                ? savedWeekGroups.flatMap((weekGroup) => weekGroup.customers.map((customer) => savedKamGroupKey(weekGroup.key, customer.items[0].user_id)))
-                : []))
-            }}
-            disabled={savedCustomers.length === 0}
-            className="h-9 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          ><ExpandCollapseIcon expanded={allSavedCustomersExpanded} />
-            <span className="hidden md:inline">{allSavedCustomersExpanded ? 'Collapse All' : 'Expand All'}</span>
-          </button>
 
 
 
-<button data-action-tone="neutral" type="button" aria-label="Refresh saved forecasts" title="Refresh saved forecasts" onClick={loadForecasts} disabled={savedTableLoading || initializing || loading}
+
+<button data-compact-action="" data-action-tone="neutral" type="button" aria-label="Refresh saved forecasts" title="Refresh saved forecasts" onClick={loadForecasts} disabled={savedTableLoading || initializing || loading}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
-            <RefreshCw className={`size-4 ${savedTableLoading ? 'animate-spin' : ''}`} aria-hidden="true" /><span className="hidden md:inline">Refresh</span>
+            <RefreshCw className={`size-4 ${savedTableLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
           </button>
 </div>
         </div>
@@ -2189,6 +2174,12 @@ export default function SalesInputPage() {
       {/* SAVED FORECAST TABLE */}
 
         <SalesHierarchyTable rows={savedHierarchyRows()} loading={savedTableLoading || initializing}
+          structureHeaderAction={<HeaderExpandCollapseButton expanded={allSavedCustomersExpanded} empty={savedCustomers.length === 0} loading={savedTableLoading || initializing || loading} onClick={() => {
+            setExpandedCustomers(new Set(allSavedCustomersExpanded ? [] : savedCustomers.map((customer) => customer.key)))
+            setCollapsedKams(new Set(allSavedCustomersExpanded && groupSavedByKam
+              ? savedWeekGroups.flatMap((weekGroup) => weekGroup.customers.map((customer) => savedKamGroupKey(weekGroup.key, customer.items[0].user_id)))
+              : []))
+          }} />}
           totalVolume={visibleSavedForecasts.reduce((sum, item) => sum + (item.status==='Voided'?0:(Number(item.volume) || 0)), 0)}
           label="Saved Forecasts table" emptyMessage="No forecasts match the current filters."
           summary={{records:savedCustomers.reduce((count,customer)=>count+customer.items.length,0),customers:totalSavedCustomers}} />

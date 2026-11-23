@@ -8,7 +8,7 @@ import { FileSpreadsheet as HeadingFileSpreadsheet, Pencil as HeadingPencil } fr
 
 import { useStatusNotification } from '@/components/action-dialogs'
 
-import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { HeaderExpandCollapseButton } from '@/components/ui/expand-collapse-icon'
 import { Save as ActionSaveIcon, X as ActionXIcon, UserPlus as ActionUserPlusIcon } from 'lucide-react'
 import { useActionDialogs } from '@/components/action-dialogs'
 import { confirmationRecordDetails } from '@/lib/action-confirmation'
@@ -321,7 +321,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
         setShow(true)
         void run(async () => { await refreshPreview() })
       }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><HeadingFileSpreadsheet className="size-4" aria-hidden="true" /><span data-forecast-action-label="">Excel Import</span></button>
-      <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Forecasts Excel Import" busy={busy} wide contained maxWidth="90rem">
+      <RecordDialog open={show} onClose={() => { setShow(false); setEditing(null) }} title="Forecasts Excel Import" busy={busy} wide contained fitContent maxWidth="90rem" maxHeight="min(42rem, calc(100dvh - 2rem))">
       <section className="app-tables flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div data-import-dialog-header data-section-header="" data-aligned-toolbar="" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div>
@@ -337,7 +337,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
 <button data-action-tone="transfer" data-action-fill="" type="button" disabled={disabled || (!authorization.can('Forecasts', 'add') || !authorization.can('Forecasts', 'import'))} title="Upload File" aria-label="Upload File" onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"><Upload className="size-4" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Upload File</span></button>
 <button data-action-tone="neutral" type="button" disabled={disabled} title="Download Template" aria-label="Download Template" onClick={() => downloadImportTemplate('Forecasts')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><Download className="size-4" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Template</span></button>
 
-<button data-action-tone="neutral" type="button" disabled={disabled} title="Refresh" aria-label="Refresh" onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /><span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span></button>
+<button data-compact-action="" data-action-tone="neutral" type="button" disabled={disabled} title="Refresh" aria-label="Refresh" onClick={() => { setShow(true); void run(async () => { await refreshPreview() }) }} className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm disabled:opacity-50"><RefreshCw className={`size-4 ${busy ? 'animate-spin' : ''}`} /></button>
 </div>
       </div>
 
@@ -353,11 +353,6 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
               {authorization.can('Forecasts', 'delete') && <button data-action-tone="danger" type="button" disabled={disabled || !stagingReady || !rows.length} title="Discard All" aria-label="Discard All" onClick={() => void discardUploadedRows(rows.map((row) => row.id))} className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50">
                 <Trash2 className="size-4" aria-hidden="true" /><span data-import-icon-label="" className="sr-only md:not-sr-only">Discard All</span>
               </button>}
-            <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={disabled || !rows.length}
-              title={allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'} aria-label={allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'} aria-expanded={allPreviewGroupsExpanded} aria-controls="forecast-import-records" onClick={toggleAllPreviewGroups}
-              className="rounded-md border px-3 py-2 text-sm"><ExpandCollapseIcon expanded={allPreviewGroupsExpanded} />
-              <span className="hidden md:inline">{allPreviewGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
-            </button>
 </div>
           </div>
           {referencesReady && stagingReady && editing && <RecordDialog open onClose={() => setEditing(null)} title="Edit Uploaded Record" busy={busy} wide contained fitContent><form className="app-tables flex min-h-0 flex-1 flex-col gap-4" onSubmit={(event) => {
@@ -375,7 +370,7 @@ export function ForecastExcelImport({ userId, isAdmin, scope, blocked, onBusyCha
               <col data-import-column="status" style={{ width: 144 }} />
               {previewFields.map(([field]) => <col key={field} data-import-column={field} />)}
             </colgroup>
-            <thead className="sticky top-0 z-10 bg-card"><tr className="border-b bg-muted/40">{['Action', 'Status', ...previewFields.map(([, label]) => label === 'Volume' ? 'Volume (50kg)' : label)].map((label) => <th data-action-column={label === "Action" ? "compact" : undefined} key={label} scope="col" className={`px-3 py-3 font-medium ${label === 'Volume (50kg)' ? 'text-right' : label === 'Year' || label === 'Action' ? 'text-center' : 'text-left'}`}>{label}</th>)}</tr></thead>
+            <thead className="sticky top-0 z-10 bg-card"><tr className="border-b bg-muted/40">{['Action', 'Status', ...previewFields.map(([, label]) => label === 'Volume' ? 'Volume (50kg)' : label)].map((label) => <th data-action-column={label === "Action" ? "compact" : undefined} key={label} scope="col" className={`px-3 py-3 font-medium ${label === 'Volume (50kg)' ? 'text-right' : label === 'Year' || label === 'Action' ? 'text-center' : 'text-left'}`}>{label === 'Status' ? <div className="flex items-center gap-1.5"><HeaderExpandCollapseButton expanded={allPreviewGroupsExpanded} loading={disabled} empty={!rows.length} aria-controls="forecast-import-records" onClick={toggleAllPreviewGroups} /><span>Status</span></div> : label}</th>)}</tr></thead>
             <tbody>{busy ? <TableLoadingRow columns={previewColumnCount} label="forecast import preview" /> : !rows.length ? <tr><td colSpan={previewColumnCount} className="px-4 py-10 text-center text-muted-foreground">No pending uploads.</td></tr> : (['Invalid', 'Valid'] as const).map((group) => {
               const grouped = preview.filter((row) => (row.issues.length > 0) === (group === 'Invalid'))
               const renderRows = (items: typeof preview) => items.map((row) => <tr key={row.source.id} className="border-b">

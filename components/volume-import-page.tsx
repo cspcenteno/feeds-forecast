@@ -24,7 +24,7 @@ import { useStatusNotification } from '@/components/action-dialogs'
 
 import { ImportProductDialog } from '@/components/import-product-dialog'
 
-import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { HeaderExpandCollapseButton } from '@/components/ui/expand-collapse-icon'
 import { FilterX, PackagePlus, UserPlus as ActionUserPlusIcon, Save as ActionSaveIcon, X as ActionXIcon } from 'lucide-react'
 import { useActionDialogs } from '@/components/action-dialogs'
 import { confirmationRecordDetails } from '@/lib/action-confirmation'
@@ -1748,7 +1748,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
 
       {/* BUDGET EXCEL IMPORT */}
 
-      {canManageImport && showImportPreview && <RecordDialog open onClose={() => setShowImportPreview(false)} title={`${moduleName} Excel Import`} busy={uploadingExcel || importing || savingImport || addingCustomer} wide contained maxWidth="90rem">
+      {canManageImport && showImportPreview && <RecordDialog open onClose={() => setShowImportPreview(false)} title={`${moduleName} Excel Import`} busy={uploadingExcel || importing || savingImport || addingCustomer} wide contained fitContent maxWidth="90rem" maxHeight="min(42rem, calc(100dvh - 2rem))">
       <div className="app-tables flex min-h-0 min-w-0 flex-1 flex-col">
         <div data-import-dialog-header className="flex shrink-0 flex-col gap-3 border-b pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div>
@@ -1795,7 +1795,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               <Download className="size-4" />
               <span data-import-icon-label="" className="sr-only md:not-sr-only">Template</span>
             </button>
-<button data-action-tone="neutral"
+<button data-compact-action="" data-action-tone="neutral"
               type="button"
               title="Refresh" aria-label="Refresh" onClick={loadStagingRecords}
               disabled={importBusy}
@@ -1804,7 +1804,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               <RefreshCw
                 className={`size-4 ${loadingStaging ? 'animate-spin' : ''}`}
               />
-              <span data-import-icon-label="" className="sr-only md:not-sr-only">Refresh</span>
+
             </button>
 </div>
         </div>
@@ -1885,12 +1885,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                     <span data-import-icon-label="" className="sr-only md:not-sr-only">Discard All</span>
                   </button>
                 )}
-              <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" disabled={importBusy || importGroupKeys.length === 0}
-                title={allImportGroupsExpanded ? 'Collapse All' : 'Expand All'} aria-label={allImportGroupsExpanded ? 'Collapse All' : 'Expand All'} aria-expanded={allImportGroupsExpanded} aria-controls={moduleName.toLowerCase() + '-import-records'}
-                onClick={() => setExpandedImportGroups(new Set(allImportGroupsExpanded ? [] : importGroupKeys))}
-                className="rounded-md border px-3 py-2 text-sm"><ExpandCollapseIcon expanded={allImportGroupsExpanded} />
-                <span className="hidden md:inline">{allImportGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
-              </button>
+
 </div>
             </div>
 
@@ -1965,7 +1960,14 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                 <thead className="sticky top-0 z-10 bg-card">
                   <tr className="border-b bg-muted/40">
                     <th data-action-column="compact" className="px-1 py-3 text-center font-medium">Action</th>
-                    <th className="px-3 py-3 text-left font-medium">Status</th>
+                    <th className="px-3 py-3 text-left font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <HeaderExpandCollapseButton expanded={allImportGroupsExpanded} loading={importBusy} empty={importGroupKeys.length === 0}
+                          onClick={() => setExpandedImportGroups(new Set(allImportGroupsExpanded ? [] : importGroupKeys))}
+                          aria-controls={moduleName.toLowerCase() + '-import-records'} />
+                        <span>Status</span>
+                      </div>
+                    </th>
                     {!isActual && <th className="px-3 py-3 text-left font-medium">Year</th>}
                     <th className="px-3 py-3 text-left font-medium">{isActual ? 'Date' : 'Month'}</th>
                     <th className="px-3 py-3 text-left font-medium">Region</th>
@@ -2016,6 +2018,12 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             </h2>
           </div>
           <div data-action-toolbar="" data-saved-volume-actions="" className="flex flex-wrap items-center gap-2">
+            {canManageImport && <button type="button" data-action-tone="transfer" aria-label="Excel Import" title="Excel Import" onClick={() => {
+              setShowImportPreview(true)
+              if (!importBusy) void loadStagingRecords()
+            }} disabled={initializing || importBusy} className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium disabled:opacity-50">
+              <FileSpreadsheet className="size-4" aria-hidden="true" /><span className="hidden md:inline">Excel Import</span>
+            </button>}
           <button data-action-tone="neutral" type="button" aria-label="Reset filters" title="Reset filters"
             onClick={() => {
               setFilterCustomer('')
@@ -2029,20 +2037,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border px-3 text-sm">
             <FilterX className="size-4 shrink-0" aria-hidden="true" /><span className="hidden md:inline">Reset filters</span>
           </button>
-            {canManageImport && <button type="button" data-action-tone="transfer" aria-label="Excel Import" title="Excel Import" onClick={() => {
-              setShowImportPreview(true)
-              if (!importBusy) void loadStagingRecords()
-            }} disabled={initializing || importBusy} className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium disabled:opacity-50">
-              <FileSpreadsheet className="size-4" aria-hidden="true" /><span className="hidden md:inline">Excel Import</span>
-            </button>}
-            <button data-slot="expand-collapse-button" type="button" data-action-tone="neutral" onClick={toggleAllSavedGroups}
-              aria-label={allSavedGroupsExpanded ? 'Collapse All' : 'Expand All'} title={allSavedGroupsExpanded ? 'Collapse All' : 'Expand All'}
-              disabled={initializing || savedKamKeys.length === 0}
-              aria-expanded={allSavedGroupsExpanded} aria-controls={moduleName.toLowerCase() + '-saved-records'}
-              className="rounded-md border px-3 py-2 text-sm"><ExpandCollapseIcon expanded={allSavedGroupsExpanded} />
-              <span className="hidden md:inline">{allSavedGroupsExpanded ? 'Collapse All' : 'Expand All'}</span>
-            </button>
-            <button data-action-tone="neutral"
+
+            <button data-compact-action="" data-action-tone="neutral"
               type="button"
               onClick={loadBudgets}
               aria-label="Refresh saved records" title="Refresh saved records"
@@ -2050,7 +2046,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw className="size-4" aria-hidden="true" />
-              <span className="hidden md:inline">Refresh</span>
+
             </button>
           </div>
         </div>
@@ -2263,7 +2259,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
                 )}
 
                 <th className="px-3 py-3 text-left font-medium">
-                  {metricLabel} Structure
+                  <div className="flex items-center gap-1.5"><HeaderExpandCollapseButton expanded={allSavedGroupsExpanded} onClick={toggleAllSavedGroups} loading={initializing || loading || loadingSavedRecords} empty={savedKamKeys.length === 0} aria-controls={moduleName.toLowerCase() + '-saved-records'} /><span>{metricLabel} Structure</span></div>
                 </th>
 
                 <th className="px-3 py-3 text-left font-medium">

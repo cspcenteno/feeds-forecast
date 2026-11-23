@@ -48,18 +48,22 @@ export function SortableHeader({
   direction,
   onSort,
   plain = false,
+  leadingAction,
 }: {
   children: ReactNode
   className?: string
   direction?: Direction
   onSort: () => void
   plain?: boolean
+  leadingAction?: ReactNode
 }) {
   const Head = plain ? 'th' : TableHead
   const Icon = direction === 'ascending' ? ChevronUp : direction === 'descending' ? ChevronDown : ChevronsUpDown
 
   return (
     <Head scope="col" className={className} aria-sort={direction}>
+      <div className={leadingAction ? 'flex items-center gap-1.5' : 'contents'}>
+      {leadingAction}
       <button
         type="button"
         onClick={onSort}
@@ -68,6 +72,7 @@ export function SortableHeader({
         {children}
         <Icon aria-hidden="true" className={direction ? 'size-4' : 'size-4 text-muted-foreground'} />
       </button>
+      </div>
     </Head>
   )
 }

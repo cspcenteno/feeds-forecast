@@ -7,7 +7,7 @@ import { dashboardSalesTotals, type DashboardMonthlyReferences } from '@/lib/das
 
 import { ChartNoAxesCombined as HeadingChartNoAxesCombined, ChartColumn as HeadingChartColumn, ChartPie as HeadingChartPie, Lightbulb as HeadingLightbulb, CalendarDays as HeadingCalendarDays } from 'lucide-react'
 
-import { ExpandCollapseIcon } from '@/components/ui/expand-collapse-icon'
+import { HeaderExpandCollapseButton } from '@/components/ui/expand-collapse-icon'
 import Link from 'next/link'
 import { useForecastAttention } from '@/lib/use-forecast-attention'
 import { useEffect, useMemo, useState } from 'react'
@@ -357,9 +357,9 @@ export default function SystemDashboard() {
               setMonth(event.target.value)
               setExpanded(new Set())
             }} className="h-10 w-44 min-w-0 rounded-md border bg-background px-3 text-sm md:w-48" />
-            <button data-action-tone="neutral" type="button" aria-label="Refresh dashboard" title="Refresh dashboard" onClick={() => setRevision((value) => value + 1)} disabled={!current}
+            <button data-compact-action="" data-action-tone="neutral" type="button" aria-label="Refresh dashboard" title="Refresh dashboard" onClick={() => setRevision((value) => value + 1)} disabled={detailsLoading} aria-busy={detailsLoading}
               className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-sm border bg-background p-0 text-sm hover:bg-muted disabled:opacity-50 md:w-auto md:px-3">
-              <RefreshCw className="size-4" aria-hidden="true" /><span className="hidden md:inline">Refresh</span>
+              <RefreshCw className={`size-4 ${detailsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -565,13 +565,10 @@ export default function SystemDashboard() {
               <div>
                 <h3 data-section-title="" className="text-sm font-semibold"><HeadingCalendarDays className="mr-2 inline-block size-5 shrink-0 align-middle text-muted-foreground" aria-hidden="true" />Monthly Sales · {monthLabel}</h3>
               </div>
-              <button data-slot="expand-collapse-button" data-action-tone="neutral" type="button" disabled={keys.length === 0}
-                onClick={() => setExpanded(new Set(allExpanded ? [] : keys))}
-                className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"><ExpandCollapseIcon expanded={allExpanded} />
-                <span className="hidden md:inline">{allExpanded ? 'Collapse All' : 'Expand All'}</span>
-              </button>
             </div>
             <SalesHierarchyTable showActions={false} showStatus={false} rows={monthlyHierarchyRows(salesGroups)} loading={detailsLoading}
+              structureHeaderAction={<HeaderExpandCollapseButton expanded={allExpanded} loading={detailsLoading} empty={keys.length === 0}
+                onClick={() => setExpanded(new Set(allExpanded ? [] : keys))} />}
               totalVolume={(data?.details ?? []).reduce((sum, item) => sum + (Number(item.volume) || 0), 0)}
               label="Monthly Sales table" emptyMessage={data?.detailsError || 'No approved forecasts for the selected month.'}
               summary={summaryForLevel(data?.details.length ?? 0, data?.showAsm ? 'asms' : data?.scope === 'kam' ? 'customers' : data?.scope === 'rsm' ? 'kams' : 'rsms', (data?.details ?? []).map(row => data?.showAsm ? row.asm_id : data?.scope === 'kam' ? row.customer_id : data?.scope === 'rsm' ? row.submitted_by : row.endorsed_by))} />

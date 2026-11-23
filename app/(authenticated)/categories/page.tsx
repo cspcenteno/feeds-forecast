@@ -242,7 +242,7 @@ export default function CategoriesPage() {
             <input
               id="name"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter category name"
+              placeholder="Enter name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />

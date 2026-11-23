@@ -227,7 +227,7 @@ export default function CustomersPage() {
           <div data-customer-fields="" className="app-field-row">
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
               <span className="text-destructive">*</span> Customer Name
-              <input placeholder="Enter customer name" value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
+              <input placeholder="Enter name" value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm font-normal" />
             </label>
             <label data-field-size="wide" className="space-y-2 text-sm font-medium">
               Salesman
@@ -274,7 +274,7 @@ export default function CustomersPage() {
 
 
         <div data-customer-toolbar="" data-filter-toolbar="" className="flex flex-nowrap items-end justify-between gap-4 overflow-x-auto border-b px-6 py-4">
-          <div className="w-64 shrink-0">
+          <div className="w-40 shrink-0">
             <div className="app-field-row">
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-muted-foreground" htmlFor="customers-region-filter">Region</label>
@@ -290,12 +290,14 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
-          <div data-action-toolbar="" data-master-search-actions="" className="ml-auto flex shrink-0 flex-nowrap items-center gap-2 whitespace-nowrap [&>[role=search]]:w-64 [&>[role=search]]:shrink-0">
+          <div data-action-toolbar="" data-master-search-actions="" className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 whitespace-nowrap">
             <TableSearch value={search} onChange={setSearch} label="Search customers" placeholder="Search here…" />
+            <div data-customer-buttons="" className="contents">
 {authorization.can('Customers', 'add') && <button type="button" aria-label="Add Customer" title="Add Customer" data-action-tone="primary" data-action-fill="" onClick={() => { resetForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Customer</span></button>}
 
 
-            <TableGroupToggle disabled={tableLoading} />
+
+            </div>
           </div>
         </div>
         <Table data-directory-table="customers" summary={summaryForLevel(sortedCustomers.length, 'salespeople', sortedCustomers.map((row) => row.salesman?.trim()))} aria-busy={tableLoading}
@@ -313,7 +315,7 @@ export default function CustomersPage() {
             </colgroup>
             <thead><tr className="border-b bg-muted/40">
               {(authorization.can('Customers', 'add') || authorization.can('Customers', 'edit') || authorization.can('Customers', 'delete')) && <th data-action-column="standard" className="px-1.5 py-3 sm:px-3 text-left font-medium">Action</th>}
-              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('customer')}>Customer Name</SortableHeader>
+              <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" leadingAction={<TableGroupToggle header disabled={tableLoading} />} {...sortHeader('customer')}>Customer Name</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('salesman')}>Salesman</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('region')}>Region</SortableHeader>
               <SortableHeader plain className="px-1.5 py-3 sm:px-3 text-left font-medium" {...sortHeader('segment')}>Segment</SortableHeader>

@@ -292,7 +292,7 @@ export default function SubregionsPage() {
             <input
               id="subregion-name"
               className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-              placeholder="Enter subregion name"
+              placeholder="Enter name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={loading}
@@ -395,7 +395,7 @@ export default function SubregionsPage() {
 
         <div data-master-search-actions="" data-product-toolbar="" data-section-header="" data-aligned-toolbar="" data-action-toolbar="" className="flex flex-wrap items-center justify-end gap-2 border-b px-4 py-3"><TableSearch value={search} onChange={setSearch} label="Search subregions" />
 {authorization.can('Subregions', 'add') && <button type="button" aria-label="Add Subregion" title="Add Subregion" data-action-tone="primary" data-action-fill="" onClick={() => { clearForm(); setFormOpen(true) }} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium"><AddRecordIcon className="size-4" aria-hidden="true" /><span className="hidden md:inline">Add Subregion</span></button>}
-<TableGroupToggle disabled={initialLoading} /></div>
+</div>
 
         <div className="overflow-x-auto">
           <Table data-directory-table="subregions" summary={summaryForLevel(sortedSubregions.length, 'regions', sortedSubregions.map((row) => row.region_id))} className="min-w-[640px] table-fixed wrap-anywhere">
@@ -409,7 +409,7 @@ export default function SubregionsPage() {
               <TableRow>
                 {(authorization.can('Subregions', 'add') || authorization.can('Subregions', 'edit') || authorization.can('Subregions', 'delete')) && <TableHead data-action-column="standard" className="px-3">Action</TableHead>}
                 <TableHead data-fixed-column="status" className="px-3">Status</TableHead>
-                <SortableHeader className="px-3" {...sortHeader('name')}>Subregion Name</SortableHeader>
+                <SortableHeader className="px-3" leadingAction={<TableGroupToggle header disabled={initialLoading} />} {...sortHeader('name')}>Subregion Name</SortableHeader>
                 <SortableHeader className="px-3" {...sortHeader('code')}>Subregion Code</SortableHeader>
 
 
