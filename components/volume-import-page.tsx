@@ -1057,7 +1057,8 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         matchingRegions.length === 1 ? matchingRegions[0] : null
 
       if (!regionName) {
-        issues.push('Missing region')
+        // A failed salesman lookup already explains why its region is unavailable.
+        if (matchedKam) issues.push('Missing region')
       } else if (matchingRegions.length === 0) {
         issues.push(`Region not found: ${source.region}`)
       } else if (matchingRegions.length > 1) {
