@@ -265,6 +265,7 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
   const [budgets, setBudgets] = useState<BudgetRecord[]>([])
   const [stagingRecords, setStagingRecords] = useState<BudgetImportRecord[]>([])
   const [actualImportKams, setActualImportKams] = useState<ImportKam[] | null>(null)
+  const [editingImportCustomer, setEditingImportCustomer] = useState<{ name: string; originalName: string | null; regionId: number | null; items: BudgetImportRecord[] } | null>(null)
   const [editingImportSalesman, setEditingImportSalesman] = useState<{ name: string; items: BudgetImportRecord[] } | null>(null)
   const [savedSalesmanNames, setSavedSalesmanNames] = useState<Set<string> | null>(null)
 
@@ -1001,20 +1002,14 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       const key = actualKey(item.actual_date, item.region_id, item.customer_id, item.product_id, item.kam, item.volume)
       savedActualMatches.set(key, (savedActualMatches.get(key) ?? 0) + 1)
     }
-    const existingKeys = new Set(
-      (isActual ? [] : budgets).map((item) =>
-          getBudgetImportKey(
-              item.year,
-              item.month ?? 0,
-              item.region_id ?? 0,
-              item.customer_id ?? 0,
-              item.product_id ?? 0,
-              item.kam
-            )
-      )
-    )
-
-    const seenStagingKeys = new Set<string>()
+    const savedBudgetMatches = new Map<string, number>()
+    if (!isActual) for (const item of budgets) {
+      const key = JSON.stringify([getBudgetImportKey(
+        item.year, item.month ?? 0, item.region_id ?? 0,
+        item.customer_id ?? 0, item.product_id ?? 0, item.kam,
+      ), Number(item.volume)])
+      savedBudgetMatches.set(key, (savedBudgetMatches.get(key) ?? 0) + 1)
+    }
 
     return previewRecords.map((source) => {
       const issues: string[] = []
@@ -1134,23 +1129,15 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
             savedActualMatches.set(key, remaining - 1)
           }
         } else {
-        const key = getBudgetImportKey(
-              validYear,
-              parsedMonth,
-              matchedRegion.id,
-              matchedCustomer.id,
-              matchedProduct.id,
-              matchedKam?.full_name?.trim() || source.kam
-            )
-
-        if (existingKeys.has(key)) {
-          status = 'Already imported'
-        } else if (seenStagingKeys.has(key)) {
-          status = 'Invalid'
-          issues.push('Duplicate in upload')
-        } else {
-          seenStagingKeys.add(key)
-        }
+          const key = JSON.stringify([getBudgetImportKey(
+            validYear, parsedMonth, matchedRegion.id, matchedCustomer.id,
+            matchedProduct.id, matchedKam?.full_name?.trim() || source.kam,
+          ), Number(validBudget)])
+          const remaining = savedBudgetMatches.get(key) ?? 0
+          if (remaining > 0) {
+            status = 'Already imported'
+            savedBudgetMatches.set(key, remaining - 1)
+          }
         }
       }
 
@@ -1363,7 +1350,9 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
       }
 
       setEditingImport((current) => current?.id === id ? null : current)
-      await loadStagingRecords()
+      setStagingRecords((current) => action === 'edit'
+        ? current.map((item) => item.id === id ? { ...item, ...fields } : item)
+        : current.filter((item) => item.id !== id))
       setMessage(action === 'edit' ? 'Uploaded record updated.' : 'Uploaded record discarded.')
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to change the uploaded record.')
@@ -1404,6 +1393,12 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
               const items = visibleImportPreview.filter((item) => !item.source.savedActual && normalizeText(item.source.kam) === normalizeText(name)).map((item) => item.source)
               setEditingImportSalesman({ name, items })
             }} />}
+            {group.kind === 'customer' && group.validation === 'Customer not found' && authorization.can(moduleName, 'edit') && <TableActionButton action="edit" compact type="button" title="Edit uploaded customer" aria-label="Edit uploaded customer" disabled={importBusy} onClick={() => {
+              const items = group.rows.filter((item) => !item.source.savedActual).map((item) => item.source)
+              if (!items.length) return
+              const originalName = items[0].customer ?? null
+              setEditingImportCustomer({ name: originalName ?? '', originalName, regionId: group.rows[0]?.region?.id ?? null, items })
+            }} />}
                     {missingCustomer && authorization.can('Customers', 'add') && (
                       <button data-action-tone="primary" data-slot="table-action-button" data-compact-action="" data-import-add-customer="" type="button" aria-label="Add to Customers" title="Add to Customers" className="inline-flex shrink-0 items-center justify-center rounded-md border" disabled={importBusy} onClick={() => addMissingCustomer(missingCustomer)}>
                         <ActionUserPlusIcon className="size-4 shrink-0" aria-hidden="true" />
@@ -1424,6 +1419,34 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         {expanded && group.rows.map(renderImportRow)}
       </Fragment>
     )
+  }
+
+  async function saveImportCustomer(event: React.FormEvent) {
+    event.preventDefault()
+    if (!editingImportCustomer || importBusy || !authorization.can(moduleName, 'edit') || !authorization.can(moduleName, 'import')) return
+    const name = editingImportCustomer.name.trim()
+    if (!name) return
+    setSavingImport(true)
+    setError('')
+    setMessage('')
+    try {
+      let query = supabase.from(stagingTable).update({ customer: name }, { count: 'exact' })
+        .in('id', editingImportCustomer.items.map((item) => item.id))
+      query = editingImportCustomer.originalName === null
+        ? query.is('customer', null) : query.eq('customer', editingImportCustomer.originalName)
+      const { error, count } = await query
+      if (error) throw new Error(error.message)
+      if (count !== editingImportCustomer.items.length) {
+        await loadStagingRecords()
+        throw new Error(`Updated ${count ?? 0} of ${editingImportCustomer.items.length} uploaded records. Some records changed or are unavailable. Close this editor and reopen the customer group to retry.`)
+      }
+      const changedIds = new Set(editingImportCustomer.items.map((item) => item.id))
+      setStagingRecords((current) => current.map((item) => changedIds.has(item.id) ? { ...item, customer: name } : item))
+      setEditingImportCustomer(null)
+      setMessage('Uploaded customer updated. Validation refreshed.')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to update uploaded customer.')
+    } finally { setSavingImport(false) }
   }
 
   function addMissingCustomer(item: ImportPreview) {
@@ -1649,16 +1672,39 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
     event.preventDefault()
     if (!editingImportSalesman || importBusy || !authorization.can(moduleName, 'edit') || !authorization.can(moduleName, 'import')) return
     try {
-      if (!actualImportKams) throw new Error('Refresh uploaded records to load salesman assignments.')
-      const salesman = resolveOracleKam(editingImportSalesman.name, actualImportKams)
+      let name = editingImportSalesman.name.trim()
+      if (!name) return
+      let salesman: ImportKam | null = null
+      if (actualImportKams) {
+        try { salesman = resolveOracleKam(name, actualImportKams) } catch { /* Unmatched text stays Invalid until the assignment is corrected. */ }
+      }
+      if (salesman?.full_name) name = salesman.full_name.trim()
       setSavingImport(true)
-      const { error } = await supabase.rpc('update_import_salesman_records', {
-        p_module: moduleName, p_salesman: salesman.full_name,
-        p_records: editingImportSalesman.items.map((item) => ({ id: item.id, kam: item.kam, region: item.region })),
-      })
-      if (error) throw new Error(error.message)
+      if (salesman) {
+        const { error } = await supabase.rpc('update_import_salesman_records', {
+          p_module: moduleName, p_salesman: name,
+          p_records: editingImportSalesman.items.map((item) => ({ id: item.id, kam: item.kam, region: item.region })),
+        })
+        if (error) throw new Error(error.message)
+      } else {
+        // Correct staging text only; the final import still requires a valid assignment.
+        const originalName = editingImportSalesman.items[0]?.kam ?? null
+        if (editingImportSalesman.items.some((item) => (item.kam ?? null) !== originalName)) {
+          throw new Error('Edit one exact uploaded salesman name at a time.')
+        }
+        let query = supabase.from(stagingTable).update({ kam: name }, { count: 'exact' })
+          .in('id', editingImportSalesman.items.map((item) => item.id))
+        query = originalName === null ? query.is('kam', null) : query.eq('kam', originalName)
+        const { error, count } = await query
+        if (error) throw new Error(error.message)
+        if (count !== editingImportSalesman.items.length) {
+          await loadStagingRecords()
+          throw new Error('Some uploaded records changed or are unavailable. Reopen the salesman group and retry.')
+        }
+      }
+      const changedIds = new Set(editingImportSalesman.items.map((item) => item.id))
+      setStagingRecords((current) => current.map((item) => changedIds.has(item.id) ? { ...item, kam: name } : item))
       setEditingImportSalesman(null)
-      await loadStagingRecords()
       setMessage('Uploaded salesman updated. Validation refreshed.')
     } catch (error) { setSavedEditError(error instanceof Error ? error.message : 'Unable to update uploaded salesman.') }
     finally { setSavingImport(false) }
@@ -1716,11 +1762,25 @@ export function VolumeImportPage({ moduleName }: { moduleName: 'Budgets' | 'Actu
         <form data-salesman-editor="" onSubmit={saveImportSalesman} className="flex flex-col gap-4">
           <div data-popup-form-header="" className="border-b pb-4 pr-10"><h2 data-dialog-title data-section-title=""><HeadingPencil className="size-5 text-muted-foreground" aria-hidden="true" />Edit {isActual ? 'Actuals' : 'Budget'} Import Salesman</h2><p className="mt-1 text-xs text-muted-foreground">{editingImportSalesman.items.length.toLocaleString()} uploaded records</p></div>
           <label className="flex min-w-0 flex-col gap-2 text-sm font-medium"><span>Salesman</span>
-            <SearchableSelect aria-label="Salesman" required value={editingImportSalesman.name} disabled={savingImport} placeholder="Select salesman" onValueChange={(name) => setEditingImportSalesman((current) => current && ({ ...current, name }))} options={(actualImportKams ?? []).filter((user) => user.full_name?.trim()).map((user) => ({ value: user.full_name!.trim(), label: user.full_name!.trim() }))} />
+            <SearchableSelect aria-label="Salesman" required freeText value={editingImportSalesman.name} disabled={savingImport} placeholder="Select or enter salesman name" onValueChange={(name) => setEditingImportSalesman((current) => current && ({ ...current, name }))} options={(actualImportKams ?? []).filter((user) => user.full_name?.trim()).map((user) => ({ value: user.full_name!.trim(), label: user.full_name!.trim() }))} />
           </label>
           <div data-action-toolbar="" data-dialog-footer="" className="flex justify-end gap-2 border-t pt-4">
             <button data-action-tone="neutral" type="button" disabled={savingImport} onClick={() => setEditingImportSalesman(null)} className="inline-flex h-10 items-center gap-2 rounded-md border px-4"><ActionXIcon className="size-4" aria-hidden="true" />Cancel</button>
             <button data-action-tone="primary" data-action-fill="" type="submit" disabled={savingImport || !editingImportSalesman.name.trim()} className="inline-flex h-10 items-center gap-2 rounded-md border px-4"><ActionSaveIcon className="size-4" aria-hidden="true" />{savingImport ? 'Saving…' : 'Save Changes'}</button>
+          </div>
+        </form>
+      </RecordDialog>}
+      {editingImportCustomer && <RecordDialog open onClose={() => setEditingImportCustomer(null)} title={`Edit ${isActual ? 'Actuals' : 'Budget'} Import Customer`} busy={savingImport} fitContent maxWidth="36rem" stackLevel={1}>
+        <form onSubmit={saveImportCustomer} className="flex flex-col gap-4">
+          <div data-popup-form-header="" className="border-b pb-4 pr-10"><h2 data-dialog-title data-section-title=""><HeadingPencil className="size-5 text-muted-foreground" aria-hidden="true" />Edit Uploaded Customer</h2><p className="mt-1 text-xs text-muted-foreground">{editingImportCustomer.items.length.toLocaleString()} uploaded records</p></div>
+          <label className="space-y-2 text-sm font-medium">Customer
+            <SearchableSelect aria-label="Customer" required freeText value={editingImportCustomer.name} disabled={savingImport} placeholder="Select or enter customer name"
+              onValueChange={(name) => setEditingImportCustomer((current) => current && ({ ...current, name }))}
+              options={customers.filter((customer) => editingImportCustomer.regionId === null || customer.region_id === editingImportCustomer.regionId).map((customer) => ({ value: customer.customer, label: customer.customer }))} />
+          </label>
+          <div data-action-toolbar="" data-dialog-footer="" className="flex justify-end gap-2 border-t pt-4">
+            <button data-action-tone="neutral" type="button" disabled={savingImport} onClick={() => setEditingImportCustomer(null)} className="inline-flex h-10 items-center gap-2 rounded-md border px-4"><ActionXIcon className="size-4" aria-hidden="true" />Cancel</button>
+            <button data-action-tone="primary" data-action-fill="" type="submit" disabled={savingImport || !editingImportCustomer.name.trim()} className="inline-flex h-10 items-center gap-2 rounded-md border px-4"><ActionSaveIcon className="size-4" aria-hidden="true" />{savingImport ? 'Saving…' : 'Save Changes'}</button>
           </div>
         </form>
       </RecordDialog>}

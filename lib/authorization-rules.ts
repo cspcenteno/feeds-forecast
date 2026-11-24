@@ -115,7 +115,7 @@ export function defaultPermissions(role: string, position = ''): PermissionMap {
     ).forEach((m) => set(m, ['view']))
 
     set('Approvals', ['view', 'edit'])
-    if (salesPosition === 'RSM') set('Forecasts', ['view', 'edit'])
+    if (salesPosition === 'RSM') set('Forecasts', ['view', 'add', 'edit'])
   } else if (role === 'Admin') {
     modules.forEach((m) => set(m, ['view', 'add', 'edit', 'import', 'delete']))
   }

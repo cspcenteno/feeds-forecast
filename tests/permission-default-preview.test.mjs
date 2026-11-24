@@ -9,11 +9,12 @@ test('preview names both gained and removed permissions without changing the ori
   const current = rows(defaultPermissions('Manager','RSM'))
   const original = structuredClone(current)
   const forecast = current.find(row => row.module === 'Forecasts')
-  forecast.can_add = true
+  forecast.can_add = false
   forecast.can_edit = false
+  forecast.can_delete = true
   const custom = structuredClone(current)
   assert.deepEqual(permissionDefaultPreview(current,rows(defaultPermissions('Manager','RSM'))),[
-    {label:'Forecasts',value:'Enable: Edit; Disable: Add'},
+    {label:'Forecasts',value:'Enable: Add, Edit; Disable: Delete'},
   ])
   assert.deepEqual(current,custom)
   assert.notDeepEqual(current,original)
@@ -23,7 +24,7 @@ test('matching defaults produce no changes and RSM-to-ASM removes returned forec
   const rsm = rows(defaultPermissions('Manager','RSM'))
   assert.deepEqual(permissionDefaultPreview(rsm,rsm),[])
   assert.deepEqual(permissionDefaultPreview(rsm,rows(defaultPermissions('Manager','ASM'))),[
-    {label:'Forecasts',value:'Disable: View, Edit'},
+    {label:'Forecasts',value:'Disable: View, Add, Edit'},
   ])
 })
 

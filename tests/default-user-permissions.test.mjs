@@ -10,10 +10,10 @@ test('KAM defaults allow forecast entry and draft deletion without approval priv
   assert.deepEqual(p.Approvals,{view:false,add:false,edit:false,import:false,export:false,delete:false})
 })
 
-test('RSM and ASM defaults differ only in returned forecast access', () => {
+test('RSM defaults allow adding and editing forecasts while ASM defaults do not', () => {
   const rsm = defaultPermissions('Manager',' rsm ')
   const asm = defaultPermissions('Manager','ASM')
-  assert.deepEqual(rsm['Forecasts'],{view:true,add:false,edit:true,import:false,export:false,delete:false})
+  assert.deepEqual(rsm['Forecasts'],{view:true,add:true,edit:true,import:false,export:false,delete:false})
   assert.deepEqual(asm['Forecasts'],{view:false,add:false,edit:false,import:false,export:false,delete:false})
   for (const p of [rsm,asm]) {
     for (const module of ['Dashboard','Weekly Sales','Budgets','Actuals']) {

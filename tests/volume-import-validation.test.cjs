@@ -21,7 +21,7 @@ function preview(isActual, rows, budgets = [], kams = [{ id: 'a', full_name: 'KA
     actualImportKams: kams,
     resolveOracleKam(value, users) {
       const matches = users.filter(user => normalizeText(user.full_name) === normalizeText(value))
-      if (matches.length !== 1) throw new Error(matches.length ? 'Multiple KAM assignments match: ' + value : 'KAM assignment not found: ' + value)
+      if (matches.length !== 1) throw new Error(matches.length ? 'Multiple KAM assignments match: ' + value : 'Salesman assignment not found (KAM/RSM/ASM): ' + value)
       if (!matches[0].region_id) throw new Error('KAM has no assigned region: ' + value)
       return matches[0]
     },
@@ -91,10 +91,14 @@ test('Actuals accepts RSM and ASM salespeople and derives their regions', () => 
   }
 })
 
-test('Budgets still separates duplicate uploads from Already Imported records', () => {
-  const uploaded = preview(false, [base, { ...base, id: 2 }])
-  assert.deepEqual(Array.from(uploaded, row => row.status), ['Ready', 'Invalid'])
-  assert.equal(uploaded[1].issues[0], 'Duplicate in upload')
-  const saved = [{ year: 2026, month: 11, region_id: 1, customer_id: 2, product_id: 3, kam: 'KAM A' }]
-  assert.equal(preview(false, [base], saved)[0].status, 'Already imported')
+test('Budgets allows repeated uploaded rows with the same or different volumes', () => {
+  const uploaded = preview(false, [base, { ...base, id: 2 }, { ...base, id: 3, volume: '4' }])
+  assert.deepEqual(Array.from(uploaded, row => row.status), ['Ready', 'Ready', 'Ready'])
+})
+
+test('Budgets matches saved occurrences including volume, salesman and year', () => {
+  const saved = [{ year: 2026, month: 11, region_id: 1, customer_id: 2, product_id: 3, kam: 'KAM A', volume: 20 }]
+  const uploaded = preview(false, [base, { ...base, id: 2 }, { ...base, id: 3, volume: '4' }, { ...base, id: 4, year: '2027' }, { ...base, id: 5, kam: 'Other KAM' }], saved)
+  assert.deepEqual(Array.from(uploaded, row => row.status), ['Already imported', 'Ready', 'Ready', 'Ready', 'Ready'])
+  assert.deepEqual(Array.from(preview(false, [base, { ...base, id: 2 }], [saved[0], { ...saved[0] }]), row => row.status), ['Already imported', 'Already imported'])
 })

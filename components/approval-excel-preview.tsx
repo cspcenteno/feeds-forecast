@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { Check, ChevronDown, Download } from 'lucide-react'
 import { Select } from '@base-ui/react/select'
@@ -19,6 +19,22 @@ export default function ApprovalExcelPreview({ input, loading, loadError, canDow
   const range = XLSX.utils.decode_range(sheet['!ref']!)
   const hidden = sheet['!cols']?.findIndex(col => col?.hidden) ?? -1
   const lastColumn = hidden >= 0 ? hidden - 1 : range.e.c
+  const tableRef = useRef<HTMLTableElement>(null)
+  useLayoutEffect(() => {
+    const table = tableRef.current
+    if (!table) return
+    const headerRows = [5, 6].map(row => table.querySelector<HTMLElement>(`[data-worksheet-row="${row}"]`))
+    const updateOffsets = () => {
+      const first = headerRows[0]?.getBoundingClientRect().height ?? 0
+      const second = headerRows[1]?.getBoundingClientRect().height ?? 0
+      table.style.setProperty('--worksheet-row6-top', `${first}px`)
+      table.style.setProperty('--worksheet-total-top', `${first + second}px`)
+    }
+    updateOffsets()
+    const observer = new ResizeObserver(updateOffsets)
+    headerRows.forEach(row => { if (row) observer.observe(row) })
+    return () => observer.disconnect()
+  }, [sheet])
   const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
   return <>
     <div className="flex shrink-0 flex-wrap items-center gap-3 pr-10 pb-4">
@@ -35,12 +51,12 @@ export default function ApprovalExcelPreview({ input, loading, loadError, canDow
       }}><Download className="size-4" />{busy ? 'Downloading…' : 'Download Excel'}</button>}
     </div>
     {(error || loadError) && <p role="alert" className="pb-3 text-sm text-destructive">{error || loadError}</p>}
-    <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-md border" tabIndex={0} role="region" aria-label="Excel worksheet">
-      <table aria-label={workbook.SheetNames[sheetIndex]} aria-busy={loading} className="table-fixed border-separate border-spacing-0 text-xs" style={{ width: 170 + 280 + 90 * (lastColumn - 1) }}>
+    <div data-approval-worksheet="" className="min-h-0 min-w-0 flex-1 overflow-auto rounded-md border" tabIndex={0} role="region" aria-label="Excel worksheet">
+      <table ref={tableRef} aria-label={workbook.SheetNames[sheetIndex]} aria-busy={loading} className="table-fixed border-separate border-spacing-0 text-xs" style={{ width: 170 + 280 + 90 * (lastColumn - 1) }}>
         <colgroup>
           {Array.from({ length: lastColumn + 1 }, (_, c) => <col key={c} style={{ width: c === 0 ? 170 : c === 1 ? 280 : 90 }} />)}
         </colgroup>
-        <tbody>{Array.from({ length: Math.max(0, range.e.r - 1) }, (_, index) => index + 2).filter(r => r < 3 || r > 4 || Boolean(sheet['A' + (r + 1)]?.v || sheet['B' + (r + 1)]?.v)).map(r => <tr key={r}>
+        <tbody>{Array.from({ length: Math.max(0, range.e.r - 1) }, (_, index) => index + 2).filter(r => r < 3 || r > 4 || Boolean(sheet['A' + (r + 1)]?.v || sheet['B' + (r + 1)]?.v)).map(r => <tr key={r} data-worksheet-row={r}>
           {Array.from({ length: lastColumn + 1 }, (_, c) => {
             const merge = sheet['!merges']?.find(item => r >= item.s.r && r <= item.e.r && c >= item.s.c && c <= item.e.c)
             if (merge && (merge.s.r !== r || merge.s.c !== c)) return null
@@ -48,8 +64,8 @@ export default function ApprovalExcelPreview({ input, loading, loadError, canDow
             const fill = cell?.s?.fgColor?.rgb as string | undefined
             const dark = ['7030A0','38761D','3F7D20'].includes(fill?.slice(-6) ?? '') || (r === 7 && c < 2)
             return <td key={c} rowSpan={merge ? merge.e.r - r + 1 : undefined} colSpan={merge ? merge.e.c - c + 1 : undefined}
-              style={{ left: c < 3 ? [0, 170, 450][c] : undefined, background: fill ? '#' + fill.slice(-6) : '#ffffff', color: dark ? 'white' : undefined, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', textAlign: c > 1 ? 'right' : 'left', fontWeight: r < 9 || !sheet['B' + (r + 1)]?.v || sheet['B' + (r + 1)]?.v === 'TOTAL' ? 600 : 400 }}
-              className={'border border-black/10 px-2 py-2' + (c < 3 ? ' md:sticky md:z-10' : '') + (c === 2 ? ' md:shadow-[2px_0_0_#d1d5db]' : '')}>{r === 5 && c === 2
+              style={{ position: c < 2 || (r >= 5 && r <= 7) ? 'sticky' : undefined, left: c < 2 ? [0, 170][c] : undefined, top: r === 5 ? 0 : r === 6 ? 'var(--worksheet-row6-top, 0px)' : r === 7 ? 'var(--worksheet-total-top, 0px)' : undefined, zIndex: r >= 5 && r <= 7 ? (c < 2 ? 40 : 30) : c < 2 ? 10 : undefined, background: fill ? '#' + fill.slice(-6) : '#ffffff', color: dark ? 'white' : undefined, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', textAlign: c > 1 ? 'right' : 'left', fontWeight: r < 9 || !sheet['B' + (r + 1)]?.v || sheet['B' + (r + 1)]?.v === 'TOTAL' ? 600 : 400 }}
+              className={'border border-black/10 px-2 py-2' + (c === 1 || (c === 0 && merge?.e.c === 1) ? ' shadow-[2px_0_0_#d1d5db]' : '')}>{r === 5 && c === 2
                 ? <Select.Root value={month ?? months.indexOf(String(sheet.C6?.v)) + 1} onValueChange={value => { if (value !== null) { setMonth(value); onBudgetMonthChange(value) } }} items={months.map((label, index) => ({ label, value: index + 1 }))}>
                     <Select.Trigger aria-label="Budget Month" className="inline-flex h-8 w-full items-center justify-between gap-1 rounded border border-black/15 bg-white/70 px-1.5 text-xs font-semibold text-black outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <Select.Value /><Select.Icon><ChevronDown className="size-3.5" /></Select.Icon>
